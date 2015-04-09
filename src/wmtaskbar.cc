@@ -628,16 +628,16 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
 #ifndef NO_CONFIGURE_MENUS
         { fApplications, true, 1, true, 0, 0, true },
 #endif
-        { fShowDesktop, true, 0, true, 0, 0, true },
+        { fShowDesktop, true, 0, true, 0, 0, taskButtonHeight ? false : true },
 #ifdef CONFIG_WINMENU
-        { fWinList, true, 0, true, 0, 0, true},
+        { fWinList, true, 0, true, 0, 0, taskButtonHeight ? false : true},
 #endif
 #ifndef NO_CONFIGURE_MENUS
-        { fObjectBar, true, 1, true, 4, 0, true },
+        { fObjectBar, true, 1, true, 4, 0, taskButtonHeight ? false : true },
 #endif
-        { fWorkspaces, taskBarWorkspacesLeft, 0, true, 4, 4, true },
+        { fWorkspaces, taskBarWorkspacesLeft, 0, true, 4, 4, taskButtonHeight ? false : true },
 
-        { fCollapseButton, false, 0, true, 0, 2, true },
+        { fCollapseButton, false, 0, true, 0, 2, taskButtonHeight ? false : true },
 #ifdef CONFIG_APPLET_CLOCK
         { fClock, false, 1, true, 2, 2, false },
 #endif
@@ -677,7 +677,7 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
 #endif
         { fDesktopTray, false, 1, true, 1, 1, false },
 #ifdef CONFIG_TRAY
-        { fWindowTray, false, 0, true, 1, 1, true },
+        { fWindowTray, false, 0, true, 1, 1, taskButtonHeight ? false : true },
 #endif
     };
     const int wcount = sizeof(wlist)/sizeof(wlist[0]);
@@ -704,6 +704,8 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
     {
         int dx, dy, dw, dh;
         manager->getScreenGeometry(&dx, &dy, &dw, &dh);
+        if (taskBarLength != 0)
+                dw = taskBarLength;
         w = dw;
     }
 
@@ -728,8 +730,12 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
         if (h[0] < 16)
             h[0] = 16;
 #else
+        if (taskBarHeight >= smallIconSize) {
+            h[0] = taskBarHeight;
+        } else {
         if (h[0] < YIcon::smallSize() + 8)
             h[0] = YIcon::smallSize() + 8;
+        }
 #endif
     }
 
@@ -747,8 +753,8 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
         if (wl->expand) {
             yy = y[wl->row];
         } else {
-            hh = wl->w->height();
-            yy = y[wl->row] + (h[wl->row] - wl->w->height()) / 2;
+            hh = taskButtonHeight ? taskButtonHeight : wl->w->height();
+            yy = y[wl->row] + (h[wl->row] - hh) / 2;
         }
 
         if (wl->left) {
@@ -771,9 +777,9 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
     if (taskBarShowWindows) {
         if (fTasks) {
             fTasks->setGeometry(YRect(left[0],
-                                      y[0],
+                                      taskButtonHeight ? y[0] + (h[0] - taskButtonHeight) / 2 : y[0],
                                       right[0] - left[0],
-                                      h[0]));
+                                      taskButtonHeight ? taskButtonHeight : h[0]));
             fTasks->show();
             fTasks->relayout();
         }
@@ -824,7 +830,14 @@ void TaskBar::updateLocation() {
     int dx, dy, dw, dh;
     manager->getScreenGeometry(&dx, &dy, &dw, &dh, -1);
 
-    int x = dx;
+    int x = taskBarCentered ? dx+dw/2-taskBarLength/2 : dx+taskBarXPos;
+
+    if (taskBarLength != 0)
+        dw = taskBarLength;
+        else
+// to centered full screen taskbar
+            x = dx;
+ 
     int y = dy;
     int w = 0;
     int h = 0;

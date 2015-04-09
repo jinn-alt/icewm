@@ -47,6 +47,9 @@ XIV(bool, taskBarShowStartMenu,                 true)
 XIV(bool, taskBarShowWindowListMenu,            true)
 XIV(bool, taskBarShowWorkspaces,                true)
 XIV(bool, taskBarShowWindows,                   true)
+XIV(int, taskBarXPos,                           0)
+XIV(int, taskBarLength,                         0)
+XIV(bool, taskBarCentered,                      false)
 XIV(bool, taskBarShowShowDesktopButton,         true)
 
 XIV(int, taskBarButtonWidthDivisor,             3)
@@ -303,6 +306,9 @@ cfoption icewm_preferences[] = {
     OBV("TaskBarShowWindows",                   &taskBarShowWindows,            "Show windows on the taskbar"),
     OBV("TaskBarShowShowDesktopButton",         &taskBarShowShowDesktopButton,  "Show 'show desktop' button on taskbar"),
     OBV("ShowEllipsis",                         &showEllipsis,                  "Show Ellipsis in taskbar items"),
+    OIV("TaskBarXPos",                          &taskBarXPos, 0, 16383,         "Set task bar position, in pixels from the left screen edge"),
+    OIV("TaskBarLength",                        &taskBarLength, 0, 16383,       "Set task bar length in pixels (0 for full screen)"),
+    OBV("TaskBarCentered",                      &taskBarCentered,               "Show task bar centered horizontally"),
 #ifdef CONFIG_TRAY
     OBV("TaskBarShowTray",                      &taskBarShowTray,               "Show windows in the tray"),
     OBV("TrayShowAllWindows",                   &trayShowAllWindows,            "Show windows from all workspaces on tray"),

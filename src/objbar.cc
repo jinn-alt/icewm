@@ -34,7 +34,7 @@ ref<YImage> toolbuttonPixbuf;
 ObjectBar::ObjectBar(YWindow *parent): YWindow(parent) {
     if (bgColor == 0)
         bgColor = new YColor(clrDefaultTaskBar);
-    setSize(1, 1);
+    setSize(0, 0);
 }
 
 ObjectBar::~ObjectBar() {

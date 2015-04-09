@@ -9,6 +9,11 @@ XIV(bool, prettyClock,                          false)
 XIV(bool, prettyClock,                          true)
 #endif
 XIV(bool, rolloverTitleButtons,                 false)
+XIV(int,  taskBarHeight,			0)
+XIV(int,  taskButtonHeight,			0)
+XIV(int,  taskButtonWidth,			0)
+XIV(int,  taskButtonSepSize,			0)
+XIV(bool, trayPanelUseBgPixmaps,		true)
 
 XIV(bool, trayDrawBevel,                        false)
 XIV(bool, titleBarCentered,                     false)
@@ -161,6 +166,12 @@ cfoption icewm_themable_preferences[] = {
 #ifndef LITE
     OBV("RolloverButtonsSupported",                             &rolloverTitleButtons,                      "Does it support the 'O' title bar button images (for mouse rollover)"),
 #endif
+    OIV("TaskBarHeight",                        &taskBarHeight, 0, 64,          "Taskbar Height (default SmallIconSize + 8)"),
+    OIV("TaskButtonHeight",                     &taskButtonHeight, 0, 64,       "Height for button elements in taskbar (default TaskBarHeight)"),
+    OIV("TaskButtonWidth",                      &taskButtonWidth, 0, 256,       "Width for button elements in taskpanel (default taskPanelWidth/TaskbarButtonDivisor )"),
+    OIV("TaskButtonSeparatorSize",              &taskButtonSepSize, 0, 64,      "Distance between task buttons (default 0)"),
+    OBV("TrayPanelUseBgPixmaps",                &trayPanelUseBgPixmaps,         "TrayPanel will use the some taskbutton[..].xpm pixmaps (default true)"),
+
     OBV("TaskBarClockLeds",                     &prettyClock,                   "Task bar clock/APM uses nice pixmapped LCD display (but then it doesn't display correctly in many languages anymore, e.g. for Japanese and Korean it works only when a real font is used and not the LEDs"),
     OBV("TrayDrawBevel",                        &trayDrawBevel,                 "Surround the tray with plastic border"),
 

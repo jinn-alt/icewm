@@ -112,27 +112,27 @@ void TrayApp::paint(Graphics &g, const YRect &/*r*/) {
 #endif
     } else if (getFrame()->isMinimized()) {
         bg = minimizedTrayAppBg;
-        bgPix = taskbuttonminimizedPixmap;
+        bgPix = trayPanelUseBgPixmaps ? taskbuttonminimizedPixmap : taskbackPixmap;
 #ifdef CONFIG_GRADIENTS
-        if (taskMinimizedGradient == null && taskbuttonminimizedPixbuf != null)
+        if (trayPanelUseBgPixmaps && taskMinimizedGradient == null && taskbuttonminimizedPixbuf != null)
             taskMinimizedGradient = taskbuttonminimizedPixbuf->scale(sw, sh);
-        bgGrad = taskMinimizedGradient;
+        bgGrad = trayPanelUseBgPixmaps ? taskMinimizedGradient : getGradient();
 #endif
     } else if (getFrame()->focused()) {
         bg = activeTrayAppBg;
-        bgPix = taskbuttonactivePixmap;
+        bgPix = trayPanelUseBgPixmaps ? taskbuttonactivePixmap : taskbackPixmap;
 #ifdef CONFIG_GRADIENTS
-        if (taskActiveGradient == null && taskbuttonactivePixbuf != null)
+        if (trayPanelUseBgPixmaps && taskActiveGradient == null && taskbuttonactivePixbuf != null)
             taskActiveGradient = taskbuttonactivePixbuf->scale(sw, sh);
-        bgGrad = taskActiveGradient;
+        bgGrad = trayPanelUseBgPixmaps ? taskActiveGradient : getGradient();
 #endif
     } else {
         bg = normalTrayAppBg;
-        bgPix = taskbuttonPixmap;
+        bgPix = trayPanelUseBgPixmaps ? taskbuttonPixmap : taskbackPixmap;
 #ifdef CONFIG_GRADIENTS
-        if (taskNormalGradient == null && taskbuttonPixbuf != null)
+        if (trayPanelUseBgPixmaps && taskNormalGradient == null && taskbuttonPixbuf != null)
             taskNormalGradient = taskbuttonPixbuf->scale(sw, sh);
-        bgGrad = taskNormalGradient;
+        bgGrad = trayPanelUseBgPixmaps ? taskNormalGradient : getGradient();
 #endif
     }
 
@@ -149,7 +149,10 @@ void TrayApp::paint(Graphics &g, const YRect &/*r*/) {
             else
 #endif
             if (bgPix != null)
+                if (trayPanelUseBgPixmaps)
                 g.fillPixmap(bgPix, 0, 0, width(), height(), 0, 0);
+                else
+                   g.fillPixmap(bgPix, 0, 0, width(), height(), parent()->x(), parent()->y());
             else {
                 g.setColor(bg);
                 g.fillRect(0, 0, width(), height());
@@ -160,7 +163,7 @@ void TrayApp::paint(Graphics &g, const YRect &/*r*/) {
     ref<YIcon> icon(getFrame()->getIcon());
 
     if (icon != null) {
-        icon->draw(g, 2, 2, YIcon::smallSize());
+        icon->draw(g, (width()-smallIconSize) / 2, (height()-smallIconSize) / 2, smallIconSize);
     }
 }
 
@@ -326,7 +329,7 @@ int TrayPane::getRequiredWidth() {
     for (TrayApp *a(fFirst); a != NULL; a = a->getNext())
         if (a->getShown()) tc++;
 
-    return (tc ? 4 + tc * (height() - 4) : 1);
+    return (tc ? tc * height() : 0);
 }
 
 void TrayPane::relayoutNow() {
@@ -348,9 +351,10 @@ void TrayPane::relayoutNow() {
     for (TrayApp *a(fFirst); a != NULL; a = a->getNext())
         if (a->getShown()) tc++;
 
-    w = h = height() - 4;
-    x = width() - 2 - tc * w;
-    y = 2;
+    w = h = height();
+    x = width() - 0 - tc * w;
+    x = x < 0 ? 0 : x;
+    y = 0;
 
     for (TrayApp *f(fFirst); f != NULL; f = f->getNext()) {
         if (f->getShown()) {

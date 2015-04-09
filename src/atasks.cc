@@ -455,6 +455,8 @@ void TaskPane::relayoutNow() {
     int rightX = width();
 
     w = (rightX - leftX - 2) / tc;
+    w -= taskButtonSepSize;
+    w = (taskButtonWidth && w > taskButtonWidth) ? taskButtonWidth : w;
     int rem = (rightX - leftX - 2) % tc;
     x = leftX;
     h = height();
@@ -473,7 +475,7 @@ void TaskPane::relayoutNow() {
             f->setGeometry(YRect(x, y, w1, h));
             f->show();
             x += w1;
-            x += 0;
+            x += taskButtonSepSize ;
             lc++;
         } else
             f->hide();
