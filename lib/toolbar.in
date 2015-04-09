@@ -1,9 +1,17 @@
 # This is an example for IceWM's toolbar definition file.
 #
-# Place your variants in @CFGDIR@ or in $HOME/.icewm
+# Place your variants in /etc/X11/icewm or in $HOME/.icewm
 # since modifications to this file will be discarded when you
 # (re)install icewm.
 #
-prog xterm /usr/share/icons/gnome/16x16/apps/terminal.png xterm
-prog "Web browser" /usr/share/icons/gnome/16x16/apps/web-browser.png xdg-open about:blank
-
+prog Screensaver lock xscreensaver-command -lock
+prog Terminal xterm xvt
+prog Emacs emacs emacs
+runonce Firefox firefox firefox-bin firefox
+runonce Thunderbird thunderbird thunderbird-bin thunderbird
+runonce Seamonkey seamonkey seamonkey-bin seamonkey
+prog XChat xchat xchat
+prog licq licq licq
+runonce GQView gqview gqview gqview
+runonce Xmms xmms XMMS_Player xmms
+prog Video xine xine

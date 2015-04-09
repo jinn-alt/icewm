@@ -3,11 +3,7 @@
 
 // themable preferences (themes can set only these)
 
-#if defined(CONFIG_I18N) || 1 // maybe not such a good idea
-XIV(bool, prettyClock,                          false)
-#else
 XIV(bool, prettyClock,                          true)
-#endif
 XIV(bool, rolloverTitleButtons,                 false)
 
 XIV(bool, trayDrawBevel,                        false)
@@ -16,6 +12,10 @@ XIV(bool, titleBarJoinLeft,                     false)
 XIV(bool, titleBarJoinRight,                    false)
 XIV(bool, showFrameIcon,                        true)
 
+#ifdef CONFIG_TASKBAR
+XIV(bool, taskBarAtTop,                         false)
+XIV(bool, taskBarDoubleHeight,                  false)
+#endif
 XIV(int, wsBorderX,                             6)
 XIV(int, wsBorderY,                             6)
 XIV(int, wsDlgBorderX,                          2)
@@ -46,9 +46,9 @@ XSV(const char *, themeAuthor,                  0)
 XSV(const char *, themeDescription,             0)
 
 XFV(const char *, titleFontName,                FONT(120), "sans-serif:size=12")
-XFV(const char *, menuFontName,                 BOLDFONT(100), "sans-serif:size=10:bold")
-XFV(const char *, statusFontName,               BOLDTTFONT(120), "monospace:size=12:bold")
-XFV(const char *, switchFontName,               BOLDTTFONT(120), "monospace:size=12:bold")
+XFV(const char *, menuFontName,                 FONT(120), "sans-serif:size=12")
+XFV(const char *, statusFontName,               TTFONT(120), "monospace:size=12")
+XFV(const char *, switchFontName,               TTFONT(120), "monospace:size=12")
 XFV(const char *, normalButtonFontName,         FONT(120), "sans-serif:size=12")
 XFV(const char *, activeButtonFontName,         BOLDFONT(120), "sans-serif:size=12:bold")
 #ifdef CONFIG_TASKBAR
@@ -164,6 +164,10 @@ cfoption icewm_themable_preferences[] = {
     OBV("TaskBarClockLeds",                     &prettyClock,                   "Task bar clock/APM uses nice pixmapped LCD display (but then it doesn't display correctly in many languages anymore, e.g. for Japanese and Korean it works only when a real font is used and not the LEDs"),
     OBV("TrayDrawBevel",                        &trayDrawBevel,                 "Surround the tray with plastic border"),
 
+#ifdef CONFIG_TASKBAR
+    OBV("TaskBarAtTop",                         &taskBarAtTop,                  "Task bar at top of the screen"),
+    OBV("TaskBarDoubleHeight",                  &taskBarDoubleHeight,           "Use double-height task bar"),
+#endif
     OBV("TitleBarCentered",                     &titleBarCentered,              "Draw window title centered (obsoleted by TitleBarJustify)"),
     OBV("TitleBarJoinLeft",                     &titleBarJoinLeft,              "Join title*S and title*T"),
     OBV("TitleBarJoinRight",                    &titleBarJoinRight,             "Join title*T and title*B"),
@@ -335,6 +339,7 @@ cfoption icewm_themable_preferences[] = {
     OSV("Gradients",                            &gradients,                     "List of gradient pixmaps in the current theme"),
 #endif
     OKF("Look", setLook, ""),
+    OKF("WorkspaceNames", addWorkspace, ""),
     OK0()
 };
 

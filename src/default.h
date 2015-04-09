@@ -26,7 +26,7 @@ XIV(bool, pointerColormap,                      true)
 XIV(bool, sizeMaximized,                        false)
 XIV(bool, showMoveSizeStatus,                   true)
 XIV(bool, workspaceSwitchStatus,                true)
-XIV(bool, beepOnNewMail,                        false)
+XIV(bool, beepOnNewMail,                        true)
 XIV(bool, warpPointer,                          false)
 XIV(bool, warpPointerOnEdgeSwitch,              false)
 XIV(bool, opaqueMove,                           true)
@@ -35,7 +35,6 @@ XIV(bool, hideTitleBarWhenMaximized,            false)
 XSV(const char *, winMenuItems,                 "rmsnxfhualyticw")
 #ifdef CONFIG_TASKBAR
 XIV(bool, showTaskBar,                          true)
-XIV(bool, taskBarAtTop,                         false)
 XIV(bool, taskBarKeepBelow,                     false)
 XIV(bool, taskBarShowClock,                     true)
 XIV(bool, taskBarShowApm,                       false)
@@ -59,13 +58,12 @@ XIV(bool, taskBarShowAllWindows,                false)
 XIV(bool, taskBarShowWindowIcons,               true)
 XIV(bool, taskBarAutoHide,                      false)
 XIV(bool, taskBarFullscreenAutoShow,            true)
-XIV(bool, taskBarDoubleHeight,                  false)
 XIV(bool, taskBarWorkspacesLeft,                true)
-XIV(bool, pagerShowPreview,                     false)
+XIV(bool, pagerShowPreview,                     true)
 XIV(bool, pagerShowWindowIcons,                 true)
 XIV(bool, pagerShowMinimized,                   true)
 XIV(bool, pagerShowBorders,                     true)
-XIV(bool, pagerShowNumbers,                     true)
+XIV(bool, pagerShowNumbers,                     false)
 XIV(bool, taskBarShowCPUStatus,                 true)
 XIV(bool, cpustatusShowRamUsage,                true)
 XIV(bool, cpustatusShowSwapUsage,               true)
@@ -86,7 +84,7 @@ XIV(bool, centerLarge,                          false)
 XIV(bool, centerTransientsOnOwner,              true)
 XIV(bool, autoRaise,                            false)
 XIV(bool, delayPointerFocus,                    true)
-XIV(bool, useMouseWheel,                        false)
+XIV(bool, useMouseWheel,                        true)
 XIV(bool, quickSwitch,                          true)
 XIV(bool, quickSwitchToMinimized,               true)
 XIV(bool, quickSwitchToHidden,                  true)
@@ -100,7 +98,7 @@ XIV(bool, quickSwitchSmallWindow,               false)
 XIV(bool, quickSwitchMaxWidth,                  false)
 XIV(bool, quickSwitchHugeIcon,                  false)
 XIV(bool, quickSwitchFillSelection,             false)
-XIV(bool, countMailMessages,                    false)
+XIV(bool, countMailMessages,                    true)
 XIV(bool, strongPointerFocus,                   false)
 XIV(bool, snapMove,                             true)
 XIV(bool, edgeHorzWorkspaceSwitching,           false)
@@ -171,12 +169,12 @@ XSV(const char *, acpiIgnoreBatteries,          0)
 #endif
 
 XSV(const char *, mailBoxPath,                  0)
-XSV(const char *, mailCommand,                  "xterm -name alpine -title ALPINE -e alpine")
-XSV(const char *, mailClassHint,                "alpine.XTerm")
+XSV(const char *, mailCommand,                  "xterm -name mutt -title MUTT -e mutt")
+XSV(const char *, mailClassHint,                "mutt.XTerm")
 XSV(const char *, newMailCommand,               0)
 XSV(const char *, lockCommand,                  0)
-XSV(const char *, clockCommand,                 "xclock -name icewm -title Clock")
-XSV(const char *, clockClassHint,               "icewm.XClock")
+XSV(const char *, clockCommand,                 "xterm -name cal -hold -g 21x9 -title 'Calendar' +sb -e cal")
+XSV(const char *, clockClassHint,               "cal.XClock")
 XSV(const char *, runDlgCommand,                0)
 XSV(const char *, openCommand,                  0)
 XSV(const char *, terminalCommand,              "xterm")
@@ -193,11 +191,11 @@ XIV(int, taskBarCPUDelay,                       500)
 XIV(int, taskBarMEMDelay,                       500)
 XIV(int, taskBarNetSamples,                     20)
 XIV(int, taskBarNetDelay,                       500)
-XSV(const char *, cpuCommand,                   "xterm -name top -title Process\\ Status -e top")
+XSV(const char *, cpuCommand,                   "xterm -name top -title 'Process Status' -e 'if [ -x /usr/bin/htop ]; then htop; else top; fi'")
 XSV(const char *, cpuClassHint,                 "top.XTerm")
-XSV(const char *, netCommand,                   "xterm -name netstat -title 'Network Status' -e netstat -c")
-XSV(const char *, netClassHint,                 "netstat.XTerm")
-XSV(const char *, netDevice,                    "eth0 wlan0")
+XSV(const char *, netCommand,                   "xterm -name iftop -title 'Network Status' -e iftop")
+XSV(const char *, netClassHint,                 "iftop.XTerm")
+XSV(const char *, netDevice,                    "eth0 wlan0 ppp0")
 XSV(const char *, addressBarCommand,            0)
 #ifdef CONFIG_I18N
 XSV(const char *, fmtTime,                      "%X")
@@ -287,7 +285,6 @@ cfoption icewm_preferences[] = {
     OBV("ArrangeWindowsOnScreenSizeChange",     &arrangeWindowsOnScreenSizeChange, "Automatically arrange windows when screen size changes"),
 #ifdef CONFIG_TASKBAR
     OBV("ShowTaskBar",                          &showTaskBar,                   "Show task bar"),
-    OBV("TaskBarAtTop",                         &taskBarAtTop,                  "Task bar at top of the screen"),
     OBV("TaskBarKeepBelow",                     &taskBarKeepBelow,              "Keep the task bar below regular windows"),
     OBV("TaskBarAutoHide",                      &taskBarAutoHide,               "Auto hide task bar after delay"),
     OBV("TaskBarFullscreenAutoShow",            &taskBarFullscreenAutoShow,     "Auto show task bar when fullscreen window active"),
@@ -320,7 +317,6 @@ cfoption icewm_preferences[] = {
     OBV("TaskBarShowMEMStatus",                 &taskBarShowMEMStatus,          "Show memory usage status on task bar (Linux only)"),
     OBV("TaskBarShowNetStatus",                 &taskBarShowNetStatus,          "Show network status on task bar (Linux only)"),
     OBV("TaskBarShowCollapseButton",            &taskBarShowCollapseButton,     "Show a button to collapse the taskbar"),
-    OBV("TaskBarDoubleHeight",                  &taskBarDoubleHeight,           "Use double-height task bar"),
     OBV("TaskBarWorkspacesLeft",                &taskBarWorkspacesLeft,         "Place workspace pager on left, not right"),
     OBV("PagerShowPreview",                     &pagerShowPreview,              "Show a mini desktop preview on each workspace button"),
     OBV("PagerShowWindowIcons",                 &pagerShowWindowIcons,          "Draw window icons inside large enough preview windows on pager (if PagerShowPreview=1)"),
@@ -465,6 +461,15 @@ cfoption icewm_preferences[] = {
     OKV("KeyWinArrangeW",                       gKeyWinArrangeW,                ""),
     OKV("KeyWinArrangeNW",                      gKeyWinArrangeNW,               ""),
     OKV("KeyWinArrangeC",                       gKeyWinArrangeC,                ""),
+    OKV("KeyWinSnapMoveN",                      gKeyWinSnapMoveN, "Move the window up until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveNE",                     gKeyWinSnapMoveNE, "Move the window up/right until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveE",                      gKeyWinSnapMoveE, "Move the window right until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveSE",                     gKeyWinSnapMoveSE, "Move the window down/right until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveS",                      gKeyWinSnapMoveS, "Move the window down until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveSW",                     gKeyWinSnapMoveSW, "Move the window down/left until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveW",                      gKeyWinSnapMoveW, "Move the window left until its bounce to an other window border"),
+    OKV("KeyWinSnapMoveNW",                     gKeyWinSnapMoveNW, "Move the window up/left until its bounce to an other window border"),
+    OKV("KeyWinSmartPlace",                     gKeyWinSmartPlace, "Smart window placement (minimal overlap)"),
     OKV("KeySysSwitchNext",                     gKeySysSwitchNext,              ""),
     OKV("KeySysSwitchLast",                     gKeySysSwitchLast,              ""),
     OKV("KeySysWinNext",                        gKeySysWinNext,                 ""),
@@ -517,7 +522,6 @@ cfoption icewm_preferences[] = {
     OKV("KeySysShowDesktop",                    gKeySysShowDesktop,             ""),
     OKV("KeySysCollapseTaskBar",                gKeySysCollapseTaskBar,         ""),
 #endif
-    OKF("WorkspaceNames", addWorkspace, ""),
     OSV("WinMenuItems",                         &winMenuItems,                  "Items supported in menu window (rmsnxfhualytickw)"),
     OK0()
 };
