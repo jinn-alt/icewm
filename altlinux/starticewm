@@ -1,0 +1,12 @@
+#!/bin/sh
+
+ExecIfExecutable()
+{
+	local f="$1"
+	shift
+	[ -x "$f" ] && exec "$f" "$@"
+}
+
+/usr/bin/xsetroot -cursor_name watch
+ExecIfExecutable /usr/bin/icewm-session "$@"
+/usr/bin/xsetroot -cursor_name X_cursor

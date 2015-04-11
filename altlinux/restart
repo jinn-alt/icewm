@@ -1,0 +1,3 @@
+#!/bin/sh
+killall -HUP icewmbg >/dev/null 2>&1 || :
+killall -HUP icewmtray >/dev/null 2>&1 || :
