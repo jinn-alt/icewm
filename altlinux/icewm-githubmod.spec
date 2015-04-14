@@ -5,7 +5,7 @@
 
 Name: %realname-githubmod
 Version: 1.3.9
-Release: alt0.M70T.1%gitrev
+Release: alt0.M70T.2%gitrev
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -130,6 +130,12 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 %doc AUTHORS NEWS README.md BUILD/doc/*.html 
 
 %changelog
+* Tue Apr 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt0.M70T.2.gite97394f
+- built for t7
+
+* Tue Apr 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt2.gite97394f
+- added support fd.o-style icons
+
 * Tue Apr 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt0.M70T.1.gite97394f
 - built for t7
 
