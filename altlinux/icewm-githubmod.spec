@@ -58,7 +58,7 @@ Recommends: iftop, mutt
 %build
 %cmake	-DCFGDIR=%_sysconfdir/X11/%realname -DPREFIX=%_prefix \
 	-DLIBDIR=%_x11x11dir/%realname -DCONFIG_GUIEVENTS=on  \
-	-DCONFIG_FDO_MENUS=off -DICESOUND="ALSA,OSS,ESound"
+	-DICESOUND="ALSA,OSS,ESound"
 pushd BUILD
 %make_build
 popd
