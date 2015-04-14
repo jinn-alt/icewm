@@ -1,7 +1,7 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
 %def_with menu
-%define gitrev .e97394f4
+%define gitrev .gite97394f
 
 Name: %realname-githubmod
 Version: 1.3.9
@@ -130,7 +130,7 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 %doc AUTHORS NEWS README.md BUILD/doc/*.html 
 
 %changelog
-* Sat Apr 11 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt1.e97394f4
+* Tue Apr 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt1.gite97394f
 - initial build for altlinux
 
 * Sat Feb 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 2:1.3.8-alt1
