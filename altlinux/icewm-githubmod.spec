@@ -15,6 +15,7 @@ Packager: Dmitriy Khanzhin <jinn@altlinux.ru>
 
 Provides: icewm = %version-%release
 Provides: icewm-light = %version-%release
+Conflicts: icewm-light
 
 Source0: %name.tar
 Source1: %realname.menu
@@ -135,6 +136,7 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 * Thu Apr 30 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt3.git960629d
 - git snapshot 960629d
 - old changelog cut off to separate file
+- added conflict to icewm-light
 
 * Tue Apr 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt2.gite97394f
 - added support fd.o-style icons
