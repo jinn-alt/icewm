@@ -1,11 +1,11 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
 %def_with menu
-%define gitrev .gite97394f
+%define gitrev .git960629d
 
 Name: %realname-githubmod
 Version: 1.3.9
-Release: alt2%gitrev
+Release: alt3%gitrev
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -130,6 +130,9 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 %doc AUTHORS NEWS README.md BUILD/doc/*.html 
 
 %changelog
+* Thu Apr 30 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt3.git960629d
+- git snapshot 960629d
+
 * Tue Apr 14 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt2.gite97394f
 - added support fd.o-style icons
 
