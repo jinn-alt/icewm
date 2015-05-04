@@ -5,7 +5,7 @@
 
 Name: %realname-githubmod
 Version: 1.3.9
-Release: alt0.M70T.3%gitrev
+Release: alt0.M70T.4%gitrev
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -15,6 +15,7 @@ Packager: Dmitriy Khanzhin <jinn@altlinux.ru>
 
 Provides: icewm = %version-%release
 Provides: icewm-light = %version-%release
+Requires: design-%realname >= 1.0-alt6
 Conflicts: icewm-light
 
 Source0: %name.tar
@@ -133,6 +134,12 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 %doc AUTHORS NEWS README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Mon May 04 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt0.M70T.4.git960629d
+- built for t7
+
+* Mon May 04 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt4.git960629d
+- added forgotten requires to design-icewm
+
 * Thu Apr 30 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt0.M70T.3.git960629d
 - built for t7
 
