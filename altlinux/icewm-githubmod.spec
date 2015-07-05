@@ -137,6 +137,7 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 * Sun Jul 05 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.10-alt1
 - 1.3.10 release
 - updated reboot/shutdown commands for use with systemd and sysvinit
+- extended strong control of startup sequence in icewm-session
 
 * Mon May 04 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt4.git960629d
 - added forgotten requires to design-icewm
