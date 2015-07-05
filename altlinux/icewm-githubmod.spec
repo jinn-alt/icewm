@@ -1,11 +1,11 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
 %def_with menu
-%define gitrev .git960629d
+%define gitrev .git956b8d7
 
 Name: %realname-githubmod
-Version: 1.3.9
-Release: alt0.M70T.4%gitrev
+Version: 1.3.10
+Release: alt0.M70T.1
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -134,6 +134,14 @@ rm -rf %buildroot/%_x11x11dir/%realname/themes/*
 %doc AUTHORS NEWS README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sun Jul 05 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.10-alt0.M70T.1
+- built for t7
+
+* Sun Jul 05 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.10-alt1
+- 1.3.10 release
+- updated reboot/shutdown commands for use with systemd and sysvinit
+- extended strong control of startup sequence in icewm-session
+
 * Mon May 04 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.9-alt0.M70T.4.git960629d
 - built for t7
 
