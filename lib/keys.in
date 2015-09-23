@@ -28,12 +28,13 @@ key "Alt+Ctrl+KP_Multiply"	amixer sset Master 5+ >/dev/null 2>&1 # raise volume
 # pressing those keys and map those symbols by using xmodmap.
 
 key "XF86Standby"		killall -QUIT icewm
+key "XF86Sleep"			/bin/sh -c "{ test -e /run/systemd/system && systemctl suspend; } ||:"
 key "XF86AudioLowerVolume"	amixer sset Master 5- >/dev/null 2>&1
 key "XF86AudioRaiseVolume"	amixer sset Master 5+ >/dev/null 2>&1
 key "XF86AudioMute"		amixer sset Master toggle >/dev/null
 key "XF86AudioPlay"		cdplay play 1
 key "XF86AudioStop"		cdplay stop
-key "XF86HomePage"		firefox
+key "XF86HomePage"		xdg-open file:///usr/share/doc/indexhtml/index.html
 key "XF86Mail"			thunderbird
-key "XF86Search"		firefox http://www.altlinux.org/
+key "XF86Search"		xdg-open http://search.altlinux.org/
 key "XF86Eject"			eject
