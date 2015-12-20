@@ -1,11 +1,11 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
 %def_with menu
-%define gitrev .gitd490895
+%define gitrev .gitb3bd220
 
 Name: %realname-githubmod
-Version: 1.3.11
-Release: alt2
+Version: 1.3.12
+Release: alt1
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -136,6 +136,9 @@ rm -rf %buildroot/%_datadir/xsessions
 %doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sun Dec 20 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12-alt1
+- 1.3.12 release
+
 * Mon Oct 05 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.11-alt2
 - added Obsoletes
 - added README.ALT
