@@ -635,7 +635,7 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
 #ifndef NO_CONFIGURE_MENUS
         { fObjectBar, true, 1, true, 4, 0, taskButtonHeight ? false : true },
 #endif
-        { fWorkspaces, taskBarWorkspacesLeft, 0, true, 4, 4, taskButtonHeight ? false : true },
+        { fWorkspaces, taskBarWorkspacesLeft, taskBarDoubleHeight && taskBarWorkspacesTop, true, 4, 4, taskButtonHeight ? false : true },
 
         { fCollapseButton, false, 0, true, 0, 2, taskButtonHeight ? false : true },
 #ifdef CONFIG_APPLET_CLOCK
@@ -704,9 +704,13 @@ void TaskBar::updateLayout(int &size_w, int &size_h) {
     {
         int dx, dy, dw, dh;
         manager->getScreenGeometry(&dx, &dy, &dw, &dh);
+<<<<<<< HEAD
         if (taskBarLength != 0)
                 dw = taskBarLength;
         w = dw;
+=======
+        w = (dw/100.0) * taskBarWidthPercentage;
+>>>>>>> refs/heads/icewm-1-3-BRANCH
     }
 
     if (taskBarAtTop) { // !!! for now
@@ -842,6 +846,10 @@ void TaskBar::updateLocation() {
     int w = 0;
     int h = 0;
 
+    w = (dw/100.0) * taskBarWidthPercentage;
+    if (strcmp(taskBarJustify, "right") == 0) x = dw - w;
+    if (strcmp(taskBarJustify, "center") == 0) x = (dw - w)/2;
+    
     updateLayout(w, h);
 
     if (fIsCollapsed) {
