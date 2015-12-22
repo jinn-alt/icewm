@@ -5,7 +5,7 @@
 
 Name: %realname-githubmod
 Version: 1.3.12
-Release: alt1
+Release: alt0.M70T.1
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -16,7 +16,7 @@ Packager: Dmitriy Khanzhin <jinn@altlinux.ru>
 Provides: %realname = %version-%release
 Provides: %realname-light = %version-%release
 Requires: design-%realname >= 1.0-alt6
-Obsoletes: %realname-light < %version-%release
+Conflicts: %realname-light
 
 Source0: %name.tar
 Source1: %realname.menu
@@ -135,6 +135,9 @@ rm -rf %buildroot/%_datadir/xsessions
 %doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Tue Dec 22 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12-alt0.M70T.1
+- built for t7
+
 * Sun Dec 20 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12-alt1
 - 1.3.12 release
 
