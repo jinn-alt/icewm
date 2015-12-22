@@ -1,22 +1,22 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
 %def_with menu
-%define gitrev .gitd490895
+%define gitrev .gitb3bd220
 
 Name: %realname-githubmod
-Version: 1.3.11
-Release: alt0.M70T.1
+Version: 1.3.12
+Release: alt1
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
 License: LGPLv2
-Url: https://github.com/bbidulock/icewm
+Url: http://www.icewm.org
 Packager: Dmitriy Khanzhin <jinn@altlinux.ru>
 
 Provides: %realname = %version-%release
 Provides: %realname-light = %version-%release
 Requires: design-%realname >= 1.0-alt6
-Conflicts: %realname-light
+Obsoletes: %realname-light < %version-%release
 
 Source0: %name.tar
 Source1: %realname.menu
@@ -27,7 +27,7 @@ Source5: %realname-48.png
 Source6: start%realname
 Source7: IceWM.xpm
 Source8: %realname.wmsession
-#Source9: README.ALT
+Source9: README.ALT
 Source10: %realname.desktop
 Source11: restart
 Source12: icewm-old-changelog.bz2
@@ -50,7 +50,7 @@ Warp 3,4, Motif or the Java Metal GUI. Tries to take the best features of the
 above systems. Features multiple workspaces, opaque move/resize, task bar,
 window list, mailbox status, digital clock. Fast and small.
  This release is based on alternative source, based on a community fork
-maintained on Github.
+maintained on Github https://github.com/bbidulock/icewm
 
 Recommends: iftop, mutt
 
@@ -70,7 +70,6 @@ popd
 pushd BUILD
 %makeinstall_std
 popd
-cp %buildroot/%_datadir/doc/%realname/preferences %buildroot/%_x11x11dir/%realname/preferences
 
 %if_with menu
 mkdir -p %buildroot%_menudir
@@ -84,7 +83,7 @@ install -pD -m644 %SOURCE4 %buildroot%_niconsdir/%realname.png
 install -pD -m644 %SOURCE5 %buildroot%_liconsdir/%realname.png
 install -pD -m644 %SOURCE7 %buildroot%_pixmapsdir/IceWM.xpm
 install -pD -m644 %SOURCE8 %buildroot%_sysconfdir/X11/wmsession.d/04IceWM
-#install -m 644 #SOURCE9 doc/README.ALT
+install -m644 %SOURCE9 README.ALT
 install -m644 %SOURCE12 icewm-old-changelog.bz2
 
 mkdir -p %buildroot%_sysconfdir/X11/%realname
@@ -133,9 +132,17 @@ rm -rf %buildroot/%_datadir/xsessions
 %_pixmapsdir/*
 %_man1dir/*
 
-%doc AUTHORS NEWS README.md BUILD/doc/*.html icewm-old-changelog.bz2
+%doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sun Dec 20 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12-alt1
+- 1.3.12 release
+
+* Mon Oct 05 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.11-alt2
+- added Obsoletes
+- added README.ALT
+- fixed Url
+
 * Wed Sep 23 2015 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.11-alt0.M70T.1
 - built for t7
 
