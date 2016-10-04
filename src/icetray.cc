@@ -42,6 +42,7 @@ public:
     void trayChanged();
 private:
     Atom icewm_internal_tray;
+    Atom manager;
     Atom _NET_SYSTEM_TRAY_OPCODE;
     YXTray *fTray2;
 };
@@ -177,6 +178,8 @@ SysTray::SysTray(): YWindow(0) {
     sprintf(trayatom2, "_ICEWM_INTTRAY_S%d", xapp->screen());
     icewm_internal_tray =
         XInternAtom(xapp->display(), trayatom2, False);
+    manager =
+        XInternAtom(xapp->display(), "MANAGER", False);
 
     _NET_SYSTEM_TRAY_OPCODE =
         XInternAtom(xapp->display(),
@@ -220,7 +223,7 @@ void SysTray::requestDock() {
 }
 
 bool SysTray::checkMessageEvent(const XClientMessageEvent &message) {
-    if (message.message_type == icewm_internal_tray) {
+    if (message.message_type == manager && (Atom) message.data.l[1] == icewm_internal_tray) {
         MSG(("requestDock"));
         requestDock();
     }
@@ -230,13 +233,18 @@ bool SysTray::checkMessageEvent(const XClientMessageEvent &message) {
 int main(int argc, char **argv) {
     YLocale locale;
     SysTrayApp stapp(&argc, &argv);
+    int notified = 0;
     for(int i=1; i<argc; ++i)
     {
-       if(argv[i] && 0 == strcmp("--notify", argv[i]))
+       if(argv[i] && 0 == strcmp("--notify", argv[i]) && !notified)
        {
           kill(getppid(), SIGUSR1);
-          break;
+          notified = 1;
        }
+#ifdef DEBUG
+       if(argv[i] && 0 == strcmp("--debug", argv[i]))
+          debug = 1;
+#endif
     }
 
     return stapp.mainLoop();
