@@ -137,6 +137,7 @@ rm -rf %buildroot/%_datadir/xsessions
 %changelog
 * Tue Oct 04 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt1.gitcbb3423
 - git snapshot cbb3423 (ALT #32034, fixed in upstream)
+- added support chromium and palemoon in toolbar (ALT #32504)
 
 * Sun Mar 20 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12-alt2.gitb60d6d4
 - git snapshot b60d6d4
