@@ -84,7 +84,9 @@ install -m 755 %SOURCE11 %buildroot%_sysconfdir/X11/%realname/restart
 
 # remove unpackaged files
 rm -f %buildroot/%_bindir/%realname-set-gnomewm
+mv %buildroot/%_x11x11dir/%realname/themes/default ./Default
 rm -rf %buildroot/%_x11x11dir/%realname/themes/*
+mv ./Default %buildroot/%_x11x11dir/%realname/themes/
 rm -rf %buildroot/%_datadir/doc/%realname
 rm -rf %buildroot/%_datadir/xsessions
 
@@ -117,6 +119,7 @@ rm -rf %buildroot/%_datadir/xsessions
 %changelog
 * Sun Nov 13 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt2.gitcbb3423
 - don't install debian-menu file, also desktop file
+- packaged theme "Default"
 
 * Tue Oct 04 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt1.gitcbb3423
 - git snapshot cbb3423 (ALT #32034, fixed in upstream)
