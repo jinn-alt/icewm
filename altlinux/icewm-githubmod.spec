@@ -4,7 +4,7 @@
 
 Name: %realname-githubmod
 Version: 1.3.12.56
-Release: alt2%gitrev
+Release: alt1%gitrev.M80P.1
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -117,6 +117,9 @@ rm -rf %buildroot/%_datadir/xsessions
 %doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Mon Nov 14 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt1.gitcbb3423.M80P.1
+- built for p8
+
 * Sun Nov 13 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt2.gitcbb3423
 - don't install debian-menu file, also desktop file
 - packaged theme "Default"
