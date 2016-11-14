@@ -7,9 +7,11 @@
 prog Screensaver lock xscreensaver-command -lock
 prog Terminal xterm xvt
 prog Emacs emacs emacs
+runonce Chromium chromium chromium chromium
 runonce Firefox firefox firefox-bin firefox
-runonce Thunderbird thunderbird thunderbird-bin thunderbird
+runonce Palemoon newmoon palemoon-bin palemoon
 runonce Seamonkey seamonkey seamonkey-bin seamonkey
+runonce Thunderbird thunderbird thunderbird-bin thunderbird
 prog XChat xchat xchat
 prog licq licq licq
 runonce GQView gqview gqview gqview

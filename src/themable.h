@@ -62,6 +62,7 @@ XFV(const char *, minimizedWindowFontName,      FONT(120), "sans-serif:size=12")
 XFV(const char *, listBoxFontName,              FONT(120), "sans-serif:size=12")
 XFV(const char *, labelFontName,                FONT(140), "sans-serif:size=12")
 XFV(const char *, clockFontName,                TTFONT(140), "monospace:size=12")
+XFV(const char *, tempFontName,                 TTFONT(140), "monospace:size=12")
 XFV(const char *, apmFontName,                  TTFONT(140), "monospace:size=12")
 XFV(const char *, inputFontName,                TTFONT(140), "monospace:size=12")
 
@@ -143,6 +144,7 @@ XSV(const char *, clrCpuIoWait,                 "rgb:60/00/60")
 XSV(const char *, clrCpuSoftIrq,                "rgb:00/FF/FF")
 XSV(const char *, clrCpuNice,                   "rgb:00/00/FF")
 XSV(const char *, clrCpuIdle,                   "rgb:00/00/00")
+XSV(const char *, clrCpuTemp,                   "rgb:60/60/C0")
 XSV(const char *, clrMemUser,                   "rgb:40/40/80")
 XSV(const char *, clrMemBuffers,                "rgb:60/60/C0")
 XSV(const char *, clrMemCached,                 "rgb:80/80/FF")
@@ -159,7 +161,7 @@ XSV(const char *, gradients,                    0)
 
 cfoption icewm_themable_preferences[] = {
 #ifndef LITE
-    OBV("RolloverButtonsSupported",                             &rolloverTitleButtons,                      "Does it support the 'O' title bar button images (for mouse rollover)"),
+    OBV("RolloverButtonsSupported",             &rolloverTitleButtons,          "Does it support the 'O' title bar button images (for mouse rollover)"),
 #endif
     OBV("TaskBarClockLeds",                     &prettyClock,                   "Task bar clock/APM uses nice pixmapped LCD display (but then it doesn't display correctly in many languages anymore, e.g. for Japanese and Korean it works only when a real font is used and not the LEDs"),
     OBV("TrayDrawBevel",                        &trayDrawBevel,                 "Surround the tray with plastic border"),
@@ -189,7 +191,7 @@ cfoption icewm_themable_preferences[] = {
     OIV("MenuIconSize",                         &menuIconSize, 8, 128,          "Menu icon size"),
     OIV("SmallIconSize",                        &smallIconSize, 8, 128,         "Dimension of the small icons"),
     OIV("LargeIconSize",                        &largeIconSize, 8, 128,         "Dimension of the large icons"),
-    OIV("HugeIconSize",                         &hugeIconSize, 8, 128,         "Dimension of the large icons"),
+    OIV("HugeIconSize",                         &hugeIconSize, 8, 128,          "Dimension of the large icons"),
 
     OIV("QuickSwitchHorzMargin",                &quickSwitchHMargin, 0, 64,     "Horizontal margin of the quickswitch window"),
     OIV("QuickSwitchVertMargin",                &quickSwitchVMargin, 0, 64,     "Vertical margin of the quickswitch window"),
@@ -223,6 +225,7 @@ cfoption icewm_themable_preferences[] = {
     OFV("ListBoxFontName",                      &listBoxFontName,               ""),
     OFV("ToolTipFontName",                      &toolTipFontName,               ""),
     OFV("ClockFontName",                        &clockFontName,                 ""),
+    OFV("TempFontName",                         &tempFontName,                  ""),
     OFV("ApmFontName",                          &apmFontName,                   ""),
     OFV("InputFontName",                        &inputFontName,                 ""),
     OFV("LabelFontName",                        &labelFontName,                 ""),
@@ -244,7 +247,7 @@ cfoption icewm_themable_preferences[] = {
     OSV("ColorNormalWorkspaceButton",           &clrWorkspaceNormalButton,      "Background of workspace buttons, ColorNormalButton is used if empty"),
     OSV("ColorNormalWorkspaceButtonText",       &clrWorkspaceNormalButtonText,  "Textcolor of workspace buttons, ColorNormalButtonText is used if empty"),
     OSV("ColorActiveWorkspaceButton",           &clrWorkspaceActiveButton,      "Background of the active workspace button, ColorActiveButton is used if empty"),
-    OSV("ColorActiveWorkspaceButtonText",       &clrWorkspaceActiveButtonText, "Textcolor of the active workspace button, ColorActiveButtonText is used if empty"),
+    OSV("ColorActiveWorkspaceButtonText",       &clrWorkspaceActiveButtonText,  "Textcolor of the active workspace button, ColorActiveButtonText is used if empty"),
 
     OSV("ColorNormalTitleBar",                  &clrInactiveTitleBar,           "Background of the titlebar of regular windows"),
     OSV("ColorNormalTitleBarText",              &clrInactiveTitleBarText,       "Textcolor of the titlebar of regular windows"),
@@ -323,6 +326,7 @@ cfoption icewm_themable_preferences[] = {
     OSV("ColorCPUStatusSoftIrq",                &clrCpuSoftIrq,                 "Soft Interrupts on the CPU monitor"),
     OSV("ColorCPUStatusNice",                   &clrCpuNice,                    "Nice load on the CPU monitor"),
     OSV("ColorCPUStatusIdle",                   &clrCpuIdle,                    "Idle (non) load on the CPU monitor, leave empty to force transparency"),
+    OSV("ColorCPUStatusTemp",                   &clrCpuTemp,                    "Temperature of the CPU"),
 #endif
 #ifdef CONFIG_APPLET_MEM_STATUS
     OSV("ColorMEMStatusUser",                   &clrMemUser,                    "User program usage in the memory monitor"),
