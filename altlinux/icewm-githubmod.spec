@@ -1,10 +1,10 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
-%define gitrev .gitcbb3423
+%define gitrev .gitedf8c50
 
 Name: %realname-githubmod
 Version: 1.3.12.56
-Release: alt3%gitrev
+Release: alt4%gitrev
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -118,6 +118,9 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Thu Jan 12 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt4.gitedf8c50
+- git snapshot edf8c50
+
 * Tue Dec 13 2016 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt3.gitcbb3423
 - packaged desktop file for xsession
 
