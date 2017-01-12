@@ -11,9 +11,9 @@ msgid ""
 msgstr ""
 "Project-Id-Version: icewm 1.2.30\n"
 "Report-Msgid-Bugs-To: https://github.com/bbidulock/icewm/issues\n"
-"POT-Creation-Date: 2016-07-09 21:33-0600\n"
-"PO-Revision-Date: 2016-06-26 18:48+0000\n"
-"Last-Translator: Dingzhong Chen <wsxy162@gmail.com>\n"
+"POT-Creation-Date: 2017-01-03 23:39-0700\n"
+"PO-Revision-Date: 2016-12-17 16:24+0000\n"
+"Last-Translator: Marguerite Su <i@marguerite.su>\n"
 "Language-Team: Chinese (China) <https://l10n.opensuse.org/projects/icewm/"
 "icewm-1-3-branch/zh_CN/>\n"
 "Language: zh_CN\n"
@@ -23,61 +23,69 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Weblate 2.6\n"
 
-#: src/aapm.cc:191 src/aapm.cc:524 src/aapm.cc:754 src/aapm.cc:875
+#: src/aapm.cc:191 src/aapm.cc:513 src/aapm.cc:753 src/aapm.cc:874
 msgid " - Power"
 msgstr " - 供电中"
 
-#: src/aapm.cc:193 src/aapm.cc:527 src/aapm.cc:757
+#: src/aapm.cc:193 src/aapm.cc:516 src/aapm.cc:756
 msgid "P"
 msgstr "P"
 
-#: src/aapm.cc:197 src/aapm.cc:498 src/aapm.cc:734 src/aapm.cc:846
+#: src/aapm.cc:197 src/aapm.cc:487 src/aapm.cc:733 src/aapm.cc:845
 #, c-format
 msgid " - Charging"
 msgstr " - 充电中"
 
-#: src/aapm.cc:199 src/aapm.cc:500 src/aapm.cc:736
+#: src/aapm.cc:199 src/aapm.cc:489 src/aapm.cc:735
 msgid "C"
 msgstr "C"
 
-#: src/aapm.cc:502
+#: src/aapm.cc:491
 msgid " - Full"
 msgstr " - 已充满"
 
-#: src/acpustatus.cc:234
+#: src/acpustatus.cc:269
 #, c-format
 msgid "CPU Load: %3.2f %3.2f %3.2f, %u"
-msgstr ""
+msgstr "CPU 负载： %3.2f %3.2f %3.2f, %u"
 
-#: src/acpustatus.cc:239
+#: src/acpustatus.cc:274
 #, c-format
 msgid ""
 "\n"
 "Ram (free): %5.2f (%.2f) M"
 msgstr ""
+"\n"
+"Ram （空闲）： %5.2f (%.2f) M"
 
-#: src/acpustatus.cc:244
+#: src/acpustatus.cc:279
 #, c-format
 msgid ""
 "\n"
 "Swap (free): %.2f (%.2f) M"
 msgstr ""
+"\n"
+"Swap （空闲）： %.2f (%.2f) M"
 
-#: src/acpustatus.cc:250
+#: src/acpustatus.cc:285
 #, c-format
 msgid ""
 "\n"
 "ACPI Temp: "
 msgstr ""
+"\n"
+"ACPI Temp： "
 
-#: src/acpustatus.cc:261
+#: src/acpustatus.cc:304
 #, c-format
 msgid ""
 "\n"
 "CPU Freq: %.3fGHz"
 msgstr ""
+"\n"
+"CPU 频率： %.3fGHz"
 
-#: src/acpustatus.cc:274
+#: src/acpustatus.cc:323
 msgid "CPU Load: "
 msgstr "CPU 负载: "
 
@@ -136,63 +144,68 @@ msgstr ""
 #: src/aworkspaces.cc:155 src/aworkspaces.cc:220 src/aworkspaces.cc:276
 #: src/wmstatus.cc:178
 msgid "Workspace: "
-msgstr "工作区："
+msgstr "工作区： "
 
 #: src/fdomenu.cc:74
-msgid "Settings"
+msgid "Accessibility"
 msgstr ""
 
 #: src/fdomenu.cc:75
-msgid "Screensavers"
-msgstr ""
+msgid "Settings"
+msgstr "设置"
 
 #: src/fdomenu.cc:76
-msgid "Accessories"
-msgstr ""
+msgid "Screensavers"
+msgstr "屏幕保护"
 
 #: src/fdomenu.cc:77
-msgid "Development"
-msgstr ""
+msgid "Accessories"
+msgstr "附件"
 
 #: src/fdomenu.cc:78
-msgid "Education"
-msgstr ""
+msgid "Development"
+msgstr "开发"
 
 #: src/fdomenu.cc:79
-msgid "Games"
-msgstr ""
+msgid "Education"
+msgstr "教育"
 
 #: src/fdomenu.cc:80
-msgid "Graphics"
-msgstr ""
+msgid "Games"
+msgstr "游戏"
 
 #: src/fdomenu.cc:81
-msgid "Multimedia"
-msgstr ""
+msgid "Graphics"
+msgstr "图像"
 
 #: src/fdomenu.cc:82
-msgid "Network"
-msgstr ""
+msgid "Multimedia"
+msgstr "多媒体"
 
 #: src/fdomenu.cc:83
-msgid "Office"
-msgstr ""
+msgid "Network"
+msgstr "网络"
 
 #: src/fdomenu.cc:84
-msgid "System"
-msgstr ""
+msgid "Office"
+msgstr "办公"
 
 #: src/fdomenu.cc:85
-msgid "WINE"
-msgstr ""
+msgid "System"
+msgstr "系统"
 
 #: src/fdomenu.cc:86
-msgid "Editors"
-msgstr ""
+#, fuzzy
+msgid "WINE"
+msgstr "WINE"
 
 #: src/fdomenu.cc:87
+msgid "Editors"
+msgstr "编辑器"
+
+#: src/fdomenu.cc:88
 msgid "Other"
-msgstr ""
+msgstr "其他"
 
 #: src/icehelp.cc:715
 msgid "Back"
@@ -200,7 +213,7 @@ msgstr "后退"
 
 #: src/icehelp.cc:715
 msgid "Alt+Left"
-msgstr "Alt+Left"
+msgstr "Alt+左方向键"
 
 #: src/icehelp.cc:716
 msgid "Forward"
@@ -208,7 +221,7 @@ msgstr "前进"
 
 #: src/icehelp.cc:716
 msgid "Alt+Right"
-msgstr "Alt+Right"
+msgstr "Alt+右方向键"
 
 #: src/icehelp.cc:718
 msgid "Previous"
@@ -254,7 +267,7 @@ msgstr "路径无效：%s\n"
 
 #: src/icehelp.cc:1342
 msgid "Invalid path: "
-msgstr "路径无效："
+msgstr "路径无效： "
 
 #: src/icelist.cc:84
 msgid "List View"
@@ -424,16 +437,16 @@ msgstr "IceWM 托盘选项"
 
 #: src/icesh.cc:616
 msgid "Usage error: "
-msgstr "用法错误："
+msgstr "用法错误： "
 
 #: src/icesh.cc:687
 #, c-format
 msgid "Invalid argument: `%s'."
-msgstr "无效参数：`%s'"
+msgstr "无效参数：`%s'。"
 
 #: src/icesh.cc:696
 msgid "No actions specified."
-msgstr "未指定行为"
+msgstr "未指定行为。"
 
 #: src/icesh.cc:703 src/icesound.cc:1050 src/icewmhint.cc:76 src/yxapp.cc:975
 #, c-format
@@ -443,7 +456,7 @@ msgstr "无法打开显示：%s。 X必须正在执行且设定 $DISPLAY。"
 #: src/icesh.cc:743
 #, c-format
 msgid "Invalid window identifier: `%s'"
-msgstr "无效的窗口标识符：%s "
+msgstr "无效的窗口标识符：`%s'"
 
 #: src/icesh.cc:896
 #, c-format
@@ -607,7 +620,7 @@ msgstr "接口 %s 未编译支持。"
 #: src/icesound.cc:1216
 #, c-format
 msgid "Unsupported interface: %s."
-msgstr "不支持的接口：%s"
+msgstr "不支持的接口：%s。"
 
 #: src/icesound.cc:1233
 #, c-format
@@ -702,7 +715,7 @@ msgstr "内存不足（len=%d）。"
 
 #: src/misc.cc:330
 msgid "Warning: "
-msgstr "警告："
+msgstr "警告： "
 
 #: src/movesize.cc:903
 #, c-format
@@ -731,11 +744,11 @@ msgstr "主题作者："
 
 #: src/wmabout.cc:43
 msgid "CodeSet:"
-msgstr ""
+msgstr "代码集："
 
 #: src/wmabout.cc:44
 msgid "Language:"
-msgstr ""
+msgstr "语言："
 
 #: src/wmabout.cc:69
 msgid "icewm - About"
@@ -970,11 +983,10 @@ msgid "Bad Look name"
 msgstr "错误的外观名"
 
 #: src/wmdialog.cc:83
-#, fuzzy
 msgid "Loc_k Workstation"
-msgstr "锁住工作站(_W)"
+msgstr "锁定工作站(_k)"
 
-#: src/wmdialog.cc:90 src/wmprog.cc:948 src/wmprog.cc:950 src/wmtaskbar.cc:434
+#: src/wmdialog.cc:90 src/wmprog.cc:949 src/wmprog.cc:951 src/wmtaskbar.cc:434
 #: src/wmtaskbar.cc:436
 msgid "_Logout..."
 msgstr "退出(_L)..."
@@ -987,7 +999,7 @@ msgstr "取消(_C)"
 msgid "_Restart icewm"
 msgstr "重启 icewm(_R)"
 
-#: src/wmdialog.cc:125 src/wmprog.cc:886 src/wmtaskbar.cc:426
+#: src/wmdialog.cc:125 src/wmprog.cc:887 src/wmtaskbar.cc:426
 #: src/wmtaskbar.cc:429
 msgid "_About"
 msgstr "关于(_A)"
@@ -1014,7 +1026,7 @@ msgstr "提升/降低"
 
 #: src/wmframe.cc:1727
 msgid "Kill Client: "
-msgstr "杀死客户程序"
+msgstr "杀死客户程序： "
 
 #: src/wmframe.cc:1731
 msgid ""
@@ -1074,45 +1086,45 @@ msgstr "未期望的关键词: %s"
 msgid "Error at key %s"
 msgstr "键 %s 错误"
 
-#: src/wmprog.cc:850
+#: src/wmprog.cc:851
 msgid "Programs"
 msgstr "程序"
 
-#: src/wmprog.cc:855
+#: src/wmprog.cc:856
 msgid "_Run..."
-msgstr "运行(_R)"
+msgstr "运行…(_R)"
 
-#: src/wmprog.cc:862 src/wmtaskbar.cc:414
+#: src/wmprog.cc:863 src/wmtaskbar.cc:414
 msgid "_Windows"
 msgstr "窗口(_W)"
 
-#: src/wmprog.cc:899
+#: src/wmprog.cc:900
 msgid "_Help"
 msgstr "帮助(_H)"
 
-#: src/wmprog.cc:917
+#: src/wmprog.cc:918
 msgid "_Click to focus"
-msgstr ""
+msgstr "点击聚焦(_C)"
 
-#: src/wmprog.cc:922
+#: src/wmprog.cc:923
 msgid "_Sloppy mouse focus"
 msgstr ""
 
-#: src/wmprog.cc:927
+#: src/wmprog.cc:928
 msgid "Custo_m"
-msgstr ""
+msgstr "自定义(_m)"
 
-#: src/wmprog.cc:933
+#: src/wmprog.cc:934
 msgid "_Focus"
-msgstr ""
+msgstr "聚焦(_F)"
 
-#: src/wmprog.cc:940
+#: src/wmprog.cc:941
 msgid "_Themes"
 msgstr "主题(_T)"
 
-#: src/wmprog.cc:942
+#: src/wmprog.cc:943
 msgid "Se_ttings"
-msgstr ""
+msgstr "设置(_t)"
 
 #: src/wmsession.cc:239 src/wmsession.cc:255 src/wmsession.cc:265
 #, c-format
@@ -1163,15 +1175,15 @@ msgstr "刷新(_R)"
 msgid "_License"
 msgstr "许可(_L)"
 
-#: src/wmtaskbar.cc:562
+#: src/wmtaskbar.cc:563
 msgid "Favorite applications"
 msgstr "喜欢的应用程序"
 
-#: src/wmtaskbar.cc:579
+#: src/wmtaskbar.cc:580
 msgid "Window list menu"
 msgstr "窗口列表菜单"
 
-#: src/wmtaskbar.cc:588
+#: src/wmtaskbar.cc:589
 msgid "Show Desktop"
 msgstr "显示桌面"
 
@@ -1367,9 +1379,8 @@ msgid "Invalid multibyte string \"%s\": %s"
 msgstr "错误的多字节字符串“%s”：%s"
 
 #: src/ymsgbox.cc:38
-#, fuzzy
 msgid "_OK"
-msgstr "确定"
+msgstr "确定(_O)"
 
 #: src/ypaths.cc:144 src/ypaths.cc:171
 #, c-format
@@ -1392,9 +1403,9 @@ msgid "Out of memory for image: %s"
 msgstr "内存不足以加载位图 \"%s\""
 
 #: src/ypaths.cc:182
-#, fuzzy, c-format
+#, c-format
 msgid "Could not find image: %s"
-msgstr "找不到位图 %s"
+msgstr "找不到位图: %s"
 
 #: src/ypixbuf.cc:482 src/ypixbuf.cc:668
 #, c-format
