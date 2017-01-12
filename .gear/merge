@@ -1,7 +1,5 @@
 merge: icewm-1-3-BRANCH altconf
-merge: icewm-1-3-BRANCH iconfind
 merge: icewm-1-3-BRANCH session_hack
 merge: icewm-1-3-BRANCH taskbar
 merge: altconf sisyphus
-merge: iconfind sisyphus
 merge: session_hack sisyphus
