@@ -5,8 +5,11 @@
 #include "yarray.h"
 
 #if 1
+#include <stdio.h>
 #include "intl.h"
-#include "sysdep.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #endif
 
 #include "yconfig.h"
@@ -404,8 +407,7 @@ void DesktopBackgroundManager::sendRestart() {
 }
 
 void printUsage(int rc = 1) {
-    fputs (_("Usage: icewmbg [ -n | -r | -q ]\n"
-             " -n  Notification in startup step\n"
+    fputs (_("Usage: icewmbg [ -r | -q ]\n"
              " -r  Restart icewmbg\n"
              " -q  Quit icewmbg\n"
              "Loads desktop background according to preferences file\n"

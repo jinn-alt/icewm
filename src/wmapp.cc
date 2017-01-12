@@ -33,6 +33,7 @@
 #include "prefs.h"
 #include "yimage.h"
 #include "ylocale.h"
+#include <stdio.h>
 #include <sys/resource.h>
 #include "yrect.h"
 #include "yprefs.h"
