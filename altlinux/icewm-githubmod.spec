@@ -119,6 +119,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %changelog
 * Sun Mar 05 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt5.gitedf8c50
 - fixed icons search path
+- added icons
 
 * Mon Jan 16 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.56-alt4.gitedf8c50
 - git snapshot edf8c50
