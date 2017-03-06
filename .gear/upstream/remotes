@@ -1,0 +1,3 @@
+[remote "origin"]
+	url = https://github.com/bbidulock/icewm.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
