@@ -1,6 +1,6 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
-%define gitrev .gitf199d1b
+%define gitrev .git719f6c4
 
 Name: %realname-githubmod
 Version: 1.3.12.195
@@ -117,6 +117,9 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sun Mar 19 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.195-alt1.git719f6c4
+- git snapshot 719f6c4
+
 * Thu Mar 09 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.3.12.195-alt1.gitf199d1b
 - git snapshot f199d1b
 
