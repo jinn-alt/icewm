@@ -5,7 +5,6 @@
  */
 #include "config.h"
 #include "yfull.h"
-#include "yutil.h"
 #include "ywindow.h"
 #include "ykey.h"
 
@@ -1910,6 +1909,7 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
 
             MSG(("output: %s -> %d", oinfo->name, oinfo->crtc));
 
+#ifndef NO_CONFIGURE
             if (xineramaPrimaryScreenName != 0 && oinfo->name != NULL) {
                 if (strcmp(xineramaPrimaryScreenName, oinfo->name) == 0)
                 { 
@@ -1922,6 +1922,7 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
                     }
                 }
             }
+#endif
 	    XRRFreeOutputInfo(oinfo);
         }
 	XRRFreeScreenResources(xrrsr);

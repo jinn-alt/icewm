@@ -25,7 +25,7 @@
 #include "sysdep.h"
 #include "default.h"
 
-#if defined(linux)
+#if defined(__linux__)
 //#include <linux/kernel.h>
 #include <sys/sysinfo.h>
 #endif
@@ -53,24 +53,10 @@
 #ifdef HAVE_SCHED_H
 #include <sched.h>
 #endif
-#include <dirent.h>
+#include "udir.h"
 #include "intl.h"
 
-static int read_file(const char *filename, char *buf, size_t buflen)
-{
-    int fd, len = -1;
-    fd = open(filename, O_RDONLY);
-    if (fd >= 0) {
-        len = read(fd, buf, buflen - 1);
-        if (len >= 0) {
-            buf[len] = '\0';
-        }
-        close(fd);
-    }
-    return len;
-}
-
-#if (defined(linux) || defined(HAVE_KSTAT_H)) || defined(HAVE_SYSCTL_CP_TIME)
+#if defined(__linux__) || defined(HAVE_KSTAT_H) || defined(HAVE_SYSCTL_CP_TIME)
 
 extern ref<YPixmap> taskbackPixmap;
 
@@ -261,7 +247,7 @@ void CPUStatus::updateToolTip() {
     char cpuid[16] = "";
     if (fCpuID >= 0)
         snprintf(cpuid, sizeof(cpuid), "%d", fCpuID);
-#ifdef linux
+#ifdef __linux__
     char fmt[255] = "";
 #define ___checkspace if(more<0 || rest-more<=0) return; pos+=more; rest-=more;
     struct sysinfo sys;
@@ -357,17 +343,12 @@ int CPUStatus::getAcpiTemp(char *tempbuf, int buflen) {
     char buf[64];
 
     memset(tempbuf, 0, buflen);
-    DIR *dir;
-    if ((dir = opendir("/proc/acpi/thermal_zone")) != NULL) {
-        struct dirent *de;
-
-        while ((de = readdir(dir)) != NULL) {
+    cdir dir("/proc/acpi/thermal_zone");
+    if (dir.isOpen()) {
+        while (dir.next()) {
             int len, seglen = 7;
-
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
-                continue;
- 
-            snprintf(namebuf, ACOUNT(namebuf), "/proc/acpi/thermal_zone/%s/temperature", de->d_name);
+            snprintf(namebuf, sizeof namebuf,
+                    "/proc/acpi/thermal_zone/%s/temperature", dir.entry());
             len = read_file(namebuf, buf, sizeof(buf));
             if (len > seglen) {
                 if (retbuflen + seglen >= buflen) {
@@ -377,18 +358,13 @@ int CPUStatus::getAcpiTemp(char *tempbuf, int buflen) {
                 strncat(tempbuf, buf + len - seglen, seglen);
             }
         }
-        closedir(dir);
     } 
-    else if ((dir = opendir("/sys/class/thermal")) != NULL) {
-        struct dirent *de;
-
-        while ((de = readdir(dir)) != NULL) {
+    else if (dir.open("/sys/class/thermal")) {
+        while (dir.next()) {
             int len;
 
-            if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
-                continue;
-
-            snprintf(namebuf, ACOUNT(namebuf), "/sys/class/thermal/%s/temp", de->d_name);
+            snprintf(namebuf, sizeof namebuf,
+                    "/sys/class/thermal/%s/temp", dir.entry());
             len = read_file(namebuf, buf, sizeof(buf));
             if (len > 4) {
                 int seglen = len - 4;
@@ -403,7 +379,6 @@ int CPUStatus::getAcpiTemp(char *tempbuf, int buflen) {
                 tempbuf[retbuflen] = '\0';
             }
         }
-        closedir(dir);
         if (1 < retbuflen && retbuflen + 1 < buflen) {
             // TRANSLATORS: Please translate the string "C" into "Celsius Temperature" in your language.
             // TRANSLATORS: Please make sure the translated string could be shown in your non-utf8 locale.
@@ -417,12 +392,13 @@ int CPUStatus::getAcpiTemp(char *tempbuf, int buflen) {
 }
 
 float CPUStatus::getCpuFreq(unsigned int cpu) {
-    char buf[16], namebuf[64];
+    char buf[16], namebuf[100];
     const char * categories[] = { "cpuinfo", "scaling" };
     for(unsigned i = 0; i < ACOUNT(categories); ++i)
     {
         float cpufreq = 0;
-        sprintf(namebuf, "/sys/devices/system/cpu/cpu%d/cpufreq/%s_cur_freq",
+        snprintf(namebuf, sizeof namebuf,
+                "/sys/devices/system/cpu/cpu%d/cpufreq/%s_cur_freq",
                 cpu, categories[i]);
         if (read_file(namebuf, buf, sizeof(buf)) > 0) {
             sscanf(buf, "%f", &cpufreq);
@@ -435,7 +411,7 @@ float CPUStatus::getCpuFreq(unsigned int cpu) {
 
 void CPUStatus::getStatus() {
     memset(cpu[taskBarCPUSamples - 1], 0, IWM_STATES * sizeof(cpu[0][0]));
-#ifdef linux
+#ifdef __linux__
     char *p, buf[4096], *tok;
     unsigned long long cur[IWM_STATES];
     int s;
@@ -490,7 +466,7 @@ void CPUStatus::getStatus() {
         cpu[taskBarCPUSamples - 1][i] = cur[i] - last_cpu[i];
         last_cpu[i] = cur[i];
     }
-#endif /* linux */
+#endif /* __linux__ */
 #ifdef HAVE_KSTAT_H
 #ifdef HAVE_OLD_KSTAT
 #define ui32 ul
@@ -708,7 +684,7 @@ void CPUStatus::GetCPUStatus(YSMListener *smActionListener, YWindow *aParent, CP
         CPUStatus::getCPUStatusCombined(smActionListener, aParent, fCPUStatus);
         return;
     }
-#if defined(linux)
+#if defined(__linux__)
     char buf[128];
     unsigned cnt = 0;
     FILE *fd = fopen("/proc/stat", "r");

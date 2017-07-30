@@ -34,6 +34,16 @@ YColor *disabledMenuItemSt = 0;
 
 ref<YFont> menuFont;
 
+ref<YPixmap> menusepPixmap;
+ref<YPixmap> menuselPixmap;
+ref<YPixmap> menubackPixmap;
+
+#ifdef CONFIG_GRADIENTS
+ref<YImage> menuselPixbuf;
+ref<YImage> menusepPixbuf;
+ref<YImage> menubackPixbuf;
+#endif
+
 int YMenu::fAutoScrollDeltaX = 0;
 int YMenu::fAutoScrollDeltaY = 0;
 int YMenu::fAutoScrollMouseX = -1;
@@ -675,7 +685,7 @@ YMenuItem * YMenu::addSorted(YMenuItem *item, bool duplicates) {
         if (item->getName() == null || fItems[i]->getName() == null)
             continue;
 
-        int cmp = item->getName().compareTo(fItems[i]->getName());
+        int cmp = item->getName().collate(fItems[i]->getName());
         if (cmp > 0)
             continue;
         else if (cmp != 0 || duplicates) {

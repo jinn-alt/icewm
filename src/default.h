@@ -132,7 +132,7 @@ XIV(bool, showWindowList,                       true)
 XIV(bool, showHelp,                             true)
 XIV(bool, allowFullscreen,                      true)
 XIV(bool, fullscreenUseAllMonitors,             false)
-XIV(bool, enableAddressBar,                     true);
+XIV(bool, enableAddressBar,                     true)
 XIV(bool, showAddressBar,                       true)
 XIV(bool, confirmLogout,                        true)
 #ifdef CONFIG_SHAPED_DECORATION
@@ -164,7 +164,7 @@ XIV(int, taskBarApmGraphWidth,                  10) // hatred
 XIV(int, taskBarMEMSamples,                     20)
 XIV(int, focusRequestFlashTime,                 0)
 XIV(int, focusRequestFlashInterval,             250)
-XIV(int, nestedThemeMenuMinNumber,              15)
+XIV(int, nestedThemeMenuMinNumber,              25)
 XIV(int, batteryPollingPeriod,                  10)
 XIV(int, netWorkAreaBehaviour,                  0)
 

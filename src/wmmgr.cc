@@ -1488,7 +1488,7 @@ YFrameWindow *YWindowManager::manageClient(Window win, bool mapClient) {
         // temp workaro/und for flashblock problems
         // reverted, causes problems with Qt5
         if (client->isEmbed() && 0) {
-            warn("app trying to map XEmbed window 0x%X, ignoring", client->handle());
+            warn("app trying to map XEmbed window 0x%lX, ignoring", client->handle());
             delete client;
             goto end;
         }
@@ -3009,29 +3009,20 @@ void YWindowManager::updateClientList() {
 void YWindowManager::updateUserTime(Time time) {
     if (time == 0 || time == -1UL)
         return;
-    if (fLastUserTime == 0) {
+    unsigned delta = (unsigned) ((time - fLastUserTime) & 0xffffffff);
+    if (fLastUserTime == 0 || delta < 0x7fffffff)
         fLastUserTime = time;
-        return;
-    }
-    if (fLastUserTime > time) {
-        if (fLastUserTime - time > 0x7fffffff)
-            fLastUserTime = time;
-    } else
-    if (fLastUserTime < time) {
-        if (time - fLastUserTime <= 0x7fffffff)
-            fLastUserTime = time;
-    }
 }
 
 void YWindowManager::execAfterFork(const char *command) {
     pid_t pid = fork();
     switch(pid) {
     case -1: /* Failed */
-        warn("fork failed (%d)", errno);
+        fail("fork failed");
         return;
     case 0: /* Child */
         execl("/bin/sh", "sh", "-c", command, (char *) 0);
-        return; /* Never reached */
+        _exit(99);
     default: /* Parent */
         return;
     }
