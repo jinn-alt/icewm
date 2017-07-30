@@ -17,6 +17,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include "intl.h"
 
@@ -725,7 +726,6 @@ void YInputLine::autoScroll(int delta, const XMotionEvent *motion) {
     beginAutoScroll(delta ? true : false, motion);
 }
 void YInputLine::complete() {
-#ifdef HAVE_ASPRINTF
     char *res=NULL;
     int  res_count=0;
     cstring t(fText);
@@ -740,7 +740,6 @@ void YInputLine::complete() {
     }
     setText(ustring(res, strlen(res)));
     free(res);
-#endif
 }
 
 #endif

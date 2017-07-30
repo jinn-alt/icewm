@@ -1,7 +1,7 @@
 #ifndef __CPUSTATUS_H
 #define __CPUSTATUS_H
 
-#if defined(linux) || defined(HAVE_KSTAT_H) || defined(HAVE_SYSCTL_CP_TIME)
+#if defined(__linux__) || defined(HAVE_KSTAT_H) || defined(HAVE_SYSCTL_CP_TIME)
 
 #define IWM_USER   (0)
 #define IWM_NICE   (1)
@@ -12,9 +12,6 @@
 #define IWM_IDLE   (6)
 #define IWM_STEAL  (7)
 #define IWM_STATES (8)
-
-#include "ywindow.h"
-#include "ytimer.h"
 
 class YSMListener;
 
@@ -49,7 +46,6 @@ private:
     YSMListener *smActionListener;
     bool ShowRamUsage, ShowSwapUsage, ShowAcpiTemp, ShowCpuFreq,
          ShowAcpiTempInGraph;
-    FILE *m_nCachedFd;
 
     YColor *tempColor;
     static ref<YFont> tempFont;

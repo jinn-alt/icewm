@@ -1,4 +1,4 @@
-[icewm -- read me first file.  2017-02-21]: #
+[icewm -- read me first file.  2017-07-30]: #
 
 Ice Window Manager (IceWM)
 ==========================
@@ -16,7 +16,7 @@ list, and various other GitHub forks.
 Release
 -------
 
-This is the icewm-1.3.12.177 package, released under LGPL license 2017-02-21.
+This is the icewm-1.4.2 package, released under LGPL license 2017-07-24.
 This release as well as future versions here, can all be obtained from
 [GitHub][1] using a command such as:
 
@@ -38,7 +38,7 @@ following commands:
     $> ./configure --prefix=/usr --sysconfdir=/etc \
        --enable-shaped-decorations --enable-gradients \
        --enable-guievents --with-icesound=ALSA,OSS \
-       --disable-menus-gnome2
+       --disable-menus-gnome2 --enable-silent-rules
     $> make V=0
     $> sudo make DESTDIR="$pkgdir" install
 
@@ -48,6 +48,7 @@ would like to customize the installation, use the command:
     ./configure --help
 
 Please see the [INSTALL][3] file for more detailed installation instructions.
+An alternative way to build IceWM using CMake is [documented here][20].
 The [ChangeLog][4] file contains a detailed history of implementation changes.
 The [COMPLIANCE][5] file lists the current state of EWMH/ICCCM compliance.  The
 [NEWS][6] file has release notes and history of user visible changes of the
@@ -76,7 +77,7 @@ Building from git also requires:
  - git (_for cloning the git repository and updating changelogs_)
  - autoconf/automake or cmake toolchain (_for build scripts_)
  - xorg-mkfontdir (_for installing themes_)
- - linuxdoc-tools (_for creating help html files_)
+ - asciidoctor or asciidoc (_for creating html documentation_)
  - markdown (_for building release package_)
 
 
@@ -84,11 +85,12 @@ Configuring IceWM
 -----------------
 
 Documentation for configuring the window manager can be obtained from [IceWM
-Website][14] or from the online manual: point your browser at [this file][16].
+Website][14] or from the [online manual][16].
 
 Unfortunately the documentation is for version 1.2.27 and is incomplete
-at that; however, it is for the most part usable.  Also, a rather sparse
-`icewm(1)` manual page is available.
+at that; however, it is for the most part usable.
+The good news is that the `icewm(1)` manual page for version 1.4.2
+is complete and fully up-to-date.
 
 
 Included Utilities
@@ -127,7 +129,7 @@ it makes sense to let the window manager send `WM_DELETE_WINDOW` message to the
 last recently used application.
 
 
-__Requirements to uses this feature in IceWM:__
+__Requirements to use this feature in IceWM:__
 
   - A patched kernel, a patch for Linux 2.4.3 is available in the contrib
     file module.
@@ -199,9 +201,10 @@ translations.
 [13]: http://icewm.sourceforge.net/
 [14]: http://www.icewm.org/
 [15]: http://www.icewm.org/FAQ/IceWM-FAQ-11.html
-[16]: file:///usr/share/doc/icewm-1.3.12.177/icewm.html
+[16]: https://github.com/bbidulock/icewm/blob/icewm-1-4-BRANCH/doc/icewm.adoc
 [17]: http://bbkeys.sourceforge.net/
 [18]: lib/icewm.desktop
 [19]: lib/icewm-session.desktop
+[20]: INSTALL-cmakebuild.md
 
 [ vim: set ft=markdown sw=4 tw=80 nocin nosi fo+=tcqlorn: ]: #
