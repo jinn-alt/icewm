@@ -448,7 +448,6 @@ void addBgImage(const char * /*name*/, const char *value, bool) {
 }
 
 int main(int argc, char **argv) {
-    bool notify_parent(false);
     ApplicationName = my_basename(*argv);
 
     bool sendRestart = false;
@@ -525,9 +524,6 @@ int main(int argc, char **argv) {
 #endif
 
     bg->update();
-
-    if (notify_parent)
-    kill(getppid(),SIGUSR1);
 
     return bg->mainLoop();
 }

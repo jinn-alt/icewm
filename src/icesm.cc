@@ -263,13 +263,14 @@ int main(int argc, char **argv) {
 
     xapp.loadEnv("env");
 
-    xapp.handleSignal(SIGUSR1);
-    
+    xapp.runIcewmbg();
+    xapp.runWM();
+
     xapp.mainLoop();
 
     xapp.runScript("shutdown");
-    xapp.runIcewmbg(true);
     xapp.runIcewmtray(true);
     xapp.runWM(true);
+    xapp.runIcewmbg(true);
     return 0;
 }
