@@ -159,10 +159,8 @@ cfoption icewm_themable_preferences[] = {
     OUV("TrayIconMaxHeight",                    &trayIconMaxHeight, 16, 128,    "Maximum scaled height of tray icons"),
     OBV("TrayDrawBevel",                        &trayDrawBevel,                 "Surround the tray with plastic border"),
 
-#ifdef CONFIG_TASKBAR
     OBV("TaskBarAtTop",                         &taskBarAtTop,                  "Task bar at top of the screen"),
     OBV("TaskBarDoubleHeight",                  &taskBarDoubleHeight,           "Use double-height task bar"),
-#endif
     OBV("TitleBarCentered",                     &titleBarCentered,              "Draw window title centered (obsoleted by TitleBarJustify)"),
     OBV("TitleBarJoinLeft",                     &titleBarJoinLeft,              "Join title*S and title*T"),
     OBV("TitleBarJoinRight",                    &titleBarJoinRight,             "Join title*T and title*B"),
