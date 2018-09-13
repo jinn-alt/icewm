@@ -7,8 +7,6 @@
  */
 #include "config.h"
 
-#ifndef LITE
-
 #include "ykey.h"
 #include "yscrollbar.h"
 
@@ -16,28 +14,15 @@
 #include "yprefs.h"
 #include "prefs.h"
 
-YColor *scrollBarBg(NULL);
-static YColor *scrollBarSlider(NULL);
-static YColor *scrollBarButton(NULL);
-static YColor *scrollBarActiveArrow(NULL);
-static YColor *scrollBarInactiveArrow(NULL);
-static bool didInit = false;
+static YColorName scrollBarBg(&clrScrollBar);
+static YColorName scrollBarSlider(&clrScrollBarSlider);
+static YColorName scrollBarButton(&clrScrollBarButton);
+static YColorName scrollBarActiveArrow(&clrScrollBarArrow);
+static YColorName scrollBarInactiveArrow(&clrScrollBarInactive);
 
-YTimer *YScrollBar::fScrollTimer = 0;
-
-static void initColors() {
-    if (didInit)
-        return ;
-    scrollBarBg = new YColor(clrScrollBar);
-    scrollBarSlider= new YColor(clrScrollBarSlider);
-    scrollBarButton= new YColor(clrScrollBarButton);
-    scrollBarActiveArrow = new YColor(clrScrollBarArrow);
-    scrollBarInactiveArrow = new YColor(clrScrollBarInactive);
-    didInit = true;
-}
+lazy<YTimer> YScrollBar::fScrollTimer;
 
 YScrollBar::YScrollBar(YWindow *aParent): YWindow(aParent) {
-    if (!didInit) initColors();
     fOrientation = Vertical;
     fMinimum = fMaximum = fValue = fVisibleAmount = 0;
     fUnitIncrement = fBlockIncrement = 1;
@@ -50,7 +35,6 @@ YScrollBar::YScrollBar(YWindow *aParent): YWindow(aParent) {
 YScrollBar::YScrollBar(Orientation anOrientation, YWindow *aParent):
 YWindow(aParent)
 {
-    if (!didInit) initColors();
     fOrientation = anOrientation;
 
     fMinimum = fMaximum = fValue = fVisibleAmount = 0;
@@ -64,7 +48,6 @@ YScrollBar::YScrollBar(Orientation anOrientation,
                        int aValue, int aVisibleAmount, int aMin, int aMax,
                        YWindow *aParent): YWindow(aParent)
 {
-    if (!didInit) initColors();
     fOrientation = anOrientation;
     fMinimum = aMin;
     fMaximum = aMax;
@@ -77,8 +60,8 @@ YScrollBar::YScrollBar(Orientation anOrientation,
 }
 
 YScrollBar::~YScrollBar() {
-    if (fScrollTimer && fScrollTimer->getTimerListener() == this)
-        fScrollTimer->setTimerListener(0);
+    if (fScrollTimer)
+        fScrollTimer->disableTimerListener(this);
 }
 
 void YScrollBar::setOrientation(Orientation anOrientation) {
@@ -607,20 +590,12 @@ void YScrollBar::handleButton(const XButtonEvent &button) {
     if (button.type == ButtonPress) {
         fScrollTo = getOp(button.x, button.y);
         doScroll();
-        if (fScrollTimer == 0)
-            fScrollTimer = new YTimer(scrollBarStartDelay);
-        if (fScrollTimer) {
-            fScrollTimer->setInterval(scrollBarStartDelay);
-            fScrollTimer->setTimerListener(this);
-            fScrollTimer->startTimer();
-        }
+        fScrollTimer->setTimer(scrollBarStartDelay, this, true);
         repaint();
     } else if (button.type == ButtonRelease) {
         fScrollTo = goNone;
-        if (fScrollTimer && fScrollTimer->getTimerListener() == this) {
-            fScrollTimer->setTimerListener(0);
-            fScrollTimer->stopTimer();
-        }
+        if (fScrollTimer)
+            fScrollTimer->disableTimerListener(this);
         repaint();
     }
 }
@@ -661,41 +636,87 @@ bool YScrollBar::handleScrollKeys(const XKeyEvent &key) {
         KeySym k = keyCodeToKeySym(key.keycode);
         int m = KEY_MODMASK(key.state);
 
-        if (m == 0 && fOrientation == Vertical) {
+        if (fOrientation == Vertical) {
             switch (k) {
             case XK_Up:
             case XK_KP_Up:
-                scroll(-fUnitIncrement);
-                return true;
+                if (m == 0) {
+                    scroll(-fUnitIncrement);
+                    return true;
+                }
+                if (m == ShiftMask) {
+                    scroll(-fUnitIncrement * 4);
+                    return true;
+                }
+                if (m == ControlMask) {
+                    scroll(-fUnitIncrement * 16);
+                    return true;
+                }
+                break;
             case XK_Home:
             case XK_KP_Home:
-                move(0);
-                return true;
+                if (m == 0) {
+                    move(0);
+                    return true;
+                }
+                break;
             case XK_Prior:
             case XK_KP_Prior:
-                if (m & ControlMask)
+                if (m == ControlMask) {
                     move(0);
-                else
+                    return true;
+                }
+                if (m == ShiftMask) {
+                    scroll(-fBlockIncrement * 4);
+                    return true;
+                }
+                if (m == 0) {
                     scroll(-fBlockIncrement);
-                return true;
+                    return true;
+                }
+                break;
             case XK_Down:
             case XK_KP_Down:
-                scroll(+fUnitIncrement);
-                return true;
+                if (m == 0) {
+                    scroll(+fUnitIncrement);
+                    return true;
+                }
+                if (m == ShiftMask) {
+                    scroll(+fUnitIncrement * 4);
+                    return true;
+                }
+                if (m == ControlMask) {
+                    scroll(+fUnitIncrement * 16);
+                    return true;
+                }
+                break;
             case XK_End:
             case XK_KP_End:
-                move(fMaximum - fVisibleAmount);
-                return true;
+                if (m == 0) {
+                    move(fMaximum - fVisibleAmount);
+                    return true;
+                }
+                break;
             case XK_Next:
             case XK_KP_Next:
-                if (m & ControlMask)
+                if (m == ControlMask) {
                     move(fMaximum - fVisibleAmount);
-                else
+                    return true;
+                }
+                if (m == ShiftMask) {
+                    scroll(+fBlockIncrement * 4);
+                    return true;
+                }
+                if (m == 0) {
                     scroll(+fBlockIncrement);
-                return true;
+                    return true;
+                }
+                break;
+            default:
+                break;
             }
         }
-        if (m == 0 && fOrientation == Horizontal) {
+        else if (m == 0 && fOrientation == Horizontal) {
             switch (k) {
             case XK_Left:
             case XK_KP_Left:
@@ -713,6 +734,8 @@ bool YScrollBar::handleScrollKeys(const XKeyEvent &key) {
             case XK_KP_End:
                 move(fMaximum - fVisibleAmount);
                 return true;
+            default:
+                break;
             }
         }
     }
@@ -811,31 +834,22 @@ YScrollBar::ScrollOp YScrollBar::getOp(int x, int y) {
 void YScrollBar::handleDNDEnter() {
     fScrollTo = goNone;
     fDNDScroll = true;
-    if (fScrollTimer && fScrollTimer->getTimerListener() == this) {
-        fScrollTimer->setTimerListener(0);
-        fScrollTimer->stopTimer();
-    }
+    if (fScrollTimer)
+        fScrollTimer->disableTimerListener(this);
 }
 
 void YScrollBar::handleDNDLeave() {
     fScrollTo = goNone;
     fDNDScroll = false;
     repaint();
-    if (fScrollTimer && fScrollTimer->getTimerListener() == this) {
-        fScrollTimer->setTimerListener(0);
-        fScrollTimer->stopTimer();
-    }
+    if (fScrollTimer)
+        fScrollTimer->disableTimerListener(this);
 }
 
 void YScrollBar::handleDNDPosition(int x, int y) {
     fScrollTo = getOp(x, y);
-    if (fScrollTimer == 0)
-        fScrollTimer = new YTimer(scrollBarStartDelay);
-    if (fScrollTimer) {
-        fScrollTimer->setInterval(scrollBarStartDelay);
-        fScrollTimer->setTimerListener(this);
-        fScrollTimer->startTimer();
-    }
+    fScrollTimer->setTimer(scrollBarStartDelay, this, true);
     repaint();
 }
-#endif
+
+// vim: set sw=4 ts=4 et:

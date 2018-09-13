@@ -17,6 +17,7 @@
 
 #include "ytimer.h"
 #include "ypopup.h"
+#include <typeinfo>
 
 /******************************************************************************/
 /******************************************************************************/
@@ -48,53 +49,43 @@ public:
     YWindow *getWindow() const { return fWindow; }
     bool isScrolling() const { return fScrolling; }
 private:
-    YTimer *fAutoScrollTimer;
-    XMotionEvent *fMotion;
+    YTimer fAutoScrollTimer;
+    XMotionEvent fMotion;
     YWindow *fWindow;
     bool fScrolling;
 };
 
 
-YAutoScroll::YAutoScroll() {
+YAutoScroll::YAutoScroll() :
+    fAutoScrollTimer(autoScrollDelay, this, false)
+{
     fWindow = 0;
-    fAutoScrollTimer = 0;
     fScrolling = false;
-    fMotion = new XMotionEvent;
 }
 
 YAutoScroll::~YAutoScroll() {
-    delete fAutoScrollTimer; fAutoScrollTimer = 0;
-    delete fMotion; fMotion = 0;
 }
 
 bool YAutoScroll::handleTimer(YTimer *timer) {
-    if (timer == fAutoScrollTimer && fWindow) {
-        fAutoScrollTimer->setInterval(autoScrollDelay);
-        return fWindow->handleAutoScroll(*fMotion);
+    if (fWindow) {
+        return fWindow->handleAutoScroll(fMotion);
     }
     return false;
 }
 
 void YAutoScroll::autoScroll(YWindow *w, bool autoScroll, const XMotionEvent *motion) {
-    if (motion && fMotion)
-        *fMotion = *motion;
+    if (motion)
+        fMotion = *motion;
     else
         w = 0;
     fWindow = w;
     if (w == 0)
         autoScroll = false;
     fScrolling = autoScroll;
-    if (autoScroll && fAutoScrollTimer == 0) {
-        fAutoScrollTimer = new YTimer(autoScrollStartDelay);
-        fAutoScrollTimer->setTimerListener(this);
-    }
-    if (fAutoScrollTimer) {
-        if (autoScroll) {
-            if (!fAutoScrollTimer->isRunning()) {
-                fAutoScrollTimer->startTimer(autoScrollStartDelay);
-            }
-        } else
-            fAutoScrollTimer->stopTimer();
+    if (autoScroll) {
+        fAutoScrollTimer.startTimer();
+    } else {
+        fAutoScrollTimer.stopTimer();
     }
 }
 
@@ -111,21 +102,21 @@ int YWindow::fClickDrag = 0;
 unsigned int YWindow::fClickButton = 0;
 unsigned int YWindow::fClickButtonDown = 0;
 
-unsigned int ignore_enternotify_hack = 0; // credits to ahwm
-
-static void update_ignore_enternotify_hack(const XEvent &event) {
-    ignore_enternotify_hack = event.xany.serial;
-    MSG(("ignore: %10d", ignore_enternotify_hack));
-    if (xapp && xapp->display())
-        XSync(xapp->display(), False);
+unsigned long YWindow::lastEnterNotifySerial; // credits to ahwm
+unsigned long YWindow::getLastEnterNotifySerial() {
+    return lastEnterNotifySerial;
+}
+void YWindow::updateEnterNotifySerial(const XEvent &event) {
+    lastEnterNotifySerial = event.xany.serial;
+    xapp->sync();
 }
 
 /******************************************************************************/
 /******************************************************************************/
 
-YWindow::YWindow(YWindow *parent, Window win):
+YWindow::YWindow(YWindow *parent, Window win, int depth, Visual *visual):
+    fDepth(depth), fVisual(visual), fAllocColormap(None),
     fParentWindow(parent),
-    fNextWindow(0), fPrevWindow(0), fFirstWindow(0), fLastWindow(0),
     fFocusedWindow(0),
 
     fHandle(win), flags(0), fStyle(0), fX(0), fY(0), fWidth(1), fHeight(1),
@@ -137,9 +128,7 @@ YWindow::YWindow(YWindow *parent, Window win):
     fEnabled(true), fToplevel(false),
     fDoubleBuffer(doubleBuffer),
     accel(0),
-#ifdef CONFIG_TOOLTIP
     fToolTip(0),
-#endif
     fDND(false), XdndDragSource(None), XdndDropTarget(None)
 {
     if (fHandle != None) {
@@ -160,23 +149,19 @@ YWindow::~YWindow() {
         fAutoScroll->autoScroll(0, false, 0);
     fFocusedWindow = 0;
     removeWindow();
-    while (fNextWindow != 0)
-	    fNextWindow->removeWindow();
+    while (nextWindow() != 0)
+           nextWindow()->removeWindow();
     while (accel) {
         YAccelerator *next = accel->next;
         delete accel;
         accel = next;
     }
-#ifdef CONFIG_TOOLTIP
     if (fToolTip) {
         fToolTip->hide();
-        if (fToolTipTimer && fToolTipTimer->getTimerListener() == fToolTip) {
-            fToolTipTimer->stopTimer();
-            fToolTipTimer->setTimerListener(0);
-        }
+        if (fToolTipTimer)
+            fToolTipTimer->disableTimerListener(fToolTip);
         delete fToolTip; fToolTip = 0;
     }
-#endif
     if (fClickWindow == this)
         fClickWindow = 0;
     if (fGraphics) {
@@ -184,6 +169,10 @@ YWindow::~YWindow() {
     }
     if (flags & wfCreated)
         destroy();
+    if (fAllocColormap) {
+        XFreeColormap(xapp->display(), fAllocColormap);
+        fAllocColormap = None;
+    }
 }
 
 void YWindow::setWindowFocus() {
@@ -202,17 +191,20 @@ void YWindow::setClassHint(char const * rName, char const * rClass) {
     XSetClassHint(xapp->display(), handle(), &wmclass);
 }
 
-void YWindow::setStyle(unsigned long aStyle) {
+void YWindow::setStyle(unsigned aStyle) {
     if (fStyle != aStyle) {
         fStyle = aStyle;
 
         if (flags & wfCreated) {
+            if (fStyle & wsToolTip)
+                fEventMask = ExposureMask;
+
             if (fStyle & wsPointerMotion)
                 fEventMask |= PointerMotionMask;
 
 
-            if ((fStyle & wsDesktopAware) || (fStyle & wsManager) ||
-                (fHandle != RootWindow(xapp->display(), DefaultScreen(xapp->display()))))
+            if (hasbit(fStyle, wsDesktopAware | wsManager) ||
+                (fHandle != xapp->root()))
                 fEventMask |=
                     StructureNotifyMask |
                     ColormapChangeMask |
@@ -224,7 +216,7 @@ void YWindow::setStyle(unsigned long aStyle) {
                     SubstructureRedirectMask | SubstructureNotifyMask;
 
             fEventMask |= ButtonPressMask | ButtonReleaseMask | ButtonMotionMask;
-            if (fHandle == RootWindow(xapp->display(), DefaultScreen(xapp->display())))
+            if (fHandle == xapp->root())
                 if (!(fStyle & wsManager) || !grabRootWindow)
                     fEventMask &= ~(ButtonPressMask | ButtonReleaseMask | ButtonMotionMask);
 
@@ -233,12 +225,20 @@ void YWindow::setStyle(unsigned long aStyle) {
     }
 }
 
+void YWindow::addEventMask(long mask) {
+    if (hasbits(fEventMask, mask) == false) {
+        fEventMask |= mask;
+        if (flags & wfCreated)
+            XSelectInput(xapp->display(), fHandle, fEventMask);
+    }
+}
+
 Graphics &YWindow::getGraphics() {
     return *(NULL == fGraphics ? fGraphics = new Graphics(*this) : fGraphics);
 }
 
 void YWindow::repaint() {
-    XClearArea(xapp->display(), handle(), 0, 0, width(), height(), True);
+    XClearArea(xapp->display(), handle(), 0, 0, 0, 0, True);
 }
 
 void YWindow::repaintSync() { // useful when server grabbed
@@ -259,8 +259,39 @@ void YWindow::repaintFocus() {
 ///    }
 }
 
-void YWindow::create() {
-    if (flags & wfCreated) return;
+bool YWindow::getWindowAttributes(XWindowAttributes* attr) {
+    if (fHandle == None)
+        return false;
+
+    if (XGetWindowAttributes(xapp->display(), fHandle, attr))
+        return true;
+
+    flags |= wfDestroyed;
+    return false;
+}
+
+void YWindow::readAttributes() {
+    XWindowAttributes attributes;
+
+    if (!getWindowAttributes(&attributes))
+        return;
+
+    fX = attributes.x;
+    fY = attributes.y;
+    fWidth = attributes.width;
+    fHeight = attributes.height;
+
+    //MSG(("window initial geometry (%d:%d %dx%d)",
+    //     fX, fY, fWidth, fHeight));
+
+    if (attributes.map_state != IsUnmapped)
+        flags |= wfVisible;
+    else
+        flags &= ~wfVisible;
+}
+
+Window YWindow::create() {
+    if (flags & wfCreated) return fHandle;
 
     if (fHandle == None) {
         XSetWindowAttributes attributes;
@@ -269,6 +300,9 @@ void YWindow::create() {
         fEventMask |=
             ExposureMask |
             ButtonPressMask | ButtonReleaseMask | ButtonMotionMask;
+
+        if (fStyle & wsToolTip)
+            fEventMask = ExposureMask;
 
         if (fStyle & wsPointerMotion)
             fEventMask |= PointerMotionMask;
@@ -298,6 +332,17 @@ void YWindow::create() {
             attributes.win_gravity = fWinGravity;
             attrmask |= CWWinGravity;
         }
+        if (fVisual != CopyFromParent) {
+            fAllocColormap = XCreateColormap(xapp->display(), desktop->handle(), fVisual, AllocNone);
+            attributes.colormap = fAllocColormap;
+            attrmask |= CWColormap;
+        }
+        if (fDepth != CopyFromParent) {
+            attributes.background_pixel = xapp->black();
+            attrmask |= CWBackPixel;
+            attributes.border_pixel = xapp->black();
+            attrmask |= CWBorderPixel;
+        }
 
         attributes.event_mask = fEventMask;
         int zw = width();
@@ -311,12 +356,16 @@ void YWindow::create() {
                                 parent()->handle(),
                                 x(), y(), zw, zh,
                                 0,
-                                CopyFromParent,
+                                fDepth,
                                 (fStyle & wsInputOnly) ? InputOnly : InputOutput,
-                                CopyFromParent,
+                                fVisual,
                                 attrmask,
                                 &attributes);
 
+        XWindowAttributes wa;
+        XGetWindowAttributes(xapp->display(), fHandle, &wa);
+        fDepth = wa.depth;
+        fVisual = wa.visual;
         if (parent() == desktop &&
             !(flags & (wsManager | wsOverrideRedirect)))
             XSetWMProtocols(xapp->display(), fHandle, &_XA_WM_DELETE_WINDOW, 1);
@@ -324,28 +373,12 @@ void YWindow::create() {
         if ((flags & wfVisible) && !(flags & wfNullSize))
             XMapWindow(xapp->display(), fHandle);
     } else {
-        XWindowAttributes attributes;
-
-        XGetWindowAttributes(xapp->display(),
-                             fHandle,
-                             &attributes);
-        fX = attributes.x;
-        fY = attributes.y;
-        fWidth = attributes.width;
-        fHeight = attributes.height;
-
-        //MSG(("window initial geometry (%d:%d %dx%d)",
-        //     fX, fY, fWidth, fHeight));
-
-        if (attributes.map_state != IsUnmapped)
-            flags |= wfVisible;
-        else
-            flags &= ~wfVisible;
+        readAttributes();
 
         fEventMask = 0;
 
         if ((fStyle & wsDesktopAware) || (fStyle & wsManager) ||
-            (fHandle != RootWindow(xapp->display(), DefaultScreen(xapp->display()))))
+            (fHandle != xapp->root()))
             fEventMask |=
                 StructureNotifyMask |
                 ColormapChangeMask |
@@ -359,7 +392,7 @@ void YWindow::create() {
 
 
             if (!grabRootWindow &&
-                fHandle == RootWindow(xapp->display(), DefaultScreen(xapp->display())))
+                fHandle == xapp->root())
                 fEventMask &= ~(ButtonPressMask | ButtonReleaseMask | ButtonMotionMask);
         }
 
@@ -367,13 +400,14 @@ void YWindow::create() {
     }
     XSaveContext(xapp->display(), fHandle, windowContext, (XPointer)this);
     flags |= wfCreated;
+    return fHandle;
 }
 
 void YWindow::destroy() {
     if (flags & wfCreated) {
         if (!(flags & wfDestroyed)) {
             if (!(flags & wfAdopted)) {
-                MSG(("----------------------destroy %X", fHandle));
+                MSG(("----------------------destroy %lX", fHandle));
                 XDestroyWindow(xapp->display(), fHandle);
                 removeAllIgnoreUnmap(fHandle);
             } else {
@@ -388,36 +422,20 @@ void YWindow::destroy() {
 }
 void YWindow::removeWindow() {
     if (fParentWindow) {
-        if (fParentWindow->fFocusedWindow == this)
-            fParentWindow->fFocusedWindow = 0;
-        if (fPrevWindow)
-            fPrevWindow->fNextWindow = fNextWindow;
-        else
-            fParentWindow->fFirstWindow = fNextWindow;
-
-        if (fNextWindow)
-            fNextWindow->fPrevWindow = fPrevWindow;
-        else
-            fParentWindow->fLastWindow = fPrevWindow;
+        fParentWindow->remove(this);
         fParentWindow = 0;
     }
-    fPrevWindow = fNextWindow = 0;
 }
 
 void YWindow::insertWindow() {
     if (fParentWindow) {
-        fNextWindow = fParentWindow->fFirstWindow;
-        fPrevWindow = 0;
-
-        if (fNextWindow)
-            fNextWindow->fPrevWindow = this;
-        else
-            fParentWindow->fLastWindow = this;
-        fParentWindow->fFirstWindow = this;
+        fParentWindow->prepend(this);
     }
 }
 
 void YWindow::reparent(YWindow *parent, int x, int y) {
+    // ensure window was created before reparenting
+    (void) handle();
     if (flags & wfVisible) {
         addIgnoreUnmap(handle());
     }
@@ -435,15 +453,8 @@ void YWindow::reparent(YWindow *parent, int x, int y) {
     fY = y;
 }
 
-Window YWindow::handle() {
-    if (!(flags & wfCreated))
-        create();
-
-    return fHandle;
-}
-
 void YWindow::show() {
-    if (!(flags & wfVisible)) {
+    if (!(flags & (wfVisible | wfDestroyed))) {
         flags |= wfVisible;
         if (!(flags & wfNullSize))
             XMapWindow(xapp->display(), handle());
@@ -453,11 +464,15 @@ void YWindow::show() {
 void YWindow::hide() {
     if (flags & wfVisible) {
         flags &= ~wfVisible;
-        if (!(flags & wfNullSize)) {
+        if (!(flags & (wfNullSize | wfDestroyed))) {
             addIgnoreUnmap(handle());
             XUnmapWindow(xapp->display(), handle());
         }
     }
+}
+
+void YWindow::setVisible(bool enable) {
+    return enable ? show() : hide();
 }
 
 void YWindow::setWinGravity(int gravity) {
@@ -570,7 +585,7 @@ void YWindow::handleEvent(const XEvent &event) {
         break;
 
     case ConfigureNotify:
-        update_ignore_enternotify_hack(event);
+        updateEnterNotifySerial(event);
 #if 1
          {
              XEvent new_event, old_event;
@@ -581,7 +596,7 @@ void YWindow::handleEvent(const XEvent &event) {
                                  &new_event) == True)
              {
                  if (event.type != new_event.type ||
-                     event.xmotion.window != new_event.xmotion.window)
+                     event.xconfigure.window != new_event.xconfigure.window)
                  {
                      XPutBackEvent(xapp->display(), &new_event);
                      break;
@@ -610,15 +625,16 @@ void YWindow::handleEvent(const XEvent &event) {
         break;
 
     case GraphicsExpose:
-        handleGraphicsExpose(event.xgraphicsexpose); break;
+        handleGraphicsExpose(event.xgraphicsexpose);
+        break;
 
     case MapNotify:
-        update_ignore_enternotify_hack(event);
+        updateEnterNotifySerial(event);
         handleMapNotify(event.xmap);
         break;
 
     case UnmapNotify:
-        update_ignore_enternotify_hack(event);
+        updateEnterNotifySerial(event);
         handleUnmapNotify(event.xunmap);
         break;
 
@@ -639,17 +655,24 @@ void YWindow::handleEvent(const XEvent &event) {
         break;
 
     case GravityNotify:
-        update_ignore_enternotify_hack(event);
+        updateEnterNotifySerial(event);
+        handleGravityNotify(event.xgravity);
         break;
 
     case CirculateNotify:
-        update_ignore_enternotify_hack(event);
+        updateEnterNotifySerial(event);
+        break;
+
+    case VisibilityNotify:
+        handleVisibility(event.xvisibility);
         break;
 
     default:
 #ifdef CONFIG_SHAPE
-        if (shapesSupported && event.type == (shapeEventBase + ShapeNotify))
+        if (shapesSupported && event.type == (shapeEventBase + ShapeNotify)) {
             handleShapeNotify(*(const XShapeEvent *)&event);
+            break;
+        }
 #endif
 #ifdef CONFIG_XRANDR
         //msg("event.type=%d %d %d", event.type, xrandrEventBase, xrandrSupported);
@@ -662,7 +685,7 @@ void YWindow::handleEvent(const XEvent &event) {
 
 ref<YPixmap> YWindow::beginPaint(YRect &r) {
     //    return new YPixmap(width(), height());
-    ref<YPixmap> pix = YPixmap::create(r.width(), r.height());
+    ref<YPixmap> pix = YPixmap::create(r.width(), r.height(), depth());
     return pix;
 }
 
@@ -706,19 +729,19 @@ void YWindow::paintExpose(int ex, int ey, int ew, int eh) {
         ey -= ee;
         eh += ee;
     }
-    if (ex + ew < width()) {
+    if (ex + ew < (int) width()) {
         ew += ee;
     } else {
         ew = width() - ex;
     }
-    if (ey + eh + ee < height()) {
+    if (ey + eh + ee < (int) height()) {
         eh += ee;
     } else {
-        eh = height() - ey;
+        eh = int(height()) - ey;
     }
 
-    YRect r1(ex, ey, ew, eh);
-    if (r1.width() > 0 && r1.height() > 0) {
+    if (ew > 0 && eh > 0) {
+        YRect r1(ex, ey, ew, eh);
         if (fDoubleBuffer) {
             ref<YPixmap> pixmap = beginPaint(r1);
             Graphics g1(pixmap, ex, ey);
@@ -750,15 +773,22 @@ void YWindow::handleConfigure(const XConfigureEvent &configure) {
     if (configure.window == handle()) {
         if (configure.x != fX ||
             configure.y != fY ||
-            configure.width != fWidth ||
-            configure.height != fHeight)
+            (unsigned) configure.width != fWidth ||
+            (unsigned) configure.height != fHeight)
         {
             fX = configure.x;
             fY = configure.y;
             fWidth = configure.width;
             fHeight = configure.height;
 
-            this->configure(YRect(fX, fY, fWidth, fHeight));
+            this->configure(geometry());
+        }
+    }
+}
+
+void YWindow::handleGravityNotify(const XGravityEvent& gravity) {
+    if (gravity.window == handle()) {
+        if (gravity.x != fX || gravity.y != fY) {
         }
     }
 }
@@ -799,15 +829,11 @@ bool YWindow::handleKey(const XKeyEvent &key) {
 }
 
 void YWindow::handleButton(const XButtonEvent &button) {
-#ifdef CONFIG_TOOLTIP
     if (fToolTip) {
         fToolTip->hide();
-        if (fToolTipTimer && fToolTipTimer->getTimerListener() == fToolTip) {
-            fToolTipTimer->stopTimer();
-            fToolTipTimer->setTimerListener(0);
-        }
+        if (fToolTipTimer)
+            fToolTipTimer->disableTimerListener(fToolTip);
     }
-#endif
 
     int const dx(abs(button.x_root - fClickEvent.x_root));
     int const dy(abs(button.y_root - fClickEvent.y_root));
@@ -886,10 +912,7 @@ void YWindow::handleMotion(const XMotionEvent &motion) {
     }
 }
 
-#ifndef CONFIG_TOOLTIP
-void YWindow::setToolTip(const ustring &/*tip*/) {
-#else
-YTimer *YWindow::fToolTipTimer = 0;
+lazy<YTimer> YWindow::fToolTipTimer;
 
 void YWindow::setToolTip(const ustring &tip) {
     if (fToolTip) {
@@ -900,50 +923,31 @@ void YWindow::setToolTip(const ustring &tip) {
             fToolTip->repaint();
         }
     }
-    if (tip != null) {
-        if (fToolTip == NULL)
-            fToolTip = new YToolTip();
-        if (fToolTip)
-            fToolTip->setText(tip);
+    else if (tip != null) {
+        fToolTip = new YToolTip();
+        fToolTip->setText(tip);
     }
-#endif
 }
 
 bool YWindow::toolTipVisible() {
-#ifdef CONFIG_TOOLTIP
     return (fToolTip && fToolTip->visible());
-#else
-    return false;
-#endif
 }
 
 void YWindow::updateToolTip() {
 }
 
-#ifndef CONFIG_TOOLTIP
-void YWindow::handleCrossing(const XCrossingEvent &/*crossing*/) {
-#else
 void YWindow::handleCrossing(const XCrossingEvent &crossing) {
     if (fToolTip) {
         if (crossing.type == EnterNotify && crossing.mode == NotifyNormal) {
-            if (fToolTipTimer == 0)
-                fToolTipTimer = new YTimer(ToolTipDelay);
-            if (fToolTipTimer) {
-                fToolTipTimer->setTimerListener(fToolTip);
-                fToolTipTimer->startTimer();
-                updateToolTip();
-                if (fToolTip)
-                    fToolTip->locate(this, crossing);
-            }
+            fToolTipTimer->setTimer(ToolTipDelay, fToolTip, true);
+            updateToolTip();
+            fToolTip->locate(this, crossing);
         } else if (crossing.type == LeaveNotify) {
             fToolTip->hide();
-            if (fToolTipTimer && fToolTipTimer->getTimerListener() == fToolTip) {
-                fToolTipTimer->stopTimer();
-                fToolTipTimer->setTimerListener(0);
-            }
+            if (fToolTipTimer)
+                fToolTipTimer->disableTimerListener(fToolTip);
         }
     }
-#endif
 }
 
 void YWindow::handleClientMessage(const XClientMessageEvent &message) {
@@ -975,8 +979,10 @@ void YWindow::handleClientMessage(const XClientMessageEvent &message) {
     }
 }
 
+void YWindow::handleVisibility(const XVisibilityEvent& visibility) {
+}
+
 #if 0
-    virtual void handleVisibility(const XVisibilityEvent &visibility);
     virtual void handleCreateWindow(const XCreateWindowEvent &createWindow);
 #endif
 
@@ -996,7 +1002,10 @@ void YWindow::handleUnmapNotify(const XUnmapEvent &xunmap) {
 void YWindow::handleUnmap(const XUnmapEvent &) {
 }
 
-void YWindow::handleConfigureRequest(const XConfigureRequestEvent & /*configureRequest*/) {
+void YWindow::handleConfigureRequest(const XConfigureRequestEvent&) {
+}
+
+void YWindow::handleMapRequest(const XMapRequestEvent&) {
 }
 
 void YWindow::handleDestroyWindow(const XDestroyWindowEvent &destroyWindow) {
@@ -1011,12 +1020,7 @@ void YWindow::paint(Graphics &g, const YRect &r) {
 }
 
 bool YWindow::nullGeometry() {
-    bool zero;
-
-    if (fWidth == 0 || fHeight == 0)
-        zero = true;
-    else
-        zero = false;
+    bool zero = (fWidth == 0 || fHeight == 0);
 
     if (zero && !(flags & wfNullSize)) {
         flags |= wfNullSize;
@@ -1048,7 +1052,7 @@ void YWindow::setGeometry(const YRect &r) {
                                   fX, fY, fWidth, fHeight);
         }
 
-        configure(YRect(fX, fY, fWidth, fHeight));
+        configure(geometry());
     }
 }
 
@@ -1060,11 +1064,11 @@ void YWindow::setPosition(int x, int y) {
         if (flags & wfCreated)
             XMoveWindow(xapp->display(), fHandle, fX, fY);
 
-        configure(YRect(fX, fY, width(), height()));
+        configure(geometry());
     }
 }
 
-void YWindow::setSize(int width, int height) {
+void YWindow::setSize(unsigned width, unsigned height) {
     if (width != fWidth || height != fHeight) {
         fWidth = width;
         fHeight = height;
@@ -1073,8 +1077,24 @@ void YWindow::setSize(int width, int height) {
             if (!nullGeometry())
                 XResizeWindow(xapp->display(), fHandle, fWidth, fHeight);
 
-        configure(YRect(x(), y(), fWidth, fHeight));
+        configure(geometry());
     }
+}
+
+void YWindow::setBorderWidth(unsigned width) {
+    XSetWindowBorderWidth(xapp->display(), handle(), width);
+}
+
+void YWindow::setBackground(unsigned long pixel) {
+    XSetWindowBackground(xapp->display(), handle(), pixel);
+}
+
+void YWindow::setBackgroundPixmap(Pixmap pixmap) {
+    XSetWindowBackgroundPixmap(xapp->display(), handle(), pixmap);
+}
+
+void YWindow::setParentRelative(void) {
+    setBackgroundPixmap(ParentRelative);
 }
 
 void YWindow::mapToGlobal(int &x, int &y) {
@@ -1271,9 +1291,9 @@ bool YWindow::changeFocus(bool next) {
 
     if (cur == 0) {
         if (next)
-            cur = fLastWindow;
+            cur = lastWindow();
         else
-            cur = fFirstWindow;
+            cur = firstWindow();
     }
 
     YWindow *org = cur;
@@ -1281,38 +1301,38 @@ bool YWindow::changeFocus(bool next) {
         ///!!! need focus ordering
 
         if (next) {
-            if (cur->fLastWindow)
-                cur = cur->fLastWindow;
-            else if (cur->fPrevWindow)
-                cur = cur->fPrevWindow;
+            if (cur->lastWindow())
+                cur = cur->lastWindow();
+            else if (cur->prevWindow())
+                cur = cur->prevWindow();
             else if (cur->isToplevel())
-                /**/;
+            {}
             else {
-                while (cur->fParentWindow) {
-                    cur = cur->fParentWindow;
+                while (cur->parent()) {
+                    cur = cur->parent();
                     if (cur->isToplevel())
                         break;
-                    if (cur->fPrevWindow) {
-                        cur = cur->fPrevWindow;
+                    if (cur->prevWindow()) {
+                        cur = cur->prevWindow();
                         break;
                     }
                 }
             }
         } else {
             // is reverse tabbing of nested windows correct?
-            if (cur->fFirstWindow)
-                cur = cur->fFirstWindow;
-            else if (cur->fNextWindow)
-                cur = cur->fNextWindow;
+            if (cur->firstWindow())
+                cur = cur->firstWindow();
+            else if (cur->nextWindow())
+                cur = cur->nextWindow();
             else if (cur->isToplevel())
                 /**/;
             else {
-                while (cur->fParentWindow) {
-                    cur = cur->fParentWindow;
+                while (cur->parent()) {
+                    cur = cur->parent();
                     if (cur->isToplevel())
                         break;
-                    if (cur->fNextWindow) {
-                        cur = cur->fNextWindow;
+                    if (cur->nextWindow()) {
+                        cur = cur->nextWindow();
                         break;
                     }
                 }
@@ -1635,14 +1655,16 @@ YDesktop::YDesktop(YWindow *aParent, Window win):
 {
     desktop = this;
     setDoubleBuffer(false);
-    int w, h;
+    unsigned w, h;
     updateXineramaInfo(w, h);
 }
 
 YDesktop::~YDesktop() {
-}
-
-void YDesktop::resetColormapFocus(bool /*active*/) {
+    for (YWindow* w; (w = firstWindow()) != 0; delete w) {
+        char* name = demangle(typeid(*w).name());
+        INFO("deleting stray %s", name);
+        free(name);
+    }
 }
 
 void YWindow::grabVKey(int key, unsigned int vm) {
@@ -1808,14 +1830,12 @@ void YWindow::scrollWindow(int dx, int dy) {
     XRectangle r[2];
     int nr = 0;
 
-    static GC scrollGC = None;
-
-    if (scrollGC == None) {
-        scrollGC = XCreateGC(xapp->display(), desktop->handle(), 0, NULL);
-    }
+    GC scrollGC = XCreateGC(xapp->display(), handle(), 0, NULL);
 
     XCopyArea(xapp->display(), handle(), handle(), scrollGC,
               dx, dy, width(), height(), 0, 0);
+
+    XFreeGC(xapp->display(), scrollGC);
 
     dx = - dx;
     dy = - dy;
@@ -1875,7 +1895,7 @@ void YWindow::scrollWindow(int dx, int dy) {
     }
 }
 
-void YDesktop::updateXineramaInfo(int &w, int &h) {
+void YDesktop::updateXineramaInfo(unsigned &w, unsigned &h) {
     xiInfo.clear();
 
 #ifdef CONFIG_XRANDR
@@ -1889,7 +1909,7 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
         {
             XRRCrtcInfo *ci = XRRGetCrtcInfo(xapp->display(), xrrsr, xrrsr->crtcs[i]);
 
-            MSG(("xrr %d (%d): %d %d %d %d", i, xrrsr->crtcs[i], ci->x, ci->y, ci->width, ci->height));
+            MSG(("xrr %d (%lu): %d %d %d %d", i, xrrsr->crtcs[i], ci->x, ci->y, ci->width, ci->height));
 
             if (!gotLayout && ci->width > 0 && ci->height > 0) {
                 DesktopScreenInfo si;
@@ -1900,19 +1920,18 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
                 si.height = ci->height;
                 xiInfo.append(si);
             }
-	    XRRFreeCrtcInfo(ci);
+            XRRFreeCrtcInfo(ci);
         }
 
         MSG(("xinerama primary screen name: %s", xineramaPrimaryScreenName));
         for (int o = 0; o < xrrsr->noutput; o++) {
             XRROutputInfo *oinfo = XRRGetOutputInfo(xapp->display(), xrrsr, xrrsr->outputs[o]);
 
-            MSG(("output: %s -> %d", oinfo->name, oinfo->crtc));
+            MSG(("output: %s -> %lu", oinfo->name, oinfo->crtc));
 
-#ifndef NO_CONFIGURE
             if (xineramaPrimaryScreenName != 0 && oinfo->name != NULL) {
                 if (strcmp(xineramaPrimaryScreenName, oinfo->name) == 0)
-                { 
+                {
                     int s = oinfo->crtc;
                     for (int sc = 0; sc < xiInfo.getCount(); sc++) {
                          if (xiInfo[sc].screen_number == s) {
@@ -1922,10 +1941,9 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
                     }
                 }
             }
-#endif
-	    XRRFreeOutputInfo(oinfo);
+            XRRFreeOutputInfo(oinfo);
         }
-	XRRFreeScreenResources(xrrsr);
+        XRRFreeScreenResources(xrrsr);
     }
 #endif
     if (xiInfo.getCount() < 2) { // use xinerama if no XRANDR screens (nvidia hack)
@@ -1952,8 +1970,8 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
                 si.height = xsi[i].height;
                 xiInfo.append(si);
             }
-	    if (xsi)
-		    XFree(xsi);
+            if (xsi)
+                    XFree(xsi);
         }
 #endif
     }
@@ -1962,8 +1980,8 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
         si.screen_number = 0;
         si.x_org = 0;
         si.y_org = 0;
-        si.width = DisplayWidth(xapp->display(), DefaultScreen(xapp->display()));
-        si.height = DisplayHeight(xapp->display(), DefaultScreen(xapp->display()));
+        si.width = xapp->displayWidth();
+        si.height = xapp->displayHeight();
         xiInfo.append(si);
     }
     {
@@ -1975,7 +1993,7 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
                 w = xiInfo[i].width + xiInfo[i].x_org;
             if (xiInfo[i].y_org + xiInfo[i].height > h)
                 h = xiInfo[i].height + xiInfo[i].y_org;
-            
+
             MSG(("screen %d (%d): %d %d %d %d", i, xiInfo[i].screen_number, xiInfo[i].x_org, xiInfo[i].y_org, xiInfo[i].width, xiInfo[i].height));
         }
     }
@@ -1984,7 +2002,7 @@ void YDesktop::updateXineramaInfo(int &w, int &h) {
 
 
 void YDesktop::getScreenGeometry(int *x, int *y,
-                                 int *width, int *height,
+                                 unsigned *width, unsigned *height,
                                  int screen_no)
 {
     if (screen_no == -1)
@@ -2010,14 +2028,14 @@ void YDesktop::getScreenGeometry(int *x, int *y,
     *height = desktop->height();
 }
 
-int YDesktop::getScreenForRect(int x, int y, int width, int height) {
+int YDesktop::getScreenForRect(int x, int y, unsigned width, unsigned height) {
     int screen = -1;
     long coverage = -1;
 
     if (xiInfo.getCount() == 0)
         return 0;
     for (int s = 0; s < xiInfo.getCount(); s++) {
-        int x_i = intersection(x, x + width,
+        int x_i = intersection(x, x + int(width),
                                xiInfo[s].x_org, xiInfo[s].x_org + xiInfo[s].width);
         //MSG(("x_i %d %d %d %d %d", x_i, x, width, xiInfo[s].x_org, xiInfo[s].width));
         int y_i = intersection(y, y + height,
@@ -2045,3 +2063,5 @@ KeySym YWindow::keyCodeToKeySym(unsigned int keycode, int index) {
 int YDesktop::getScreenCount() {
     return xiInfo.getCount();
 }
+
+// vim: set sw=4 ts=4 et:

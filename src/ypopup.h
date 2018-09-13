@@ -7,7 +7,7 @@ class YPopDownListener {
 public:
     virtual void handlePopDown(YPopupWindow *popup) = 0;
 protected:
-    virtual ~YPopDownListener() {};
+    virtual ~YPopDownListener() {}
 };
 
 class YPopupWindow: public YWindow {
@@ -35,10 +35,11 @@ private:
                int x_delta, int y_delta,
                int xiScreen,
                unsigned int flags);
+    void popdown();
+
     friend class YMenu;
     friend class YButton;
 public:
-    void popdown();
 
     virtual void updatePopup();
     void finishPopup();
@@ -81,3 +82,5 @@ private:
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

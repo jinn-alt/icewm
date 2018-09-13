@@ -1,6 +1,7 @@
 #ifndef __YPREFS_H
 #define __YPREFS_H
 
+#include "ylib.h"
 #include "yconfig.h"
 
 XIV(bool, dontRotateMenuPointer,                true)
@@ -23,23 +24,20 @@ XIV(int, ClickMotionDelay,                      200)
 XIV(int, MultiClickTime,                        400)
 XIV(int, autoScrollStartDelay,                  500)
 XIV(int, autoScrollDelay,                       60)
-#ifdef CONFIG_TOOLTIP
-XIV(int, ToolTipDelay,                          1000)
+XIV(int, ToolTipDelay,                          500)
 XIV(int, ToolTipTime,                           0)
-#endif
 
 ///#warning "move this one back to WM"
 XIV(bool, grabRootWindow,                       true)
 
-#ifdef CONFIG_XFREETYPE
-XIV(bool, haveXft,                              true)
-#endif
-#if defined(__linux__) || defined(__FreeBSD__)
-XSV(const char *, iconPath,                     "/usr/share/icons/hicolor:/usr/share/icons/locolor:/usr/share/icons/large:/usr/share/icons/mini:/usr/share/icons/default.gnome:/usr/share/icons/default.kde:/usr/share/icons/oxygen:/usr/share/pixmaps")
+#if defined(__linux__)
+XSV(const char *, iconPath,                     "/usr/share/icons/hicolor:/usr/share/icons/default.gnome:/usr/share/icons/default.kde:/usr/share/icons:/usr/share/pixmaps")
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+XSV(const char *, iconPath,                     "/usr/local/share/icons/hicolor:/usr/local/share/icons:/usr/local/share/pixmaps")
 #else
 XSV(const char *, iconPath,                     0)
 #endif
-#define CONFIG_DEFAULT_THEME "default/default.theme"
+
 XSV(const char *, themeName,                    CONFIG_DEFAULT_THEME)
 XSV(const char *, xineramaPrimaryScreenName,    0)
 
@@ -58,10 +56,10 @@ enum WMLook {
 #define CONFIG_DEFAULT_LOOK     lookNice
 XIV(WMLook, wmLook,                             CONFIG_DEFAULT_LOOK)
 
-#ifdef CONFIG_TOOLTIP
 XSV(const char *, clrToolTip,                   "rgb:E0/E0/00")
 XSV(const char *, clrToolTipText,               "rgb:00/00/00")
-#endif
 XFV(const char *, toolTipFontName,              FONT(120), "sans-serif:size=12")
 
 #endif
+
+// vim: set sw=4 ts=4 et:

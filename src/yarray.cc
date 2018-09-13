@@ -13,8 +13,10 @@
  *  - introduced YStringArray
  */
 
+#include "mstring.h"
 #include "yarray.h"
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 
 YBaseArray::YBaseArray(YBaseArray &other):
@@ -25,10 +27,24 @@ YBaseArray::YBaseArray(YBaseArray &other):
     other.release();
 }
 
+YBaseArray::YBaseArray(const YBaseArray& other):
+    fElementSize(other.fElementSize),
+    fCapacity(other.fCount),
+    fCount(other.fCount),
+    fElements(new StorageType[fCapacity * fElementSize])
+{
+    memcpy(fElements, other.fElements, fCount * fElementSize);
+}
+
 void YBaseArray::setCapacity(SizeType nCapacity) {
     if (nCapacity != fCapacity) {
         StorageType *nElements = new StorageType[nCapacity * fElementSize];
-        memcpy(nElements, fElements, min(nCapacity, fCapacity) * fElementSize);
+        size_t how_much = min(nCapacity, fCapacity) * fElementSize;
+        if (how_much)
+        {
+            assert(fElements);
+            memcpy(nElements, fElements, how_much);
+        }
 
         delete[] fElements;
         fElements = nElements;
@@ -39,14 +55,7 @@ void YBaseArray::setCapacity(SizeType nCapacity) {
 
 void YBaseArray::append(const void *item) {
     if (fCount >= fCapacity) {
-        const SizeType nCapacity = (fCapacity ? fCapacity * 2 : 4);
-        StorageType *nElements = new StorageType[nCapacity * fElementSize];
-
-        memcpy(nElements, fElements, fCapacity * fElementSize);
-
-        delete[] fElements;
-        fElements = nElements;
-        fCapacity = nCapacity;
+        setCapacity(max(fCapacity * 2, 4));
     }
 
     memcpy(getElement(fCount++), item, fElementSize);
@@ -63,13 +72,16 @@ void YBaseArray::insert(const SizeType index, const void *item) {
     StorageType *nElements(nCount <= fCapacity ? fElements :
                            new StorageType[nCapacity * fElementSize]);
 
-    if (nElements != fElements)
+    if (nElements != fElements && fElements)
         memcpy(nElements, fElements, min(index, fCount) * fElementSize);
 
     if (index < fCount)
         memmove(nElements + (index + 1) * fElementSize,
                 fElements + (index) * fElementSize,
                 (fCount - index) * fElementSize);
+    else if (fCount < index)
+        memset(nElements + fCount * fElementSize,
+               0, (index - fCount) * fElementSize);
 
     if (nElements != fElements) {
         delete[] fElements;
@@ -94,12 +106,18 @@ void YBaseArray::remove(const SizeType index) {
         clear();
 }
 
-void YBaseArray::clear() {
-    delete[] fElements;
+void YBaseArray::shrink(const SizeType reducedCount) {
+    MSG(("shrink %d %d", reducedCount, fCount));
+    if (reducedCount >= 0 && reducedCount <= fCount)
+        fCount = reducedCount;
+    else { PRECONDITION(false); }
+}
 
-    fElements = 0;
-    fCapacity = 0;
-    fCount = 0;
+void YBaseArray::clear() {
+    if (fElements) {
+        delete[] fElements;
+        release();
+    }
 }
 
 void YBaseArray::release() {
@@ -108,10 +126,24 @@ void YBaseArray::release() {
     fCount = 0;
 }
 
-YStringArray::YStringArray(const YStringArray &other):
-YBaseArray(sizeof(char *)) {
-    setCapacity(other.getCapacity());
+void YBaseArray::swap(YBaseArray& other) {
+    PRECONDITION(fElementSize == other.fElementSize);
+    ::swap(fCapacity, other.fCapacity);
+    ::swap(fCount,    other.fCount);
+    ::swap(fElements, other.fElements);
+}
 
+void YBaseArray::operator=(const YBaseArray& other) {
+    if (this != &other) {
+        clear();
+        setCapacity(other.getCount());
+        memcpy(fElements, other.fElements, fCount * fElementSize);
+    }
+}
+
+YStringArray::YStringArray(const YStringArray &other) :
+    YArray<const char*>(other.getCount())
+{
     for (SizeType i = 0; i < other.getCount(); ++i)
         append(other.getString(i));
 }
@@ -128,13 +160,30 @@ YStringArray::SizeType YStringArray::find(const char *str) {
 }
 
 void YStringArray::remove(const SizeType index) {
-    if (index < getCount()) delete[] getString(index);
-    YBaseArray::remove(index);
+    if (index < getCount()) {
+        delete[] getString(index);
+        YBaseArray::remove(index);
+    }
 }
 
 void YStringArray::clear() {
     for (int i = 0; i < getCount(); ++i) delete[] getString(i);
     YBaseArray::clear();
+}
+
+void YStringArray::shrink(int reducedSize) {
+    for (int n = getCount(); n > reducedSize; )
+        delete[] getString(--n);
+    BaseType::shrink(reducedSize);
+}
+
+static int ystring_compare(const void *p1, const void *p2) {
+    return strcoll(*(char *const *)p1, *(char *const *)p2);
+}
+
+void YStringArray::sort() {
+    if (1 < getCount())
+        qsort(getItemPtr(0), getCount(), sizeof(char *), ystring_compare);
 }
 
 char * const *YStringArray::getCArray() const {
@@ -146,3 +195,17 @@ char **YStringArray::release() {
     YBaseArray::release();
     return strings;
 }
+
+static int mstring_compare(const void *p1, const void *p2)
+{
+    const mstring *s1 = (const mstring *) p1;
+    const mstring *s2 = (const mstring *) p2;
+    return s1->collate(*s2);
+}
+
+void MStringArray::sort() {
+    if (1 < getCount())
+        qsort(getItemPtr(0), getCount(), sizeof(mstring), mstring_compare);
+}
+
+// vim: set sw=4 ts=4 et:

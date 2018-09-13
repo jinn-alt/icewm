@@ -1,26 +1,63 @@
 #ifndef __WMMGR_H
 #define __WMMGR_H
 
-#include <X11/Xproto.h>
-#include "ywindow.h"
-#include "ymenu.h"
 #include "WinMgr.h"
-#include "ytimer.h"
+#include "ylist.h"
+#include "yaction.h"
 
-#define MAXWORKSPACES 64
-#define INVALID_WORKSPACE 0xFFFFFFFF
+#define MAXWORKSPACES     20
 
 extern long workspaceCount;
 extern char *workspaceNames[MAXWORKSPACES];
-extern YAction *workspaceActionActivate[MAXWORKSPACES];
-extern YAction *workspaceActionMoveTo[MAXWORKSPACES];
-extern YAction *layerActionSet[WinLayerCount];
+extern YAction workspaceActionActivate[MAXWORKSPACES];
+extern YAction workspaceActionMoveTo[MAXWORKSPACES];
+extern YAction layerActionSet[WinLayerCount];
 
 class YWindowManager;
 class YFrameClient;
 class YFrameWindow;
 class YSMListener;
 class IApp;
+
+/*
+ * X11 time state to support _NET_WM_USER_TIME.
+ * Keep track of the time in seconds when we receive a X11 time stamp.
+ * Only compare two X11 time stamps if they are in a time interval.
+ */
+class UserTime {
+private:
+    unsigned long xtime;
+    bool valid;
+    long since;
+    enum {
+        XTimeMask = 0xFFFFFFFFUL,       // milliseconds
+        XTimeRange = 0x7FFFFFFFUL,      // milliseconds
+        SInterval = 0x3FFFFFFFUL / 1000,     // seconds
+    };
+public:
+    UserTime() : xtime(0), valid(false), since(0) { }
+    explicit UserTime(unsigned long xtime, bool valid = true) :
+        xtime(xtime & XTimeMask), valid(valid), since(seconds()) { }
+    unsigned long time() const { return xtime; }
+    bool good() const { return valid; }
+    long when() const { return since; }
+    bool update(unsigned long xtime, bool valid = true) {
+        UserTime u(xtime, valid);
+        return *this < u || xtime == 0 ? (*this = u, true) : false;
+    }
+    bool operator<(const UserTime& u) const {
+        if (since == 0 || u.since == 0) return u.since != 0;
+        if (valid == false || u.valid == false) return u.valid;
+        if (since < u.since && u.since - since > SInterval) return true;
+        if (since > u.since && since - u.since > SInterval) return false;
+        if (xtime < u.xtime) return u.xtime - xtime <= XTimeRange;
+        if (xtime > u.xtime) return xtime - u.xtime >  XTimeRange;
+        return false;
+    }
+    bool operator==(const UserTime& u) const {
+        return !(*this < u) && !(u < *this);
+    }
+};
 
 class EdgeSwitch: public YWindow, public YTimerListener {
 public:
@@ -33,8 +70,9 @@ private:
     YWindowManager *fManager;
     YCursor & fCursor;
     int fDelta;
+    bool fVert;
 
-    static YTimer *fEdgeSwitchTimer;
+    static lazy<YTimer> fEdgeSwitchTimer;
 };
 
 class YProxyWindow: public YWindow {
@@ -88,10 +126,10 @@ public:
                         bool reparent = true);
     void destroyedClient(Window win);
     YFrameWindow *mapClient(Window win);
-    
+
     void setFocus(YFrameWindow *f, bool canWarp = false);
     YFrameWindow *getFocus() { return fFocusWin; }
-    
+
     void loseFocus(YFrameWindow *window);
     void activate(YFrameWindow *frame, bool raise, bool canWarp = false);
 
@@ -112,44 +150,40 @@ public:
     void getNewPosition(YFrameWindow *frame, int &x, int &y, int w, int h, int xiscreen);
     void placeWindow(YFrameWindow *frame, int x, int y, int cw, int ch, bool newClient, bool &canActivate);
 
-    YFrameWindow *top(long layer) const {
-	    if (layer < 0)
-		    return fTop[0];
-	    if (layer >= WinLayerCount)
-		    return fTop[WinLayerCount - 1];
-	    return fTop[layer];
-    }
+    YFrameWindow *top(long layer) const;
     void setTop(long layer, YFrameWindow *top);
-    YFrameWindow *bottom(long layer) const { return fBottom[layer]; }
-    void setBottom(long layer, YFrameWindow *bottom) { fBottom[layer] = bottom; }
+    YFrameWindow *bottom(long layer) const;
+    void setBottom(long layer, YFrameWindow *bottom);
 
     YFrameWindow *topLayer(long layer = WinLayerCount - 1);
     YFrameWindow *bottomLayer(long layer = 0);
 
-    YFrameWindow *firstFrame() { return fFirst; }
-    YFrameWindow *lastFrame() { return fLast; }
-    void setFirstFrame(YFrameWindow *f) { fFirst = f; }
-    void setLastFrame(YFrameWindow *f) { fLast = f; }
+    void setAbove(YFrameWindow* frame, YFrameWindow* above);
+    void setBelow(YFrameWindow* frame, YFrameWindow* below);
+    void removeLayeredFrame(YFrameWindow *);
+    void appendCreatedFrame(YFrameWindow *f);
+    void removeCreatedFrame(YFrameWindow *f);
 
-    YFrameWindow *firstFocusFrame() { return fFirstFocus; }
-    YFrameWindow *lastFocusFrame() { return fLastFocus; }
-    void setFirstFocusFrame(YFrameWindow *f) { fFirstFocus = f; }
-    void setLastFocusFrame(YFrameWindow *f) { fLastFocus = f; }
+    YFrameIter focusedIterator() { return fFocusedOrder.iterator(); }
+    YFrameIter focusedReverseIterator() { return fFocusedOrder.reverseIterator(); }
+    int focusedCount() const { return fFocusedOrder.count(); }
+    void insertFocusFrame(YFrameWindow* frame, bool focused);
+    void removeFocusFrame(YFrameWindow* frame);
+    void lowerFocusFrame(YFrameWindow* frame);
+    void raiseFocusFrame(YFrameWindow* frame);
 
     void restackWindows(YFrameWindow *win);
     void focusTopWindow();
-    YFrameWindow *getLastFocus(bool skipSticky = false, long workspace = -1);
+    YFrameWindow *getLastFocus(bool skipAllWorkspaces = false, long workspace = -1);
     void focusLastWindow();
     bool focusTop(YFrameWindow *f);
     void relocateWindows(long workspace, int screen, int dx, int dy);
     void updateClientList();
-    void updateUserTime(Time time);
+    void updateUserTime(const UserTime& userTime);
 
     YMenu *createWindowMenu(YMenu *menu, long workspace);
     int windowCount(long workspace);
-#ifdef CONFIG_WINMENU
     void popupWindowListMenu(YWindow *owner, int x, int y);
-#endif
 
     void initWorkspaces();
 
@@ -171,7 +205,11 @@ public:
 
     bool readCurrentDesktop(long &workspace);
     void setDesktopGeometry();
+    bool compareDesktopNames(char **strings, int count);
+    bool readDesktopLayout();
     bool readDesktopNames();
+    bool readNetDesktopNames();
+    bool readWinDesktopNames();
     void setWinDesktopNames(long count);
     void setNetDesktopNames(long count);
     void setDesktopNames(long count);
@@ -188,19 +226,17 @@ public:
 
     void wmCloseSession();
     void exitAfterLastClient(bool shuttingDown);
-    void execAfterFork(const char *command);
+    static void execAfterFork(const char *command);
     void checkLogout();
 
     virtual void resetColormap(bool active);
 
     void switchFocusTo(YFrameWindow *frame, bool reorderFocus = true);
     void switchFocusFrom(YFrameWindow *frame);
-    void notifyFocus(YFrameWindow *frame);
+    void notifyActive(YFrameWindow *frame);
 
     void popupStartMenu(YWindow *owner);
-#ifdef CONFIG_WINMENU
     void popupWindowListMenu(YWindow *owner);
-#endif
 
     void switchToWorkspace(long nw, bool takeCurrent);
     void switchToPrevWorkspace(bool takeCurrent);
@@ -212,7 +248,7 @@ public:
     void smartPlace(YFrameWindow **w, int count);
     void getCascadePlace(YFrameWindow *frame, int &lastX, int &lastY, int &x, int &y, int w, int h);
     void cascadePlace(YFrameWindow **w, int count);
-    void setWindows(YFrameWindow **w, int count, YAction *action);
+    void setWindows(YFrameWindow **w, int count, YAction action);
 
     void getWindowsToArrange(YFrameWindow ***w, int *count, bool sticky = false, bool skipNonMinimizable = false);
 
@@ -228,13 +264,13 @@ public:
     void updateFullscreenLayerEnable(bool enable);
     int getScreen();
 
-    void doWMAction(long action);
-    void lockFocus() { 
+    static void doWMAction(WMAction action);
+    void lockFocus() {
         //MSG(("lockFocus %d", lockFocusCount));
-        lockFocusCount++; 
+        lockFocusCount++;
     }
-    void unlockFocus() { 
-        lockFocusCount--; 
+    void unlockFocus() {
+        lockFocusCount--;
         //MSG(("unlockFocus %d", lockFocusCount));
     }
     bool focusLocked() { return lockFocusCount != 0; }
@@ -243,7 +279,18 @@ public:
 
     WMState wmState() const { return fWmState; }
     bool fullscreenEnabled() { return fFullscreenEnabled; }
-    Time lastUserTime() const { return fLastUserTime; }
+    void setFullscreenEnabled(bool enable) { fFullscreenEnabled = enable; }
+    const UserTime& lastUserTime() const { return fLastUserTime; }
+
+    struct DesktopLayout {
+        int orient;
+        int columns;
+        int rows;
+        int corner;
+    };
+
+    const DesktopLayout& layout() const { return fLayout; }
+
 private:
     struct WindowPosState {
         int x, y, w, h;
@@ -254,18 +301,19 @@ private:
     void updateArea(long workspace, int screen_number, int l, int t, int r, int b);
     bool handleWMKey(const XKeyEvent &key, KeySym k, unsigned int m, unsigned int vm);
 
+    IApp *app;
+    YActionListener *wmActionListener;
+    YSMListener *smActionListener;
+    Window fActiveWindow;
     YFrameWindow *fFocusWin;
-    YFrameWindow *fTop[WinLayerCount];
-    YFrameWindow *fBottom[WinLayerCount];
-    YFrameWindow *fFirst, *fLast; // creation order
-    YFrameWindow *fFirstFocus, *fLastFocus; // focus order
-    YFrameWindow **fFocusedWindow;
+    YLayeredList fLayers[WinLayerCount];
+    YCreatedList fCreationOrder;  // frame creation order
+    YFocusedList fFocusedOrder;   // focus order: old -> now
+    YFrameWindow *fFocusedWindow[MAXWORKSPACES];
+
     long fActiveWorkspace;
     long fLastWorkspace;
     YFrameWindow *fColormapWindow;
-    YActionListener *wmActionListener;
-    YSMListener *smActionListener;
-    IApp *app;
 
     long fWorkAreaWorkspaceCount;
     int fWorkAreaScreenCount;
@@ -285,8 +333,12 @@ private:
     bool fFullscreenEnabled;
 
     WMState fWmState;
-    Time fLastUserTime;
+    UserTime fLastUserTime;
     bool fShowingDesktop;
+    bool fCreatedUpdated;
+    bool fLayeredUpdated;
+
+    DesktopLayout fLayout;
 };
 
 extern YWindowManager *manager;
@@ -305,9 +357,7 @@ extern Atom _XA_WIN_LAYER;
 extern Atom _XA_WIN_PROTOCOLS;
 extern Atom _XA_WIN_STATE;
 extern Atom _XA_WIN_SUPPORTING_WM_CHECK;
-#ifdef CONFIG_TRAY
 extern Atom _XA_WIN_TRAY;
-#endif
 extern Atom _XA_WIN_WORKAREA;
 extern Atom _XA_WIN_WORKSPACE_COUNT;
 extern Atom _XA_WIN_WORKSPACE_NAMES;
@@ -337,23 +387,32 @@ extern Atom _XA_ICEWM_ACTION;
 #define _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT   6
 #define _NET_WM_MOVERESIZE_SIZE_LEFT         7
 #define _NET_WM_MOVERESIZE_MOVE              8 /* Movement only */
-                                                 //*=testnetwmhints
+#define _NET_WM_MOVERESIZE_SIZE_KEYBOARD     9
+#define _NET_WM_MOVERESIZE_MOVE_KEYBOARD    10
+#define _NET_WM_MOVERESIZE_CANCEL           11
+
+#define _NET_WM_ORIENTATION_HORZ    0
+#define _NET_WM_ORIENTATION_VERT    1
+#define _NET_WM_TOPLEFT     0
+#define _NET_WM_TOPRIGHT    1
+#define _NET_WM_BOTTOMRIGHT 2
+#define _NET_WM_BOTTOMLEFT  3
 
 
 extern Atom _XA_NET_ACTIVE_WINDOW;                  // OK
-extern Atom _XA_NET_CLIENT_LIST;                    // OK (perf: don't update on stacking changes)
+extern Atom _XA_NET_CLIENT_LIST;                    // OK
 extern Atom _XA_NET_CLIENT_LIST_STACKING;           // OK
 extern Atom _XA_NET_CLOSE_WINDOW;                   // OK
 extern Atom _XA_NET_CURRENT_DESKTOP;                // OK
 extern Atom _XA_NET_DESKTOP_GEOMETRY;               // OK
-extern Atom _XA_NET_DESKTOP_LAYOUT;                 // TODO
+extern Atom _XA_NET_DESKTOP_LAYOUT;                 // OK
 extern Atom _XA_NET_DESKTOP_NAMES;                  //*OK
 extern Atom _XA_NET_DESKTOP_VIEWPORT;               // OK (trivial)
 extern Atom _XA_NET_FRAME_EXTENTS;                  // OK
 extern Atom _XA_NET_MOVERESIZE_WINDOW;              //*OK
 extern Atom _XA_NET_NUMBER_OF_DESKTOPS;             //*OK
 extern Atom _XA_NET_PROPERTIES;                     // N/A (obsolete)
-extern Atom _XA_NET_REQUEST_FRAME_EXTENTS;          // TODO
+extern Atom _XA_NET_REQUEST_FRAME_EXTENTS;          // OK
 extern Atom _XA_NET_RESTACK_WINDOW;                 // OK
 extern Atom _XA_NET_SHOWING_DESKTOP;                // OK
 extern Atom _XA_NET_STARTUP_ID;                     // OK
@@ -391,7 +450,7 @@ extern Atom _XA_NET_WM_MOVERESIZE;                  //*OK
 extern Atom _XA_NET_WM_NAME;                        // OK
 extern Atom _XA_NET_WM_OPAQUE_REGION;               // TODO
 extern Atom _XA_NET_WM_PID;                         // OK (trivial)
-extern Atom _XA_NET_WM_PING;                        // TODO
+extern Atom _XA_NET_WM_PING;                        // OK
 extern Atom _XA_NET_WM_STATE;                       // OK
 extern Atom _XA_NET_WM_STATE_ABOVE;                 // OK
 extern Atom _XA_NET_WM_STATE_BELOW;                 // OK
@@ -414,7 +473,7 @@ extern Atom _XA_NET_WM_USER_TIME;                   // OK
 extern Atom _XA_NET_WM_USER_TIME_WINDOW;            // OK
 extern Atom _XA_NET_WM_VISIBLE_ICON_NAME;           // OK
 extern Atom _XA_NET_WM_VISIBLE_NAME;                // OK
-extern Atom _XA_NET_WM_OPACITY;                     // TODO
+extern Atom _XA_NET_WM_WINDOW_OPACITY;              // OK
 extern Atom _XA_NET_WM_WINDOW_TYPE;                 // OK
 extern Atom _XA_NET_WM_WINDOW_TYPE_COMBO;           // OK
 extern Atom _XA_NET_WM_WINDOW_TYPE_DESKTOP;         // OK
@@ -450,3 +509,5 @@ extern Atom _XA_KDE_WM_CHANGE_STATE;
 extern Atom XA_IcewmWinOptHint;
 
 #endif
+
+// vim: set sw=4 ts=4 et:

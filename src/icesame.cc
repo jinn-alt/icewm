@@ -14,6 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "intl.h"
 
@@ -35,14 +36,14 @@ public:
         score = 0;
         scoreLabel = new YLabel("0", this);
 
-        c[0][0] = new YColor("rgb:00/00/00");
-        c[0][1] = 0; //new YColor("rgb:00/00/00");
-        c[1][0] = new YColor("rgb:FF/00/00");
-        c[1][1] = new YColor("rgb:80/00/00");
-        c[2][0] = new YColor("rgb:FF/FF/00");
-        c[2][1] = new YColor("rgb:80/80/00");
-        c[3][0] = new YColor("rgb:00/00/FF");
-        c[3][1] = new YColor("rgb:00/00/80");
+        c[0][0] = "rgb:00/00/00";
+        c[0][1] = "rgb:00/00/00";
+        c[1][0] = "rgb:FF/00/00";
+        c[1][1] = "rgb:80/00/00";
+        c[2][0] = "rgb:FF/FF/00";
+        c[2][1] = "rgb:80/80/00";
+        c[3][0] = "rgb:00/00/FF";
+        c[3][1] = "rgb:00/00/80";
 
         setStyle(wsPointerMotion);
         setSize(XSIZE * XCOUNT, YSIZE * YCOUNT + scoreLabel->height());
@@ -50,11 +51,7 @@ public:
         scoreLabel->show();
 
         // !!! keybindings, Menu, Shift+F10
-        actionUndo = new YAction();
-        actionNew = new YAction();
-        actionRestart = new YAction();
-        actionClose = new YAction();
-        
+
         menu = new YMenu();
         menu->setActionListener(this);
         menu->addItem(_("Undo"), 0, _("Ctrl+Z"), actionUndo);
@@ -66,23 +63,18 @@ public:
 
         // !!! fix
         setTitle(_("Same Game"));
-        {
-            MwmHints mwm;
 
-            memset(&mwm, 0, sizeof(mwm));
-            mwm.flags =
-                MWM_HINTS_FUNCTIONS |
-                MWM_HINTS_DECORATIONS;
-            mwm.functions =
-                MWM_FUNC_MOVE | MWM_FUNC_CLOSE | MWM_FUNC_MINIMIZE;
-            mwm.decorations =
-                /*MWM_DECOR_BORDER |*/ MWM_DECOR_TITLE | MWM_DECOR_MENU | MWM_DECOR_MINIMIZE;
+        MwmHints mwm(
+                MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS,
+                MWM_FUNC_MOVE | MWM_FUNC_CLOSE | MWM_FUNC_MINIMIZE,
+                MWM_DECOR_TITLE | MWM_DECOR_MENU | MWM_DECOR_MINIMIZE,
+                0,
+                0);
 
-            XChangeProperty(xapp->display(), handle(),
-                            _XATOM_MWM_HINTS, _XATOM_MWM_HINTS,
-                            32, PropModeReplace,
-                            (unsigned char *)&mwm, sizeof(mwm)/sizeof(long)); ///!!!
-        }
+        XChangeProperty(xapp->display(), handle(),
+                        _XATOM_MWM_HINTS, _XATOM_MWM_HINTS,
+                        32, PropModeReplace,
+                        (unsigned char *)&mwm, PROP_MWM_HINTS_ELEMENTS);
 
         char res_name[] = "icesame";
         char res_class[] = "IceSame";
@@ -269,7 +261,7 @@ public:
         YWindow::handleMotion(motion);
     }
 
-    virtual void actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+    virtual void actionPerformed(YAction action, unsigned int /*modifiers*/) {
         if (action == actionNew)
             newGame();
         else if (action == actionRestart)
@@ -288,10 +280,10 @@ private:
     int restartField[XCOUNT][YCOUNT];
     bool canUndo;
     int score, undoScore;
-    YColor *c[NCOLOR][2];
+    YColorName c[NCOLOR][2];
     YMenu *menu;
     YLabel *scoreLabel;
-    YAction *actionUndo, *actionNew, *actionRestart, *actionClose;
+    YAction actionUndo, actionNew, actionRestart, actionClose;
 };
 
 int IceSame::mark(int x, int y) {
@@ -312,10 +304,8 @@ int IceSame::mark(int x, int y) {
 int main(int argc, char **argv) {
     YLocale locale;
 
-#ifdef ENABLE_NLS
     bindtextdomain(PACKAGE, LOCDIR);
     textdomain(PACKAGE);
-#endif
 
     YXApplication app(&argc, &argv);
 
@@ -325,3 +315,5 @@ int main(int argc, char **argv) {
 
     return app.mainLoop();
 }
+
+// vim: set sw=4 ts=4 et:

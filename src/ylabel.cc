@@ -5,15 +5,13 @@
  */
 #include "config.h"
 
-#ifndef LITE
-
 #include "ylabel.h"
 #include "wpixmaps.h"
 #include "base.h"
 #include "prefs.h"
 
-YColor *YLabel::labelFg = 0;
-YColor *YLabel::labelBg = 0;
+YColorName YLabel::labelFg(&clrLabelText);
+YColorName YLabel::labelBg(&clrLabel);
 ref<YFont> YLabel::labelFont;
 
 YLabel::YLabel(const ustring &label, YWindow *parent):
@@ -23,10 +21,6 @@ YLabel::YLabel(const ustring &label, YWindow *parent):
 
     if (labelFont == null)
         labelFont = YFont::getFont(XFA(labelFontName));
-    if (labelBg == 0)
-        labelBg = new YColor(clrLabel);
-    if (labelFg == 0)
-        labelFg = new YColor(clrLabelText);
 
     autoSize();
 }
@@ -35,13 +29,11 @@ YLabel::~YLabel() {
 }
 
 void YLabel::paint(Graphics &g, const YRect &/*r*/) {
-#ifdef CONFIG_GRADIENTS
     ref<YImage> gradient(parent() ? parent()->getGradient() : null);
 
     if (gradient != null)
         g.drawImage(gradient, x() - 1, y() - 1, width(), height(), 0, 0);
-    else 
-#endif    
+    else
     if (dialogbackPixmap != null)
         g.fillPixmap(dialogbackPixmap, 0, 0, width(), height(), x() - 1, y() - 1);
     else {
@@ -54,7 +46,7 @@ void YLabel::paint(Graphics &g, const YRect &/*r*/) {
         int x = 1;
         int h = labelFont->height();
         ustring s(null), r(null);
-        
+
         g.setColor(labelFg);
         g.setFont(labelFont);
 
@@ -88,4 +80,5 @@ void YLabel::autoSize() {
     }
     setSize(1 + w + 1, 1 + h + 1);
 }
-#endif
+
+// vim: set sw=4 ts=4 et:

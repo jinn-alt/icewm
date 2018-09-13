@@ -1,34 +1,50 @@
 #ifndef ICEWMBG_PREFS_H
 #define ICEWMBG_PREFS_H
 
+/* Synchronize with MAXWORKSPACES from wmmgr.h */
+#define MAX_WORKSPACES  20
+
 #include "yconfig.h"
 
-XSV(const char *, DesktopBackgroundColor, "rgb:4f/4f/a7")
-XSV(const char *, DesktopBackgroundPixmap, "/usr/share/design/current/backgrounds/default.png")
-XSV(const char *, DesktopTransparencyColor, 0)
-XSV(const char *, DesktopTransparencyPixmap, 0)
-XIV(bool, desktopBackgroundScaled, true)
+XSV(const char *, desktopBackgroundColorstr, "rgb:4f/4f/a7")
+XSV(const char *, desktopBackgroundFilename, "/usr/share/design/current/backgrounds/default.png")
+XSV(const char *, desktopTransparencyColorstr, 0)
+XSV(const char *, desktopTransparencyFilename, 0)
+XIV(bool, scaleBackground, true)
 XIV(bool, centerBackground, true)
+XIV(bool, multiheadBackground, false)
 XIV(bool, supportSemitransparency, true)
 
-void addBgImage(const char *name, const char *value, bool);
-
-#ifndef NO_CONFIGURE
+void addBgImage(const char *name, const char *value, bool append);
 
 cfoption icewmbg_prefs[] = {
-    OBV("DesktopBackgroundCenter",              &centerBackground,              "Display desktop background centered and not tiled"),
-    OBV("SupportSemitransparency",              &supportSemitransparency,       "Support for semitransparent terminals like Eterm or gnome-terminal"),
-    OBV("DesktopBackgroundScaled",              &desktopBackgroundScaled,       "Desktop background scaled to full screen"),
-    OSV("DesktopBackgroundColor",               &DesktopBackgroundColor,        "Desktop background color"),
-    OSV("DesktopBackgroundImage",               &DesktopBackgroundPixmap,       "Desktop background image"),
-    OSV("DesktopTransparencyColor",             &DesktopTransparencyColor,      "Color to announce for semi-transparent windows"),
-    OSV("DesktopTransparencyImage",             &DesktopTransparencyPixmap,     "Image to announce for semi-transparent windows"),
-    OKF("DesktopBackgroundImage", addBgImage, ""),
-    //{ false, { 0, 0, 0 }, { 0, false }, { 0 } }, &addBgImage },
+    OBV("DesktopBackgroundMultihead",  &multiheadBackground,
+        "Paint the background image over all multihead monitors combined"),
+
+    OBV("DesktopBackgroundCenter",  &centerBackground,
+        "Display desktop background centered and not tiled"),
+
+    OBV("SupportSemitransparency",  &supportSemitransparency,
+        "Support for semitransparent terminals like Eterm or gnome-terminal"),
+
+    OBV("DesktopBackgroundScaled",  &scaleBackground,
+        "Resize desktop background to full screen"),
+
+    OKF("DesktopBackgroundImage",   addBgImage,
+        "Desktop background image(s)"),
+
+    OKF("DesktopBackgroundColor",   addBgImage,
+        "Desktop background color(s)"),
+
+    OKF("DesktopTransparencyImage", addBgImage,
+        "Image(s) to announce for semitransparent windows"),
+
+    OKF("DesktopTransparencyColor", addBgImage,
+        "Color(s) to announce for semitransparent windows"),
+
     OK0()
-    //{ cfoption::CF_NONE, 0, { false, { 0, 0, 0 }, { 0, false }, { 0 } }, 0 }
 };
 
 #endif
 
-#endif
+// vim: set sw=4 ts=4 et:

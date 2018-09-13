@@ -1,25 +1,26 @@
 #include "config.h"
 
-#ifdef CONFIG_TASKBAR
-
 #include "ylib.h"
 #include "aworkspaces.h"
-#include "wmtaskbar.h"
+#include "applet.h"
 #include "prefs.h"
 #include "wmmgr.h"
 #include "wmapp.h"
 #include "wmframe.h"
 #include "yrect.h"
-#include "yicon.h"
+#include "ypaths.h"
 #include "wmwinlist.h"
 #include "wpixmaps.h"
 #include "intl.h"
+#include <math.h>
 
-YColor * WorkspaceButton::normalButtonBg(NULL);
-YColor * WorkspaceButton::normalButtonFg(NULL);
+YColorName WorkspaceButton::normalButtonBg(&clrWorkspaceNormalButton);
+YColorName WorkspaceButton::normalBackupBg(&clrNormalButton);
+YColorName WorkspaceButton::normalButtonFg(&clrWorkspaceNormalButtonText);
 
-YColor * WorkspaceButton::activeButtonBg(NULL);
-YColor * WorkspaceButton::activeButtonFg(NULL);
+YColorName WorkspaceButton::activeButtonBg(&clrWorkspaceActiveButton);
+YColorName WorkspaceButton::activeBackupBg(&clrActiveButton);
+YColorName WorkspaceButton::activeButtonFg(&clrWorkspaceActiveButtonText);
 
 ref<YFont> WorkspaceButton::normalButtonFont;
 ref<YFont> WorkspaceButton::activeButtonFont;
@@ -28,49 +29,40 @@ static ref<YResourcePaths> getResourcePaths() {
     return YResourcePaths::subdirs("workspace", false);
 }
 
-WorkspaceButton::WorkspaceButton(long ws, YWindow *parent): ObjectButton(parent, (YAction *)0)
+WorkspaceButton::WorkspaceButton(long ws, YWindow *parent):
+    ObjectButton(parent, YAction())
 {
     fWorkspace = ws;
     //setDND(true);
+    setTitle(manager->workspaceName(ws));
 }
 
 void WorkspaceButton::handleClick(const XButtonEvent &up, int /*count*/) {
     switch (up.button) {
-#ifdef CONFIG_WINLIST
         case 2:
             if (windowList)
                 windowList->showFocused(-1, -1);
             break;
-#endif
-#ifdef CONFIG_WINMENU
         case 3:
             manager->popupWindowListMenu(this, up.x_root, up.y_root);
             break;
-#endif
         case 4:
-            manager->switchToPrevWorkspace(false);
+            if(taskBarUseMouseWheel) manager->switchToPrevWorkspace(false);
             break;
         case 5:
-            manager->switchToNextWorkspace(false);
+            if(taskBarUseMouseWheel) manager->switchToNextWorkspace(false);
             break;
     }
 }
 
 void WorkspaceButton::handleDNDEnter() {
-    if (fRaiseTimer == 0)
-        fRaiseTimer = new YTimer(autoRaiseDelay);
-    if (fRaiseTimer) {
-        fRaiseTimer->setTimerListener(this);
-        fRaiseTimer->startTimer();
-    }
+    fRaiseTimer->setTimer(autoRaiseDelay, this, true);
     repaint();
 }
 
 void WorkspaceButton::handleDNDLeave() {
-    if (fRaiseTimer && fRaiseTimer->getTimerListener() == this) {
-        fRaiseTimer->stopTimer();
-        fRaiseTimer->setTimerListener(0);
-    }
+    if (fRaiseTimer)
+        fRaiseTimer->disableTimerListener(this);
     repaint();
 }
 
@@ -81,7 +73,7 @@ bool WorkspaceButton::handleTimer(YTimer *t) {
     return false;
 }
 
-void WorkspaceButton::actionPerformed(YAction */*action*/, unsigned int modifiers) {
+void WorkspaceButton::actionPerformed(YAction /*action*/, unsigned int modifiers) {
     if (modifiers & ShiftMask) {
         manager->switchToWorkspace(fWorkspace, true);
     } else if (modifiers & xapp->AltMask) {
@@ -123,25 +115,8 @@ WorkspacesPane::WorkspacesPane(YWindow *parent): YWindow(parent) {
                     else
                         wk->setText(workspaceNames[w]);
                 }
-#if 0
-                ref<YImage> image
-                    (paths->loadImage("workspace/", workspaceNames[w]));
 
-                if (image != null)
-                    wk->setImage(image);
-                else
-                    wk->setText(workspaceNames[w]);
-#endif
-
-/// TODO "why my_basename here?"
-                char * wn(newstr(my_basename(workspaceNames[w])));
-                char * ext(strrchr(wn, '.'));
-                if (ext) *ext = '\0';
-
-                wk->setToolTip(ustring(_("Workspace: ")).append(wn));
-                delete[] wn;
-
-                //if ((int)wk->height() + 1 > ht) ht = wk->height() + 1;
+                wk->updateName();
             }
             fWorkspaceButton[w] = wk;
         }
@@ -165,6 +140,9 @@ WorkspacesPane::~WorkspacesPane() {
             delete fWorkspaceButton[w];
         delete [] fWorkspaceButton;
     }
+    for (int i = workspaceCount; --i >= 0; --workspaceCount) {
+        delete[] workspaceNames[i]; workspaceNames[i] = 0;
+    }
 }
 
 void WorkspacesPane::repositionButtons() {
@@ -184,27 +162,20 @@ void WorkspacesPane::repositionButtons() {
 }
 
 void WorkspacesPane::relabelButtons() {
-    if (pagerShowPreview)
-        return;
-
     ref<YResourcePaths> paths = getResourcePaths();
 
     for (long w = 0; w < fWorkspaceButtonCount; w++) {
-        YButton *wk = fWorkspaceButton[w];
+        WorkspaceButton *wk = fWorkspaceButton[w];
         if (wk) {
-            ref<YImage> image
-                (paths->loadImage("workspace/",workspaceNames[w]));
-            if (image != null)
-                wk->setImage(image);
-            else
-                wk->setText(workspaceNames[w]);
-
-            char * wn(newstr(my_basename(workspaceNames[w])));
-            char * ext(strrchr(wn, '.'));
-            if (ext) *ext = '\0';
-
-            wk->setToolTip(ustring(_("Workspace: ")).append(wn));
-            delete[] wn;
+            if (false == pagerShowPreview) {
+                ref<YImage> image
+                    (paths->loadImage("workspace/",workspaceNames[w]));
+                if (image != null)
+                    wk->setImage(image);
+                else
+                    wk->setText(workspaceNames[w]);
+            }
+            wk->updateName();
         }
     }
 
@@ -255,11 +226,7 @@ void WorkspacesPane::updateButtons() {
                             wk->setText(workspaceNames[w]);
                     }
 
-                    char * wn(newstr(my_basename(workspaceNames[w])));
-                    char * ext(strrchr(wn, '.'));
-                    if (ext) *ext = '\0';
-
-                    wk->setToolTip(ustring(_("Workspace: ")).append(wn));
+                    wk->updateName();
                 }
                 fWorkspaceButton[w] = wk;
             }
@@ -298,41 +265,33 @@ ref<YFont> WorkspaceButton::getFont() {
         : YButton::getFont();
 }
 
-YColor * WorkspaceButton::getColor() {
+YColor WorkspaceButton::getColor() {
     return isPressed()
-        ? *clrWorkspaceActiveButtonText
-        ? activeButtonFg
-        ? activeButtonFg
-        : activeButtonFg = new YColor(clrWorkspaceActiveButtonText)
-        : YButton::getColor()
-        : *clrWorkspaceNormalButtonText
-        ? normalButtonFg
-        ? normalButtonFg
-        : normalButtonFg = new YColor(clrWorkspaceNormalButtonText)
-        : YButton::getColor();
+        ? activeButtonFg ? activeButtonFg : YButton::getColor()
+        : normalButtonFg ? normalButtonFg : YButton::getColor();
 }
 
 YSurface WorkspaceButton::getSurface() {
-    if (activeButtonBg == 0)
-        activeButtonBg =
-            new YColor(*clrWorkspaceActiveButton
-                       ? clrWorkspaceActiveButton : clrActiveButton);
-    if (normalButtonBg == 0)
-        normalButtonBg =
-            new YColor(*clrWorkspaceNormalButton
-                       ? clrWorkspaceNormalButton : clrNormalButton);
-
-#ifdef CONFIG_GRADIENTS    
-    return (isPressed() ? YSurface(activeButtonBg, 
+    return (isPressed()
+            ? YSurface(activeButtonBg ? activeButtonBg : activeBackupBg,
                                    workspacebuttonactivePixmap,
                                    workspacebuttonactivePixbuf)
-            : YSurface(normalButtonBg,
+            : YSurface(normalButtonBg ? normalButtonBg : normalBackupBg,
                        workspacebuttonPixmap,
                        workspacebuttonPixbuf));
-#else
-    return (isPressed() ? YSurface(activeButtonBg, workspacebuttonactivePixmap)
-            : YSurface(normalButtonBg, workspacebuttonPixmap));
-#endif
+}
+
+mstring WorkspaceButton::baseName() {
+    mstring name(my_basename(workspaceNames[fWorkspace]));
+    name = name.trim();
+    int dot = name.lastIndexOf('.');
+    if (inrange(dot, 1, (int) name.length() - 2))
+        name = name.substring(0, dot);
+    return name;
+}
+
+void WorkspaceButton::updateName() {
+    setToolTip(_("Workspace: ") + baseName());
 }
 
 void WorkspacesPane::repaint() {
@@ -360,17 +319,17 @@ void WorkspaceButton::paint(Graphics &g, const YRect &/*r*/) {
             x += 1; y += 1; w -= 2; h -= 2;
         }
 
-        int wx, wy, ww, wh;
+        unsigned wx, wy, ww, wh;
         double sf = (double) desktop->width() / w;
 
         ref<YIcon> icon;
-        YColor *colors[] = {
+        YColor colors[] = {
             surface.color,
-            surface.color->brighter(),
-            surface.color->darker(),
+            surface.color.brighter(),
+            surface.color.darker(),
             getColor(),
-            NULL, // getColor()->brighter(),
-            getColor()->darker()
+            YColor(), // getColor().brighter(),
+            getColor().darker()
         };
 
         for (YFrameWindow *yfw = manager->bottomLayer(WinLayerBelow);
@@ -378,15 +337,17 @@ void WorkspaceButton::paint(Graphics &g, const YRect &/*r*/) {
                 yfw = yfw->prevLayer()) {
             if (yfw->isHidden() ||
                     !yfw->visibleOn(fWorkspace) ||
-                    (yfw->frameOptions() & YFrameWindow::foIgnoreWinList))
+                    hasbit(yfw->frameOptions(),
+                        YFrameWindow::foIgnoreWinList |
+                        YFrameWindow::foIgnorePagerPreview))
                 continue;
-            wx = (int) round(yfw->x() / sf) + x;
-            wy = (int) round(yfw->y() / sf) + y;
-            ww = (int) round(yfw->width() / sf);
-            wh = (int) round(yfw->height()  / sf);
+            wx = (unsigned) round(double(yfw->x()) / sf) + x;
+            wy = (unsigned) round(double(yfw->y()) / sf) + y;
+            ww = (unsigned) round(double(yfw->width()) / sf);
+            wh = (unsigned) round(double(yfw->height()) / sf);
             if (ww < 1 || wh < 1)
                 continue;
-            if (yfw->isMaximizedVert()) { // !!! hack 
+            if (yfw->isMaximizedVert()) { // !!! hack
                 wy = y; wh = h;
             }
             if (yfw->isMinimized()) {
@@ -401,7 +362,6 @@ void WorkspaceButton::paint(Graphics &g, const YRect &/*r*/) {
                         g.setColor(colors[2]);
                     g.fillRect(wx+1, wy+1, ww-2, wh-2);
 
-#ifndef LITE
                     if (pagerShowWindowIcons && ww > smallIconSize+1 &&
                             wh > smallIconSize+1 && (icon = yfw->clientIcon()) != null &&
                             icon->small() != null) {
@@ -409,7 +369,6 @@ void WorkspaceButton::paint(Graphics &g, const YRect &/*r*/) {
                                     wx + (ww-smallIconSize)/2,
                                     wy + (wh-smallIconSize)/2);
                     }
-#endif
                 }
                 g.setColor(colors[5]);
             }
@@ -424,11 +383,14 @@ void WorkspaceButton::paint(Graphics &g, const YRect &/*r*/) {
             g.draw3DRect(x-1, y-1, w+1, h+1, !isPressed());
         }
 
+        char label[12] = {};
         if (pagerShowNumbers) {
+            snprintf(label, sizeof label, "%d", int(fWorkspace+1) % 100);
+        } else {
+            strlcpy(label, cstring(baseName()), min(5, int(sizeof label)));
+        }
+        if (label[0] != 0) {
             ref<YFont> font = getFont();
-
-            char label[9];
-            sprintf(label, "%ld", (long) (fWorkspace+1) % 100);
 
             wx = (w - font->textWidth(label)) / 2 + x;
             wy = (h - font->height()) / 2 + font->ascent() + y;
@@ -442,4 +404,4 @@ void WorkspaceButton::paint(Graphics &g, const YRect &/*r*/) {
     }
 }
 
-#endif
+// vim: set sw=4 ts=4 et:

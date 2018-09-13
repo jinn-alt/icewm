@@ -4,47 +4,63 @@
 #include "ysmapp.h"
 #include "ymenu.h"
 #include "ymsgbox.h"
-#ifdef CONFIG_GUIEVENTS
 #include "guievent.h"
-#endif
 
 class YWindowManager;
+class AboutDlg;
+class CtrlAltDelete;
+class SwitchWindow;
+
+enum FocusModels {
+    FocusCustom,
+    FocusClick,
+    FocusSloppy,
+    FocusExplicit,
+    FocusStrict,
+    FocusQuiet,
+    FocusModelCount,
+    FocusModelLast = FocusModelCount - 1
+};
 
 class YSMListener {
 public:
-    virtual void handleSMAction(int message) = 0;
+    virtual void handleSMAction(WMAction message) = 0;
     virtual void restartClient(const char *path, char *const *args) = 0;
     virtual void runOnce(const char *resource, const char *path, char *const *args) = 0;
     virtual void runCommandOnce(const char *resource, const char *cmdline) = 0;
 protected:
-    virtual ~YSMListener() {}; 
+    virtual ~YSMListener() {}
 };
 
-class YWMApp: 
-    public YSMApplication, 
-    public YActionListener, 
-    public YMsgBoxListener, 
+class YWMApp:
+    public YSMApplication,
+    public YActionListener,
+    public YMsgBoxListener,
     public YSMListener
 {
 public:
     YWMApp(int *argc, char ***argv, const char *displayName = 0);
     ~YWMApp();
-#ifdef CONFIG_GUIEVENTS
     void signalGuiEvent(GUIEvent ge);
-#endif
 
     virtual void afterWindowEvent(XEvent &xev);
     virtual void handleSignal(int sig);
     virtual bool handleIdle();
     virtual bool filterEvent(const XEvent &xev);
-    virtual void actionPerformed(YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
 
     virtual void handleMsgBox(YMsgBox *msgbox, int operation);
-    virtual void handleSMAction(int message);
+    virtual void handleSMAction(WMAction message);
 
-    void doLogout();
+    void doLogout(RebootShutdown reboot);
     void logout();
     void cancelLogout();
+
+    // drop ties to own clients/windows since those are now destroyed by unmanageClients
+    inline void clientsAreUnmanaged() {
+        fLogoutMsgBox = 0;
+        aboutDlg = 0;
+    }
 
 #ifdef CONFIG_SESSION
     virtual void smSaveYourselfPhase2();
@@ -52,6 +68,7 @@ public:
 #endif
 
     void setFocusMode(int mode);
+    void initFocusMode();
 
     virtual void restartClient(const char *path, char *const *args);
     virtual void runOnce(const char *resource, const char *path, char *const *args);
@@ -70,13 +87,23 @@ public:
     static YCursor scrollUpPointer;
     static YCursor scrollDownPointer;
 
-#ifndef LITE
     static ref<YIcon> getDefaultAppIcon();
-#endif
+
+    bool hasCtrlAltDelete() const { return ctrlAltDelete != 0; }
+    CtrlAltDelete* getCtrlAltDelete();
+    bool hasSwitchWindow() const { return switchWindow != 0; }
+    SwitchWindow* getSwitchWindow();
 
 private:
-    YWindowManager *fWindowManager;
+    char** mainArgv;
+
+    // XXX: these pointers are PITA because they can become wild when objects
+    // are destroyed independently by manager. What we need is something like std::weak_ptr...
     YMsgBox *fLogoutMsgBox;
+    AboutDlg* aboutDlg;
+
+    CtrlAltDelete* ctrlAltDelete;
+    SwitchWindow* switchWindow;
 
     void runRestart(const char *path, char *const *args);
 
@@ -84,45 +111,31 @@ private:
 
     static void initAtoms();
     static void initPointers();
-#ifndef LITE
     static void initIcons();
     static void termIcons();
-#endif
     static void initIconSize();
     static void initPixmaps();
 };
 
-#ifdef CONFIG_GUIEVENTS
 extern YWMApp * wmapp;
-#endif
 
 extern YMenu *windowMenu;
-extern YMenu *occupyMenu;
 extern YMenu *layerMenu;
 extern YMenu *moveMenu;
-
-#ifdef CONFIG_TRAY
 extern YMenu *trayMenu;
-#endif
-
-#ifdef CONFIG_WINMENU
 extern YMenu *windowListMenu;
-#endif
-
-#ifdef CONFIG_WINLIST
 extern YMenu *windowListPopup;
 extern YMenu *windowListAllPopup;
-#endif
 
-extern YMenu *maximizeMenu;
 extern YMenu *logoutMenu;
 
-#ifndef NO_CONFIGURE_MENUS
 class ObjectMenu;
 extern ObjectMenu *rootMenu;
-#endif
-class CtrlAltDelete;
-extern CtrlAltDelete *ctrlAltDelete;
-extern int rebootOrShutdown;
+
+class KProgram;
+extern YObjectArray<KProgram> keyProgs;
+extern RebootShutdown rebootOrShutdown;
 
 #endif
+
+// vim: set sw=4 ts=4 et:

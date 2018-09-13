@@ -1,8 +1,6 @@
 #ifndef __THEMES_H
 #define __THEMES_H
 
-#ifndef NO_CONFIGURE_MENUS
-
 #include "objmenu.h"
 #include "obj.h"
 
@@ -27,8 +25,8 @@ public:
     ThemesMenu(IApp *app, YSMListener *smActionListener, YActionListener *wmActionListener, YWindow *parent = 0);
     virtual ~ThemesMenu();
 
-    void updatePopup();
-    void refresh();
+    virtual void updatePopup();
+    virtual void refresh();
 
 private:
     void findThemes(const upath& path, YMenu *container);
@@ -38,21 +36,21 @@ private:
         YSMListener *smActionListener,
         const ustring& label,
         const ustring& relThemeName);
-    
+
     static void findThemeAlternatives(
         IApp *app,
         YSMListener *smActionListener,
         const upath& path,
         const ustring& relName,
         YMenuItem *item);
-        
+
     // this solution isn't nice. Saving it globaly somewhere would be
     // much better, we would have a themeCound from the last refresh
     // cycle and update it after menu construction, counting themes that
     // are actually added to menues
     int countThemes(const upath& path);
     int themeCount;
-    
+
     YSMListener *smActionListener;
     YActionListener *wmActionListener;
     IApp *app;
@@ -60,4 +58,4 @@ private:
 
 #endif
 
-#endif
+// vim: set sw=4 ts=4 et:

@@ -91,7 +91,7 @@ void cdir::rewind() {
 }
 
 adir::adir(const char* path)
-    : fPath(path), fName(0), fString(0), fCount(0), fLast(-1)
+    : fPath(path), fLast(-1)
 {
     if (path) {
         open();
@@ -99,13 +99,8 @@ adir::adir(const char* path)
 }
 
 void adir::close() {
-    if (fName) {
-        delete[] fString;
-        delete[] fName;
-        fName = 0;
-        fCount = 0;
-        fLast = -1;
-    }
+    fName.clear();
+    fLast = -1;
 }
 
 bool adir::open(const char* path) {
@@ -113,48 +108,27 @@ bool adir::open(const char* path) {
     return open();
 }
 
-static int compare_strings(const void *p1, const void *p2) {
-    return strcoll(*(char *const *)p1, *(char *const *)p2);
-}
-
 bool adir::open() {
     close();
     if (fPath) {
         DirPtr dirp(fPath);
         if (dirp) {
-            int count = 0;
-            size_t size = 0;
-            for (; dirp.next(); ++count) {
-                size += dirp.size();
+            while (dirp.next()) {
+                fName.append(dirp.name());
             }
-            fName = new char*[count+10];
-            fString = new char[size+100];
-            fName[0] = fString;
-            fName[0][0] = 0;
-            fCount = 0;
-            size_t offset = 0;
-            for (dirp.rewind(); dirp.next() && fCount < count; ) {
-                size_t len = dirp.size();
-                if (offset + len <= size) {
-                    fName[fCount] = fString + offset;
-                    memcpy(fName[fCount], dirp.name(), len);
-                    offset += len;
-                    ++fCount;
-                }
-            }
-            fLast = -1;
-            qsort(fName, fCount, sizeof(*fName), compare_strings);
+            fName.sort();
         }
+        fLast = -1;
     }
     return isOpen();
 }
 
 bool adir::next() {
-    return fName && 1 + fLast < fCount && ++fLast >= 0;
+    return 1 + fLast < count() && ++fLast >= 0;
 }
 
 const char* adir::entry() const {
-    if (fName && fLast >= 0 && fLast < fCount) {
+    if (fLast >= 0 && fLast < count()) {
         return fName[fLast];
     }
     return 0;
@@ -220,7 +194,7 @@ bool udir::nextExt(const ustring& extension) {
 }
 
 sdir::sdir(const upath& path)
-    : fPath(path), fName(0), fCount(0), fLast(-1)
+    : fPath(path), fLast(-1)
 {
     if (path.nonempty()) {
         open();
@@ -228,12 +202,8 @@ sdir::sdir(const upath& path)
 }
 
 void sdir::close() {
-    if (fName) {
-        fCount = 0;
-        delete[] fName;
-        fName = 0;
-        fLast = -1;
-    }
+    fName.clear();
+    fLast = -1;
 }
 
 bool sdir::open(const upath& path) {
@@ -241,26 +211,16 @@ bool sdir::open(const upath& path) {
     return open();
 }
 
-static int compare_ustrings(const void *p1, const void *p2)
-{
-    const ustring *u1 = (const ustring *) p1;
-    const ustring *u2 = (const ustring *) p2;
-    return u1->collate(*u2);
-}
-
 bool sdir::open() {
     close();
     if (fPath.nonempty()) {
         DirPtr dirp(fPath);
         if (dirp) {
-            int count = 4;
-            while (dirp.next())
-                ++count;
-            fName = new ustring[count];
-            fCount = 0;
-            for (dirp.rewind(); dirp.next() && fCount < count; )
-                fName[fCount++] = ustring(dirp.name());
-            qsort(fName, fCount, sizeof(*fName), compare_ustrings);
+            while (dirp.next()) {
+                mstring copy(dirp.name());
+                fName.append(copy);
+            }
+            fName.sort();
         }
         fLast = -1;
     }
@@ -268,7 +228,7 @@ bool sdir::open() {
 }
 
 bool sdir::next() {
-    return fName && 1 + fLast < fCount && ++fLast >= 0;
+    return 1 + fLast < count() && ++fLast >= 0;
 }
 
 const ustring& sdir::entry() const {
@@ -284,3 +244,5 @@ bool sdir::nextExt(const ustring& extension) {
     return false;
 }
 
+
+// vim: set sw=4 ts=4 et:

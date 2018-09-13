@@ -71,11 +71,11 @@ static void test_mstring()
     assert(e, e == null);
     assert(e, e.indexOf(' ') == -1);
 
-    mstring m("abc", 0);
+    mstring m("abc", (size_t) 0);
     expect(m, "");
     assert(m, m.length() == 0);
 
-    mstring n(0, 0);
+    mstring n(0, (size_t) 0);
     expect(n, "");
     assert(n, n.length() == 0);
 
@@ -182,6 +182,35 @@ static void test_mstring()
     expect(u, "aha");
     u = mstring("aha") + NULL;
     expect(u, "aha");
+
+    u = mstring("ab", "cd");
+    expect(u, "abcd");
+    u = mstring("ab", (char *) NULL);
+    expect(u, "ab");
+    u = mstring(NULL, "cd");
+    expect(u, "cd");
+    u = mstring((char *) NULL, (char *) NULL);
+    assert(u, u == null);
+
+    u = mstring("ab", "cd", "ef");
+    expect(u, "abcdef");
+    u = mstring("ab", "cd", (char *) NULL);
+    expect(u, "abcd");
+    u = mstring("ab", (char *) NULL, "ef");
+    expect(u, "abef");
+    u = mstring(NULL, "cd", "ef");
+    expect(u, "cdef");
+    u = mstring((char *) NULL, (char *) NULL, (char *) NULL);
+    expect(u, "");
+
+    u = mstring("#ffff").match("#fffff");
+    expect(u, null);
+    u = mstring("#fffff").match("#fffff");
+    expect(u, "#fffff");
+    u = mstring("f#ffffff").match("#fffff");
+    expect(u, "#fffff");
+    u = mstring("f#ffffff").match("#f{5}");
+    expect(u, "#fffff");
 }
 
 static void test_upath()
@@ -458,3 +487,5 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+// vim: set sw=4 ts=4 et:

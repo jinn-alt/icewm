@@ -3,42 +3,72 @@
 
 #include "ywindow.h"
 #include "ytimer.h"
+#include "ypointer.h"
+#include "yaction.h"
+#include "applet.h"
 
-#ifdef CONFIG_APPLET_CLOCK
-
+class IAppletContainer;
 class YSMListener;
+class YMenu;
 
-class YClock: public YWindow, public YTimerListener {
+class YClock:
+    public IApplet,
+    private Picturer,
+    private YTimerListener,
+    private YActionListener
+{
 public:
-    YClock(YSMListener *smActionListener, YWindow *aParent = 0);
+    YClock(YSMListener *smActionListener, IAppletContainer* iapp, YWindow *aParent);
     virtual ~YClock();
 
+private:
     void autoSize();
+    char const * strTimeFmt(struct tm const & t);
 
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual void handleButton(const XButtonEvent &button);
     virtual void handleCrossing(const XCrossingEvent &crossing);
     virtual void handleClick(const XButtonEvent &up, int count);
-    virtual void paint(Graphics &g, const YRect &r);
+    virtual void handleExpose(const XExposeEvent &e);
 
-    void updateToolTip();
+    virtual void updateToolTip();
     virtual bool handleTimer(YTimer *t);
+    virtual bool picture();
 
-private:
-    YTimer *clockTimer;
+    enum {
+        TimeSize = 64,
+        DateSize = 128,
+    };
+
+    lazy<YTimer> clockTimer;
     bool clockUTC;
     bool toolTipUTC;
+    bool clockTicked;
+    unsigned paintCount;
     int transparent;
     YSMListener *smActionListener;
+    IAppletContainer* iapp;
+    osmart<YMenu> fMenu;
+    const char* fTimeFormat;
 
+    void changeTimeFormat(const char* format);
+    using IApplet::getPixmap;
     ref<YPixmap> getPixmap(char ch);
     int calcWidth(const char *s, int count);
     bool hasTransparency();
+    bool draw(Graphics& g);
+    void fill(Graphics& g);
+    void fill(Graphics& g, int x, int y, int w, int h);
+    bool paintPretty(Graphics& g, const char* s, int len);
+    bool paintPlain(Graphics& g, const char* s, int len);
 
-
-    static YColor *clockBg;
-    static YColor *clockFg;
-    static ref<YFont> clockFont;
+    int negativePosition;
+    int positions[TimeSize];
+    char previous[TimeSize];
+    YColorName clockBg;
+    YColorName clockFg;
+    ref<YFont> clockFont;
 };
 #endif
 
-#endif
+// vim: set sw=4 ts=4 et:

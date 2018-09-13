@@ -13,12 +13,13 @@
 #define __YPOINTER_H
 
 /**************************************************************************
- * Smart pointers behave like pointers but delete the object they own when 
+ * Smart pointers behave like pointers but delete the object they own when
  * they go out of scope. The following smart pointers are distinguished:
  *
  *   1. osmart for `new` objects, deallocated by delete.
  *   2. asmart for `new[]` arrays, deallocated by delete[].
  *   3. fsmart for `malloc` data, deallocated by free.
+ *   3. xsmart for `Xmalloc` data, deallocated by XFree.
  *
  * 2b. csmart is an alias for asmart for new[] character strings.
  *
@@ -105,6 +106,9 @@ public:
     operator DataType *() const { return fData; }
     DataType& operator*() const { return *fData; }
     DataType *operator->() const { return fData; }
+
+protected:
+    DataType** address() { return &fData; }
 };
 
 // For pointers to objects which were allocated with 'new'.
@@ -125,6 +129,7 @@ public:
     }
 
     void operator=(const osmart& some) { super::copy(some); }
+    void operator=(DataType *some) { super::data(some, odispose); }
 };
 
 // For arrays which were allocated with 'new[]'.
@@ -141,12 +146,11 @@ public:
         : super(copy) {}
 
     void operator=(const asmart& some) { super::copy(some); }
+    void operator=(DataType *some) { super::data(some, adispose); }
 
     void data(DataType *some, dispose_t disp = adispose) {
         super::data(some, disp);
     }
-
-    DataType& operator[](int index) const { return super::data()[index]; }
 };
 
 // for new[] character strings
@@ -160,7 +164,10 @@ public:
     csmart(const csmart& copy)
         : super(copy) {}
 
-    void operator=(const csmart& some) { super::copy(some); }
+    csmart& operator=(const csmart& some) { super::copy(some); return *this; }
+    csmart& operator=(char *some) { super::data(some, adispose); return *this; }
+
+    char** operator&() { return super::address(); }
 };
 
 // for malloc data
@@ -180,6 +187,35 @@ public:
     }
 
     void operator=(const fsmart& some) { super::copy(some); }
+    void operator=(DataType *some) { super::data(some, fdispose); }
+};
+
+extern "C" {
+    extern int XFree(void*);
+}
+
+// for XFree-able data
+template <class DataType>
+class xsmart : public ysmart<DataType> {
+public:
+    typedef ysmart<DataType> super;
+    typedef typename super::dispose_t dispose_t;
+    static inline void xdispose(DataType *p) { if (p) ::XFree(p); }
+
+    explicit xsmart(DataType *data = 0, dispose_t disp = xdispose)
+        : super(data, disp) {}
+    xsmart(const xsmart& copy) : super(copy) {}
+
+    void data(DataType *some, dispose_t disp = xdispose) {
+        super::data(some, disp);
+    }
+
+    void operator=(const xsmart& some) { super::copy(some); }
+    void operator=(DataType *some) { super::data(some, xdispose); }
+
+    DataType** operator&() { return super::address(); }
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

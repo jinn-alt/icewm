@@ -4,24 +4,15 @@
  * Copyright (C) 1997-2002 Marko Macek
  */
 #include "config.h"
-
-#include "yfull.h"
-#include "ykey.h"
 #include "wmframe.h"
-
-#include "wmclient.h"
 #include "wmstatus.h"
-#include "yxapp.h"
 #include "wmapp.h"
-#include "yrect.h"
 #include "prefs.h"
-
-#include "intl.h"
-
 #include "wmtaskbar.h"
 #include "aworkspaces.h"
+#include "intl.h"
 
-#include <stdio.h>
+extern YColorName activeBorderBg;
 
 void YFrameWindow::snapTo(int &wx, int &wy,
                           int rx1, int ry1, int rx2, int ry2,
@@ -186,23 +177,18 @@ void YFrameWindow::drawMoveSizeFX(int x, int y, int w, int h, bool) {
 
     int const bw((wsBorderX + wsBorderY) / 2);
     int const bo((wsBorderX + wsBorderY) / 4);
-    static Graphics * gc(NULL);
 
-    if (gc == NULL) {
-        XGCValues gcv;
+    XGCValues gcv;
 
-        gcv.foreground = YColor(clrActiveBorder).pixel();
-        gcv.function = GXxor;
-        gcv.graphics_exposures = False;
-        gcv.line_width = bw;
-        gcv.subwindow_mode = IncludeInferiors;
+    gcv.foreground = activeBorderBg.pixel();
+    gcv.function = GXxor;
+    gcv.graphics_exposures = False;
+    gcv.line_width = bw;
+    gcv.subwindow_mode = IncludeInferiors;
 
-        gc = new Graphics(*desktop, GCForeground | GCFunction |
-                                    GCGraphicsExposures | GCLineWidth |
-                                    GCSubwindowMode, &gcv);
-    }
-
-    gc->drawRect(x + bo, y + bo, w - bw, h - bw);
+    Graphics g(*desktop, GCForeground | GCFunction | GCGraphicsExposures |
+                         GCLineWidth | GCSubwindowMode, &gcv);
+    g.drawRect(x + bo, y + bo, w - bw, h - bw);
 }
 
 int YFrameWindow::handleMoveKeys(const XKeyEvent &key, int &newX, int &newY) {
@@ -334,43 +320,42 @@ void YFrameWindow::handleMoveMouse(const XMotionEvent &motion, int &newX, int &n
     int mx, my, Mx, My;
     manager->getWorkArea(this, &mx, &my, &Mx, &My);
 
-
     if (!(motion.state & ShiftMask)) {
         if (/*EdgeResistance >= 0 && %%% */ EdgeResistance < 10000) {
-            if (newX + int(width() + n * borderX()) > Mx) {
-                if (newX + int(width() + n * borderX()) < int(Mx + EdgeResistance))
-                    newX = Mx - width() - n * borderX();
+            if (newX + int(width()) + n * borderX() > Mx) {
+                if (newX + int(width()) + n * borderX() < Mx + EdgeResistance)
+                    newX = Mx - int(width()) - n * borderX();
                 else if (motion.state & ShiftMask)
                     newX -= EdgeResistance;
             }
-            if (newY + int(height() + n * borderY()) > My) {
-                if (newY + int(height() + n * borderY()) < int(My + EdgeResistance))
-                    newY = My - height() - n * borderY();
+            if (newY + int(height()) + n * borderY() > My) {
+                if (newY + int(height()) + n * borderY() < My + EdgeResistance)
+                    newY = My - int(height()) - n * borderY();
                 else if (motion.state & ShiftMask)
                     newY -= EdgeResistance;
             }
             if (newX < mx) {
-                if (newX > int(- EdgeResistance + mx))
+                if (newX > mx - EdgeResistance)
                     newX = mx;
                 else if (motion.state & ShiftMask)
                     newX += EdgeResistance;
             }
             if (newY < my) {
-                if (newY > int(- EdgeResistance + my))
+                if (newY > my - EdgeResistance)
                     newY = my;
                 else if (motion.state & ShiftMask)
                     newY += EdgeResistance;
             }
         }
         if (EdgeResistance == 10000 || isMaximizedHoriz()) {
-            if (newX + int(width() + n * borderX()) > Mx)
-                newX = Mx - width() - n * borderX();
+            if (newX + int(width()) + n * borderX() > Mx)
+                newX = Mx - int(width()) - n * borderX();
             if (newX < mx)
                 newX = mx;
         }
         if (EdgeResistance == 10000 || isMaximizedVert()) {
-            if (newY + int(height() + n * borderY()) > My)
-                newY = My - height() - n * borderY();
+            if (newY + int(height()) + n * borderY() > My)
+                newY = My - int(height()) - n * borderY();
             if (newY < my)
                 newY = my;
         }
@@ -382,6 +367,9 @@ void YFrameWindow::handleMoveMouse(const XMotionEvent &motion, int &newX, int &n
 void YFrameWindow::handleResizeMouse(const XMotionEvent &motion,
                                      int &newX, int &newY, int &newWidth, int &newHeight)
 {
+    if (buttonDownX == 0 && buttonDownY == 0)
+        return;
+
     int mouseX = motion.x_root;
     int mouseY = motion.y_root;
 
@@ -415,21 +403,19 @@ void YFrameWindow::handleResizeMouse(const XMotionEvent &motion,
         newX = x() + width() - newWidth;
     if (grabY == -1)
         newY = y() + height() - newHeight;
-
 }
 
 void YFrameWindow::outlineMove() {
     int xx(x()), yy(y());
 
     XGrabServer(xapp->display());
-    XSync(xapp->display(), False);
 
-    for(;;) {
+    for (;;) {
         XEvent xev;
 
         XWindowEvent(xapp->display(), handle(),
-                     KeyPressMask | ExposureMask | 
-                     ButtonPressMask | ButtonReleaseMask | 
+                     KeyPressMask | ExposureMask |
+                     ButtonPressMask | ButtonReleaseMask |
                      PointerMotionMask, &xev);
 
         switch (xev.type) {
@@ -443,9 +429,7 @@ void YFrameWindow::outlineMove() {
                     case -2:
                         if (xx != ox || yy != oy) {
                             drawMoveSizeFX(ox, oy, width(), height());
-#ifndef LITE
                             statusMoveSize->setStatus(this, YRect(xx, yy, width(), height()));
-#endif
                             drawMoveSizeFX(xx, yy, width(), height());
                         }
 
@@ -475,9 +459,7 @@ void YFrameWindow::outlineMove() {
 
                 if (xx != ox || yy != oy) {
                     drawMoveSizeFX(ox, oy, width(), height());
-#ifndef LITE
                     statusMoveSize->setStatus(this, YRect(xx, yy, width(), height()));
-#endif
                     drawMoveSizeFX(xx, yy, width(), height());
                 }
 
@@ -504,14 +486,13 @@ void YFrameWindow::outlineResize() {
     }
 
     XGrabServer(xapp->display());
-    XSync(xapp->display(), False);
 
-    for(;;) {
+    for (;;) {
         XEvent xev;
 
         XWindowEvent(xapp->display(), handle(),
                      KeyPressMask | ExposureMask |
-                     ButtonPressMask | ButtonReleaseMask | 
+                     ButtonPressMask | ButtonReleaseMask |
                      PointerMotionMask, &xev);
 
         switch (xev.type) {
@@ -525,9 +506,7 @@ void YFrameWindow::outlineResize() {
                     case 1:
                         if (ox != xx || oy != yy || ow != ww || oh != hh) {
                             drawMoveSizeFX(ox, oy, ow, oh);
-#ifndef LITE
                             statusMoveSize->setStatus(this, YRect(xx, yy, ww, hh));
-#endif
                             drawMoveSizeFX(xx, yy, ww, hh);
                         }
 
@@ -542,7 +521,7 @@ void YFrameWindow::outlineResize() {
                     case -1:
                         goto end;
                 }
-                
+
                 break;
             }
 
@@ -557,9 +536,7 @@ void YFrameWindow::outlineResize() {
 
                 if (ox != xx || oy != yy || ow != ww || oh != hh) {
                     drawMoveSizeFX(ox, oy, ow, oh);
-#ifndef LITE
                     statusMoveSize->setStatus(this, YRect(xx, yy, ww, hh));
-#endif
                     drawMoveSizeFX(xx, yy, ww, hh);
                 }
 
@@ -590,20 +567,18 @@ void YFrameWindow::manualPlace() {
     buttonDownY = 0;
 
     if (!xapp->grabEvents(desktop,
-                          YXApplication::movePointer.handle(),
+                          YXApplication::movePointer,
                           ButtonPressMask |
                           ButtonReleaseMask |
                           PointerMotionMask))
         return;
 
     XGrabServer(xapp->display());
-#ifndef LITE
     statusMoveSize->begin(this);
-#endif
 
     drawMoveSizeFX(xx, yy, width(), height());
 
-    for(;;) {
+    for (;;) {
         XEvent xev;
 
         XMaskEvent(xapp->display(),
@@ -622,9 +597,7 @@ void YFrameWindow::manualPlace() {
                     case -2:
                         if (xx != ox || yy != oy) {
                             drawMoveSizeFX(ox, oy, width(), height());
-#ifndef LITE
                             statusMoveSize->setStatus(this, YRect(xx, yy, width(), height()));
-#endif
                             drawMoveSizeFX(xx, yy, width(), height());
                         }
 
@@ -642,7 +615,7 @@ void YFrameWindow::manualPlace() {
 
                 break;
             }
-            
+
 
             case ButtonPress:
             case ButtonRelease:
@@ -654,9 +627,7 @@ void YFrameWindow::manualPlace() {
                 handleMoveMouse(xev.xmotion, xx, yy);
                 if (xx != ox || yy != oy) {
                     drawMoveSizeFX(ox, oy, width(), height());
-#ifndef LITE
                     statusMoveSize->setStatus(this, YRect(xx, yy, width(), height()));
-#endif
                     drawMoveSizeFX(xx, yy, width(), height());
                 }
 
@@ -668,9 +639,7 @@ void YFrameWindow::manualPlace() {
 end:
     drawMoveSizeFX(xx, yy, width(), height());
 
-#ifndef LITE
     statusMoveSize->end();
-#endif
     moveWindow(xx, yy);
     xapp->releaseEvents();
     XUngrabServer(xapp->display());
@@ -731,15 +700,13 @@ bool YFrameWindow::handleKey(const XKeyEvent &key) {
                 setCurrentGeometryOuter(YRect(newX, newY, newWidth, newHeight));
                 drawMoveSizeFX(x(), y(), width(), height());
 
-#ifndef LITE
                 statusMoveSize->setStatus(this);
-#endif
                 break;
             case -2:
                 drawMoveSizeFX(x(), y(), width(), height());
                 setCurrentGeometryOuter(YRect(newX, newY, newWidth, newHeight));
                 drawMoveSizeFX(x(), y(), width(), height());
-                /* falls-through */
+                /* fall-through */
 
             case -1:
                 endMoveSize();
@@ -879,80 +846,82 @@ bool YFrameWindow::canSize(bool horiz, bool vert) {
 }
 
 bool YFrameWindow::canMove() {
-    if (!(frameFunctions() & ffMove))
-        return false;
-    return true;
+    return hasbit(frameFunctions(), ffMove);
 }
 
-#ifdef WMSPEC_HINTS
 void YFrameWindow::startMoveSize(int x, int y,
                                  int direction)
 {
-    int sx[] = { -1, 0, 1, 1, 1, 0, -1, -1, 0 };
-    int sy[] = { -1, -1, -1, 0, 1, 1, 1, 0, 0 };
+    int sx[] = { -1, 0, 1, 1, 1, 0, -1, -1, };
+    int sy[] = { -1, -1, -1, 0, 1, 1, 1, 0, };
 
-    if (direction >= 0 && direction < (int) ACOUNT(sx)) {
-        MSG(("move size %d %d %d", x, y, direction));
-        if (direction == _NET_WM_MOVERESIZE_MOVE) {
-            x -= this->x();
-            y -= this->y();
-        }
-        startMoveSize((direction == _NET_WM_MOVERESIZE_MOVE) ? 1 : 0,
-                      true, sx[direction], sy[direction], x, y);
+    if (inrange(direction, 0, int ACOUNT(sx) - 1)) {
+        MSG(("move size %d %d direction %d", x, y, direction));
+        startMoveSize(false, true, sx[direction], sy[direction], x, y);
+    }
+    else if (direction == _NET_WM_MOVERESIZE_MOVE) {
+        MSG(("move size %d %d move by mouse", x, y));
+        startMoveSize(true, true, 0, 0, x - this->x(), y - this->y());
+    }
+    else if (direction == _NET_WM_MOVERESIZE_SIZE_KEYBOARD) {
+        MSG(("move size %d %d size by keyboard", x, y));
+        startMoveSize(false, false, 0, 0, x - this->x(), y - this->y());
+    }
+    else if (direction == _NET_WM_MOVERESIZE_MOVE_KEYBOARD) {
+        MSG(("move size %d %d move by keyboard", x, y));
+        startMoveSize(true, false, 0, 0, x - this->x(), y - this->y());
+    }
+    else if (direction == _NET_WM_MOVERESIZE_CANCEL) {
     } else
         warn(_("Unknown direction in move/resize request: %d"), direction);
 }
-#endif
 
-void YFrameWindow::startMoveSize(int doMove, int byMouse,
+void YFrameWindow::startMoveSize(bool doMove, bool byMouse,
                                  int sideX, int sideY,
                                  int mouseXroot, int mouseYroot) {
     Cursor grabPointer = None;
 
-    sizeByMouse = byMouse;
     grabX = sideX;
     grabY = sideY;
     origX = x();
     origY = y();
     origW = width();
     origH = height();
+    buttonDownX = 0;
+    buttonDownY = 0;
 
     manager->setWorkAreaMoveWindows(true);
     if (doMove && grabX == 0 && grabY == 0) {
         buttonDownX = mouseXroot;
         buttonDownY = mouseYroot;
 
-#ifdef CONFIG_GUIEVENTS
         wmapp->signalGuiEvent(geWindowMoved);
-#endif
-        grabPointer = YXApplication::movePointer.handle();
+        grabPointer = YXApplication::movePointer;
     } else if (!doMove) {
-#ifdef CONFIG_GUIEVENTS
         wmapp->signalGuiEvent(geWindowSized);
-#endif
 
         if (grabY == -1) {
             if (grabX == -1)
-                grabPointer = YWMApp::sizeTopLeftPointer.handle();
+                grabPointer = YWMApp::sizeTopLeftPointer;
             else if (grabX == 1)
-                grabPointer = YWMApp::sizeTopRightPointer.handle();
+                grabPointer = YWMApp::sizeTopRightPointer;
             else
-                grabPointer = YWMApp::sizeTopPointer.handle();
+                grabPointer = YWMApp::sizeTopPointer;
         } else if (grabY == 1) {
             if (grabX == -1)
-                grabPointer = YWMApp::sizeBottomLeftPointer.handle();
+                grabPointer = YWMApp::sizeBottomLeftPointer;
             else if (grabX == 1)
-                grabPointer = YWMApp::sizeBottomRightPointer.handle();
+                grabPointer = YWMApp::sizeBottomRightPointer;
             else
-                grabPointer = YWMApp::sizeBottomPointer.handle();
+                grabPointer = YWMApp::sizeBottomPointer;
         } else {
             if (grabX == -1)
-                grabPointer = YWMApp::sizeLeftPointer.handle();
+                grabPointer = YWMApp::sizeLeftPointer;
             else if (grabX == 1)
-                grabPointer = YWMApp::sizeRightPointer.handle();
+                grabPointer = YWMApp::sizeRightPointer;
             else
-                grabPointer = YXApplication::leftPointer.handle();
-            
+                grabPointer = YXApplication::leftPointer;
+
         }
 
         if (grabX == 1)
@@ -966,24 +935,21 @@ void YFrameWindow::startMoveSize(int doMove, int byMouse,
             buttonDownY = mouseYroot - y();
     }
 
-    XSync(xapp->display(), False);
     if (!xapp->grabEvents(this,
                           grabPointer,
                           ButtonPressMask |
                           ButtonReleaseMask |
                           PointerMotionMask))
     {
+        movingWindow = false;
+        sizingWindow = false;
         return ;
     }
 
-    if (doMove)
-        movingWindow = 1;
-    else
-        sizingWindow = 1;
+    movingWindow = doMove;
+    sizingWindow = !doMove;
 
-#ifndef LITE
     statusMoveSize->begin(this);
-#endif
 
     drawMoveSizeFX(x(), y(), width(), height());
 
@@ -998,29 +964,25 @@ void YFrameWindow::startMoveSize(int doMove, int byMouse,
 
 void YFrameWindow::endMoveSize() {
     xapp->releaseEvents();
-#ifndef LITE
     statusMoveSize->end();
-#endif
 
     if ((movingWindow && opaqueMove) ||
         (sizingWindow && opaqueResize))
         drawMoveSizeFX(x(), y(), width(), height());
 
-    movingWindow = 0;
-    sizingWindow = 0;
+    movingWindow = false;
+    sizingWindow = false;
 
     manager->setWorkAreaMoveWindows(false);
 
-#ifdef CONFIG_TASKBAR
     if (taskBar && taskBar->workspacesPane()) {
         taskBar->workspacesPane()->repaint();
     }
-#endif
 }
 
 void YFrameWindow::handleBeginDrag(const XButtonEvent &down, const XMotionEvent &motion) {
     if ((down.button == 3) && canMove()) {
-        startMoveSize(1, 1,
+        startMoveSize(true, true,
                       0, 0,
                       down.x, down.y);
         handleDrag(down, motion);
@@ -1029,23 +991,23 @@ void YFrameWindow::handleBeginDrag(const XButtonEvent &down, const XMotionEvent 
         grabY = 0;
 
         if (down.x < int(borderX())) grabX = -1;
-        else if (width() - down.x <= borderX()) grabX = 1;
+        else if ((int) width() - down.x <= borderX()) grabX = 1;
 
         if (down.y < int(borderY())) grabY = -1;
-        else if (height() - down.y <= borderY()) grabY = 1;
+        else if ((int) height() - down.y <= borderY()) grabY = 1;
 
         if (grabY != 0 && grabX == 0) {
             if (down.x < int(wsCornerX)) grabX = -1;
-            else if ((int)width() - down.x <= wsCornerX) grabX = 1;
+            else if ((int)width() - down.x <= (int) wsCornerX) grabX = 1;
         }
 
         if (grabX != 0 && grabY == 0) {
             if (down.y < int(wsCornerY)) grabY = -1;
-            else if ((int)height() - down.y <= wsCornerY) grabY = 1;
+            else if ((int)height() - down.y <= (int) wsCornerY) grabY = 1;
         }
 
         if (grabX != 0 || grabY != 0) {
-            startMoveSize(0, 1,
+            startMoveSize(false, true,
                           grabX, grabY,
                           down.x_root, down.y_root);
 
@@ -1075,9 +1037,7 @@ void YFrameWindow::moveWindow(int newX, int newY) {
     if (opaqueMove)
         drawMoveSizeFX(x(), y(), width(), height());
 
-#ifndef LITE
     statusMoveSize->setStatus(this);
-#endif
 }
 
 void YFrameWindow::handleDrag(const XButtonEvent &/*down*/, const XMotionEvent &/*motion*/) {
@@ -1113,9 +1073,7 @@ void YFrameWindow::handleMotion(const XMotionEvent &motion) {
         setCurrentGeometryOuter(YRect(newX, newY, newWidth, newHeight));
         drawMoveSizeFX(x(), y(), width(), height());
 
-#ifndef LITE
         statusMoveSize->setStatus(this);
-#endif
         return ;
     } else if (movingWindow) {
         int newX = x();
@@ -1128,3 +1086,5 @@ void YFrameWindow::handleMotion(const XMotionEvent &motion) {
     YWindow::handleMotion(motion);
 }
 
+
+// vim: set sw=4 ts=4 et:

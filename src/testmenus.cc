@@ -15,10 +15,13 @@ const char *ApplicationName = "testmenus";
 YMenu *logoutMenu(NULL);
 YWMApp *wmapp(NULL);
 YMenu *windowListMenu(NULL);
+YWindowManager *manager;
 
 void YWMApp::restartClient(const char *path, char *const *args) {
 }
 void YWMApp::runOnce(const char *resource, const char *path, char *const *args) {
+}
+void YWMApp::signalGuiEvent(GUIEvent) {
 }
 
 class MenuWindow: public YWindow {
@@ -37,7 +40,7 @@ public:
 #if 0
         file = YIcon::getIcon("file");
 
-        YAction *actionNone = new YAction();
+        YAction actionNone = actionNull;
 
         submenu0 = new YMenu();
         submenu0->addItem("XML Tree", 0, null, actionNone);
@@ -98,3 +101,5 @@ int main(int argc, char **argv) {
 
     return xapp.mainLoop();
 }
+
+// vim: set sw=4 ts=4 et:

@@ -4,25 +4,21 @@
  * Copyright (C) 1997-2002 Marko Macek
  */
 #include "config.h"
-#include "yfull.h"
 #include "wmframe.h"
 
-#include "wmaction.h"
 #include "wmtitle.h"
 #include "wmapp.h"
-#include "wmclient.h"
 #include "wmcontainer.h"
 #include "wpixmaps.h"
 #include "ymenuitem.h"
 #include "yrect.h"
 #include "prefs.h"
-#include "yprefs.h"
 
 void YFrameWindow::updateMenu() {
     YMenu *windowMenu = this->windowMenu();
     // enable all commands
     windowMenu->setActionListener(this);
-    windowMenu->enableCommand(0);
+    windowMenu->enableCommand(actionNull);
 
     if (isMaximized())
         windowMenu->disableCommand(actionMaximize);
@@ -47,11 +43,9 @@ void YFrameWindow::updateMenu() {
         windowMenu->disableCommand(actionSize);
     if (!(func & ffMinimize))
         windowMenu->disableCommand(actionMinimize);
-#ifndef CONFIG_PDA
     if (!(func & ffHide))
         windowMenu->disableCommand(actionHide);
-#endif
-    if (!(func & ffRollup) || !titlebar()->visible())
+    if (!(func & ffRollup) || !titlebar() || !titlebar()->visible())
         windowMenu->disableCommand(actionRollup);
     if (!(func & ffMaximize))
         windowMenu->disableCommand(actionMaximize);
@@ -63,7 +57,7 @@ void YFrameWindow::updateMenu() {
     if ((item = windowMenu->findAction(actionRollup)))
         item->setChecked(isRollup());
     if ((item = windowMenu->findAction(actionOccupyAllOrCurrent)))
-        item->setChecked(isSticky());
+        item->setChecked(isAllWorkspaces());
 #if DO_NOT_COVER_OLD
     if ((item = windowMenu->findAction(actionDoNotCover)))
         item->setChecked(doNotCover());
@@ -71,34 +65,40 @@ void YFrameWindow::updateMenu() {
     if ((item = windowMenu->findAction(actionFullscreen)))
         item->setChecked(isFullscreen());
     if ((item = windowMenu->findSubmenu(moveMenu)))
-        item->setEnabled(!isSticky());
+        item->setEnabled(!isAllWorkspaces());
 
+    moveMenu->setActionListener(this);
     for (int i(0); i < moveMenu->itemCount(); i++) {
         item = moveMenu->getItem(i);
-        for (int w(0); w < workspaceCount; w++)
-            if (item && item->getAction() == workspaceActionMoveTo[w])
-                item->setEnabled(w != getWorkspace());
+        if (item && item->getAction() == workspaceActionMoveTo[i]) {
+            bool const e(i == getWorkspace());
+            item->setEnabled(!e);
+            item->setChecked(e);
+        }
     }
 
+    layerMenu->setActionListener(this);
+    int layer = WinLayerCount - 1;
     for (int j(0); j < layerMenu->itemCount(); j++) {
         item = layerMenu->getItem(j);
-        for (int layer(0); layer < WinLayerCount; layer++)
-            if (item && item->getAction() == layerActionSet[layer]) {
-                bool const e(layer == getActiveLayer());
-                item->setEnabled(!e);
-                item->setChecked(e);
-            }
+        YAction action = item->getAction();
+        while (action < layerActionSet[layer] && 0 < layer) {
+            --layer;
+        }
+        if (action == layerActionSet[layer]) {
+            bool const e(layer == getActiveLayer());
+            item->setEnabled(!e);
+            item->setChecked(e);
+        }
     }
 
-#ifdef CONFIG_TRAY
-///    if (trayMenu) {
-        for (int k = 0; k < windowMenu->itemCount(); k++) {
-            item = windowMenu->getItem(k);
-            if (item->getAction() == actionToggleTray) {
-                item->setChecked(getTrayOption() != WinTrayIgnore);
-            }
-        }
-///    }
+    if ((item = windowMenu->findAction(actionToggleTray))) {
+        bool enabled = false == (frameOptions() & foIgnoreTaskBar);
+        bool checked = enabled && (getTrayOption() != WinTrayIgnore);
+        item->setChecked(checked);
+        item->setEnabled(enabled);
+    }
+
 #if 0
     if (trayMenu) for (int k(0); k < trayMenu->itemCount(); k++) {
         item = trayMenu->getItem(k);
@@ -109,7 +109,6 @@ void YFrameWindow::updateMenu() {
                 item->setChecked(e);
             }
     }
-#endif
 #endif
 }
 
@@ -156,11 +155,7 @@ void YFrameWindow::setShape() {
 
             if (titleY() > 0) {
                 rect[nrect].x = borderX();
-#ifdef TITLEBAR_BOTTOM
-                rect[nrect].y = height() - borderY() - titleY();
-#else
                 rect[nrect].y = borderY();
-#endif
                 rect[nrect].width  = width() - 2 * borderX();
                 rect[nrect].height = titleY();
                 nrect++;
@@ -174,11 +169,7 @@ void YFrameWindow::setShape() {
             XShapeCombineShape(xapp->display(), handle(),
                                ShapeBounding,
                                borderX(),
-                               borderY()
-#ifndef TITLEBAR_BOTTOM
-                               + titleY()
-#endif
-                               ,
+                               borderY() + titleY(),
                                client()->handle(),
                                ShapeBounding, nrect ? ShapeUnion : ShapeSet);
         }
@@ -200,33 +191,32 @@ void YFrameWindow::layoutShape() {
         fShapeBorderX = borderX();
         fShapeBorderY = borderY();
 
-#ifdef CONFIG_SHAPED_DECORATION
+#ifdef CONFIG_SHAPE
         if (shapesSupported &&
             (frameDecors() & fdBorder) &&
             !(isIconic() || isFullscreen()))
         {
             int const a(focused() ? 1 : 0);
             int const t((frameDecors() & fdResize) ? 0 : 1);
-    
-            Pixmap shape = XCreatePixmap(xapp->display(), desktop->handle(), width(), height(), 1);
-            Graphics g(shape, width(), height());
-    
+
+            Pixmap shape = XCreatePixmap(xapp->display(), desktop->handle(),
+                                         width(), height(), 1);
+            Graphics g(shape, width(), height(), 1);
+
             g.setColorPixel(1);
             g.fillRect(0, 0, width(), height());
-    
-            const int xTL(frameTL[t][a] != null ? frameTL[t][a]->width() : 0),
-                xTR(width() -
-                    (frameTR[t][a] != null ? frameTR[t][a]->width() : 0)),
+
+            const int
+                xTL(frameTL[t][a] != null ? frameTL[t][a]->width() : 0),
+                xTR(width() - (frameTR[t][a] != null ? frameTR[t][a]->width() : 0)),
                 xBL(frameBL[t][a] != null ? frameBL[t][a]->width() : 0),
-                xBR(width() -
-                    (frameBR[t][a] != null ? frameBR[t][a]->width() : 0));
-            const int yTL(frameTL[t][a] != null ? frameTL[t][a]->height() : 0),
-                yBL(height() -
-                    (frameBL[t][a] != null ? frameBL[t][a]->height() : 0)),
+                xBR(width() - (frameBR[t][a] != null ? frameBR[t][a]->width() : 0));
+            const int
+                yTL(frameTL[t][a] != null ? frameTL[t][a]->height() : 0),
+                yBL(height() - (frameBL[t][a] != null ? frameBL[t][a]->height() : 0)),
                 yTR(frameTR[t][a] != null ? frameTR[t][a]->height() : 0),
-                yBR(height() -
-                    (frameBR[t][a] != null ? frameBR[t][a]->height() : 0));
-    
+                yBR(height() - (frameBR[t][a] != null ? frameBR[t][a]->height() : 0));
+
             if (frameTL[t][a] != null) {
                 g.copyDrawable(frameTL[t][a]->mask(), 0, 0,
                                frameTL[t][a]->width(), frameTL[t][a]->height(),
@@ -263,7 +253,7 @@ void YFrameWindow::layoutShape() {
                                frameBR[t][a]->width() - borderX(),
                                frameBR[t][a]->width() - borderY());
             }
-    
+
             if (frameT[t][a] != null)
                 g.repHorz(frameT[t][a]->mask(),
                           frameT[t][a]->width(), frameT[t][a]->height(),
@@ -280,7 +270,7 @@ void YFrameWindow::layoutShape() {
                 g.repVert(frameR[t][a]->mask(),
                           frameR[t][a]->width(), frameR[t][a]->height(),
                           width() - frameR[t][a]->width(), yTR, yBR - yTR);
-    
+
             if (titlebar() && titleY())
                 titlebar()->renderShape(shape);
             XShapeCombineMask(xapp->display(), handle(),
@@ -296,7 +286,7 @@ void YFrameWindow::layoutShape() {
 #endif
     }
 }
-    
+
 void YFrameWindow::configure(const YRect &r) {
     MSG(("configure %d %d %d %d", r.x(), r.y(), r.width(), r.height()));
 
@@ -309,7 +299,6 @@ void YFrameWindow::configure(const YRect &r) {
 void YFrameWindow::performLayout()
 {
     layoutTitleBar();
-    layoutButtons();
     layoutResizeIndicators();
     layoutClient();
     layoutShape();
@@ -318,6 +307,9 @@ void YFrameWindow::performLayout()
 }
 
 void YFrameWindow::layoutTitleBar() {
+    if (titlebar() == 0)
+        return;
+
     if (titleY() == 0) {
         titlebar()->hide();
     } else {
@@ -326,224 +318,100 @@ void YFrameWindow::layoutTitleBar() {
         int title_width = width() - 2 * borderX();
         titlebar()->setGeometry(
             YRect(borderX(),
-                  borderY()
-#ifdef TITLEBAR_BOTTOM
-                  + height() - titleY() - 2 * borderY()
-#endif
-                  ,
-                  (title_width > 0) ? title_width : 1,
+                  borderY(),
+                  max(1, title_width),
                   titleY()));
-    }
-}
 
-YFrameButton *YFrameWindow::getButton(char c) {
-    unsigned long decors = frameDecors();
-    switch (c) {
-    case 's': if (decors & fdSysMenu) return fMenuButton; break;
-    case 'x': if (decors & fdClose) return fCloseButton; break;
-    case 'm': if (decors & fdMaximize) return fMaximizeButton; break;
-    case 'i': if (decors & fdMinimize) return fMinimizeButton; break;
-    case 'h': if (decors & fdHide) return fHideButton; break;
-    case 'r': if (decors & fdRollup) return fRollupButton; break;
-    case 'd': if (decors & fdDepth) return fDepthButton; break;
-    default:
-        return 0;
-    }
-    return 0;
-}
-
-void YFrameWindow::positionButton(YFrameButton *b, int &xPos, bool onRight) {
-    /// !!! clean this up
-    if (b == fMenuButton) {
-        const unsigned bw(((LOOK(lookPixmap | lookMetal | lookGtk |
-                                 lookFlat | lookMotif ) && showFrameIcon) ||
-			    b->getPixmap(0) == null) ?
-			   titleY() : b->getPixmap(0)->width());
-
-        if (onRight) xPos -= bw;
-        b->setGeometry(YRect(xPos, 0, bw, titleY()));
-        if (!onRight) xPos += bw;
-    } else if (LOOK(lookPixmap | lookMetal | lookGtk | lookFlat)) {
-        const unsigned bw(b->getPixmap(0) != null
-                ? b->getPixmap(0)->width() : titleY());
-
-        if (onRight) xPos -= bw;
-        b->setGeometry(YRect(xPos, 0, bw, titleY()));
-        if (!onRight) xPos += bw;
-    } else if (wmLook == lookWin95) {
-        if (onRight) xPos -= titleY();
-        b->setGeometry(YRect(xPos, 2, titleY(), titleY() - 3));
-        if (!onRight) xPos += titleY();
-    } else {
-        if (onRight) xPos -= titleY();
-        b->setGeometry(YRect(xPos, 0, titleY(), titleY()));
-        if (!onRight) xPos += titleY();
-    }
-}
-
-void YFrameWindow::layoutButtons() {
-    if (titleY() == 0)
-        return ;
-
-    unsigned long decors = frameDecors();
-
-    if (fMinimizeButton) {
-        if (decors & fdMinimize)
-            fMinimizeButton->show();
-        else
-            fMinimizeButton->hide();
-    }
-
-    if (fMaximizeButton) {
-        if (decors & fdMaximize)
-            fMaximizeButton->show();
-        else
-            fMaximizeButton->hide();
-    }
-
-    if (fRollupButton) {
-        if (decors & fdRollup)
-            fRollupButton->show();
-        else
-            fRollupButton->hide();
-    }
-
-    if (fHideButton) {
-        if (decors & fdHide)
-            fHideButton->show();
-        else
-            fHideButton->hide();
-    }
-
-    if (fCloseButton) {
-        if ((decors & fdClose))
-            fCloseButton->show();
-        else
-            fCloseButton->hide();
-    }
-
-    if (fMenuButton) {
-        if (decors & fdSysMenu)
-            fMenuButton->show();
-        else
-            fMenuButton->hide();
-    }
-
-    if (fDepthButton) {
-        if (decors & fdDepth)
-            fDepthButton->show();
-        else
-            fDepthButton->hide();
-    }
-
-    const int pi(focused() ? 1 : 0);
-
-    if (titleButtonsLeft) {
-        int xPos(titleJ[pi] != null ? titleJ[pi]->width() : 0);
-
-        for (const char *bc = titleButtonsLeft; *bc; bc++) {
-            YFrameButton *b = 0;
-
-            switch (*bc) {
-            case ' ':
-                xPos++;
-                b = 0;
-                break;
-            default:
-                b = getButton(*bc);
-                break;
-            }
-
-            if (b)
-                positionButton(b, xPos, false);
-        }
-    }
-
-    if (titleButtonsRight) {
-        int xPos(width() - 2 * borderX() -
-                 (titleQ[pi] != null ? titleQ[pi]->width() : 0));
-
-        for (const char *bc = titleButtonsRight; *bc; bc++) {
-            YFrameButton *b = 0;
-
-            switch (*bc) {
-            case ' ':
-                xPos--;
-                b = 0;
-                break;
-            default:
-                b = getButton(*bc);
-                break;
-            }
-
-            if (b)
-                positionButton(b, xPos, true);
-        }
+        titlebar()->layoutButtons();
     }
 }
 
 void YFrameWindow::layoutResizeIndicators() {
     if (((frameDecors() & (fdResize | fdBorder)) == (fdResize | fdBorder)) &&
-        !isRollup() && !isMinimized() && (frameFunctions() & ffResize))
+        !isRollup() && !isMinimized() && (frameFunctions() & ffResize) &&
+        !isFullscreen())
     {
+        if (!indicatorsCreated)
+            createPointerWindows();
         if (!indicatorsVisible) {
-            indicatorsVisible = 1;
+            indicatorsVisible = true;
 
             XMapWindow(xapp->display(), topSide);
             XMapWindow(xapp->display(), leftSide);
             XMapWindow(xapp->display(), rightSide);
             XMapWindow(xapp->display(), bottomSide);
 
-            XMapWindow(xapp->display(), topLeftCorner);
-            XMapWindow(xapp->display(), topRightCorner);
-            XMapWindow(xapp->display(), bottomLeftCorner);
-            XMapWindow(xapp->display(), bottomRightCorner);
+            XMapWindow(xapp->display(), topLeft);
+            XMapWindow(xapp->display(), topRight);
+            XMapWindow(xapp->display(), bottomLeft);
+            XMapWindow(xapp->display(), bottomRight);
+
+            XMapWindow(xapp->display(), topLeftSide);
+            XMapWindow(xapp->display(), topRightSide);
         }
     } else {
         if (indicatorsVisible) {
-            indicatorsVisible = 0;
+            indicatorsVisible = false;
 
             XUnmapWindow(xapp->display(), topSide);
             XUnmapWindow(xapp->display(), leftSide);
             XUnmapWindow(xapp->display(), rightSide);
             XUnmapWindow(xapp->display(), bottomSide);
 
-            XUnmapWindow(xapp->display(), topLeftCorner);
-            XUnmapWindow(xapp->display(), topRightCorner);
-            XUnmapWindow(xapp->display(), bottomLeftCorner);
-            XUnmapWindow(xapp->display(), bottomRightCorner);
+            XUnmapWindow(xapp->display(), topLeft);
+            XUnmapWindow(xapp->display(), topRight);
+            XUnmapWindow(xapp->display(), bottomLeft);
+            XUnmapWindow(xapp->display(), bottomRight);
+
+            XUnmapWindow(xapp->display(), topLeftSide);
+            XUnmapWindow(xapp->display(), topRightSide);
         }
     }
     if (!indicatorsVisible)
         return;
 
-    XMoveResizeWindow(xapp->display(), topSide, 0, 0, width(), borderY());
-    XMoveResizeWindow(xapp->display(), leftSide, 0, 0, borderX(), height());
-    XMoveResizeWindow(xapp->display(), rightSide, width() - borderX(), 0, borderY(), height());
-    XMoveResizeWindow(xapp->display(), bottomSide, 0, height() - borderY(), width(), borderY());
+    int ww(max(3, (int) width()));
+    int hh(max(3, (int) height()));
+    int bx(max(1, (int) borderX()));
+    int by(max(1, (int) borderY()));
+    int cx(max(1, (int) wsCornerX));
+    int cy(max(1, (int) wsCornerY));
+    int xx(max(1, min(cx, ww / 2)));
+    int yy(max(1, min(cy, hh / 2)));
 
-    XMoveResizeWindow(xapp->display(), topLeftCorner, 0, 0, wsCornerX, wsCornerY);
-    XMoveResizeWindow(xapp->display(), topRightCorner, width() - wsCornerX, 0, wsCornerX, wsCornerY);
-    XMoveResizeWindow(xapp->display(), bottomLeftCorner, 0, height() - wsCornerY, wsCornerX, wsCornerY);
-    XMoveResizeWindow(xapp->display(), bottomRightCorner, width() - wsCornerX, height() - wsCornerY, wsCornerX, wsCornerY);
+    XMoveResizeWindow(xapp->display(), topSide,
+                      xx, 0, ww - 2 * xx, by);
+    XMoveResizeWindow(xapp->display(), leftSide,
+                      0, yy, bx, hh - 2 * yy);
+    XMoveResizeWindow(xapp->display(), rightSide,
+                      ww - bx, yy, bx, hh - 2 * yy);
+    XMoveResizeWindow(xapp->display(), bottomSide,
+                      xx, hh - by, ww - 2 * xx, by);
+
+    XMoveResizeWindow(xapp->display(), topLeft,
+                      0, 0, xx, yy);
+    XMoveResizeWindow(xapp->display(), topRight,
+                      ww - xx, 0, xx, yy);
+    XMoveResizeWindow(xapp->display(), bottomLeft,
+                      0, hh - yy, xx, yy);
+    XMoveResizeWindow(xapp->display(), bottomRight,
+                      ww - xx, hh - yy, xx, yy);
+
+    XMoveResizeWindow(xapp->display(), topLeftSide,
+                      0, 0, bx, yy);
+    XMoveResizeWindow(xapp->display(), topRightSide,
+                      ww - bx, 0, bx, yy);
 }
 
 void YFrameWindow::layoutClient() {
     if (!isRollup() && !isIconic()) {
-        //int x = this->x() + borderX();
-        //int y = this->y() + borderY();
-        int w = this->width() - 2 * borderX();
-        int h = this->height() - 2 * borderY() - titleY();
+        int x = borderX();
+        int y = borderY();
+        int title = titleY();
+        int w = this->width() - 2 * x;
+        int h = this->height() - 2 * y - title;
 
-
-
-        fClientContainer->setGeometry(
-            YRect(borderX(), borderY()
-#ifndef TITLEBAR_BOTTOM
-                  + titleY()
-#endif
-                  , w, h));
-
+        fClientContainer->setGeometry(YRect(x, y + title, w, h));
         fClient->setGeometry(YRect(0, 0, w, h));
     }
 }
@@ -606,68 +474,21 @@ bool YFrameWindow::canRaise() {
     return false;
 }
 
-bool YFrameWindow::Overlaps(bool above) {
-    YFrameWindow *f;
-    int w1x2 , w1y2 , w2x2 , w2y2;
-    long curWorkspace = manager->activeWorkspace();
-    bool B,C,D,E,F,H;
-
-    if (above)
-        f = prev();
-    else
-        f = next();
-
-    while (f) {
-        if (!f->isMinimized() && !f->isHidden() && f->visibleOn(curWorkspace)) {
-            w2x2 = f->x() + (int)f->width() - 1;
-            w2y2 = f->y() + (int)f->height() - 1;
-            w1x2 = x() + (int)width() - 1;
-            w1y2 = y() + (int)height() - 1;
-            B = w2x2 >= x();
-            C = y() >= f->y();
-            E = w1x2 >= f->x();
-            F = w2x2 >= w1x2;
-            H = w2y2 >= w1y2;
-            if (w1y2 >= f->y()) {
-                if (F) {
-                    if (E && H) {
-                        return true;
-                    }
-                } else {
-                    if (B && !C) {
-                        return true;
-                    }
-                }
-            }
-            D = w2y2 >= y();
-            if (x() >= f->x()) {
-                if (C) {
-                    if (B && D) {
-                        return true;
-                    }
-                } else {
-                    if (F && !H) {
-                        return true;
-                    }
-                }
-            } else {
-                if (H) {
-                    if (C && !F) {
-                        return true;
-                    }
-                } else {
-                    if (E && D) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        if (above)
-            f = f->prev();
-        else
-            f = f->next();
+unsigned YFrameWindow::overlap(YFrameWindow* f) {
+    if (false == f->isHidden() &&
+        false == f->isMinimized() &&
+        f->visibleOn(manager->activeWorkspace()))
+    {
+        return geometry().intersect(f->geometry()).pixels();
     }
+    return 0;
+}
+
+bool YFrameWindow::overlaps(bool below) {
+    YFrameWindow* f = below ? prev() : next();
+    for (; f; f = below ? f->prev() : f->next())
+        if (overlap(f))
+            return true;
     return false;
 }
 
@@ -679,7 +500,7 @@ int YFrameWindow::borderX() const {
 
 int YFrameWindow::borderXN() const {
     return
-        ((frameDecors() & fdBorder) && (hideBordersMaximized ? !isMaximized() : true))
+        ((frameDecors() & fdBorder) && !(hideBordersMaximized && isMaximized()))
         ? ((frameDecors() & fdResize) ? wsBorderX : wsDlgBorderX)
         : 0;
 }
@@ -691,7 +512,7 @@ int YFrameWindow::borderY() const {
 
 int YFrameWindow::borderYN() const {
     return
-        ((frameDecors() & fdBorder) && (hideBordersMaximized ? !isMaximized() : true))
+        ((frameDecors() & fdBorder) && !(hideBordersMaximized && isMaximized()))
         ? ((frameDecors() & fdResize) ? wsBorderY : wsDlgBorderY)
         : 0;
 }
@@ -705,3 +526,5 @@ int YFrameWindow::titleYN() const {
         return 0;
     return (frameDecors() & fdTitleBar) ? wsTitleBar : 0;
 }
+
+// vim: set sw=4 ts=4 et:

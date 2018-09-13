@@ -39,20 +39,35 @@ IF(NOT DEFINED(BINDIR))
 set(BINDIR "${CMAKE_INSTALL_PREFIX}/bin")
 ENDIF()
 
-FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" vfilecontents)
-STRING(REGEX REPLACE "\n" ";" vfilecontents "${vfilecontents}")
-foreach (line ${vfilecontents})
-	STRING(REGEX REPLACE "=" ";" keyval "${line}")
-	list(GET keyval 0 _key)
-	IF(NOT DEFINED ${_key})
-		list(GET keyval 1 ${_key})
-	ENDIF()
-endforeach()
+find_package(Git)
+find_program(SED_EXECUTABLE sed)
+
+if(Git_FOUND AND IS_DIRECTORY "${CMAKE_SOURCE_DIR}/.git")
+	execute_process(COMMAND "${GIT_EXECUTABLE}" "describe" "--tags"
+		COMMAND "${SED_EXECUTABLE}" "s,[-_],.,g;s,\\.g.*$,,"
+		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+		OUTPUT_VARIABLE VERSION
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		)
+	set(PACKAGE "icewm")
+else()
+	FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" vfilecontents)
+	STRING(REGEX REPLACE "\n" ";" vfilecontents "${vfilecontents}")
+	foreach (line ${vfilecontents})
+		STRING(REGEX REPLACE "=" ";" keyval "${line}")
+		list(GET keyval 0 _key)
+		IF(NOT DEFINED ${_key})
+			list(GET keyval 1 ${_key})
+		ENDIF()
+	endforeach()
+endif()
+
 
 add_subdirectory(src)
 add_subdirectory(po)
 add_subdirectory(lib)
 add_subdirectory(doc)
+add_subdirectory(man)
 
-install(FILES icewm-set-gnomewm DESTINATION ${BINDIR} PERMISSIONS WORLD_EXECUTE OWNER_EXECUTE GROUP_EXECUTE WORLD_READ OWNER_READ OWNER_WRITE GROUP_READ)
+install(FILES icewm-set-gnomewm contrib/icewm-menu-xrandr DESTINATION ${BINDIR} PERMISSIONS WORLD_EXECUTE OWNER_EXECUTE GROUP_EXECUTE WORLD_READ OWNER_READ OWNER_WRITE GROUP_READ)
 

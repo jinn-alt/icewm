@@ -4,41 +4,38 @@
  * Copyright (C) 1997-2001 Marko Macek
  */
 #include "config.h"
-
-#include "ypixbuf.h"
-#include "ylib.h"
-#include "wmbutton.h"
-
-#include "wmaction.h"
 #include "wmframe.h"
+#include "wmbutton.h"
 #include "wmtitle.h"
 #include "yxapp.h"
-#include "yicon.h"
 #include "yprefs.h"
 #include "prefs.h"
 #include "wpixmaps.h"
 
-static YColor *titleButtonBg = 0;
-static YColor *titleButtonFg = 0;
+static YColorName titleButtonBg(&clrNormalTitleButton);
+static YColorName titleButtonFg(&clrNormalTitleButtonText);
 
-//!!! get rid of this
-extern YColor *activeTitleBarBg;
-extern YColor *inactiveTitleBarBg;
+inline YColor YFrameButton::background(bool active) {
+    return YFrameTitleBar::background(active);
+}
 
 YFrameButton::YFrameButton(YWindow *parent,
+                           bool right,
                            YFrameWindow *frame,
-                           YAction *action,
-                           YAction *action2): YButton(parent, 0)
+                           YAction action,
+                           YAction action2):
+    YButton(desktop, actionNull),
+    fFrame(frame),
+    fRight(right),
+    fAction(action),
+    fAction2(action2)
 {
-    if (titleButtonBg == 0)
-        titleButtonBg = new YColor(clrNormalTitleButton);
-    if (titleButtonFg == 0)
-        titleButtonFg = new YColor(clrNormalTitleButtonText);
+    if (right)
+        setWinGravity(NorthEastGravity);
 
-    fFrame = frame;
-    fAction = action;
-    fAction2 = action2;
-    if (fAction == 0)
+    reparent(parent, 0, 0);
+
+    if (fAction == actionNull)
         setPopup(frame->windowMenu());
 
     setSize(0,0);
@@ -53,7 +50,7 @@ void YFrameButton::handleButton(const XButtonEvent &button) {
     {
         if (!(button.state & ControlMask) && raiseOnClickButton) {
             getFrame()->activate();
-            if (raiseOnClickButton && (actionDepth == 0 || fAction != actionDepth))
+            if (raiseOnClickButton && fAction != actionDepth)
                 getFrame()->wmRaise();
         }
     }
@@ -61,7 +58,7 @@ void YFrameButton::handleButton(const XButtonEvent &button) {
 }
 
 void YFrameButton::handleClick(const XButtonEvent &up, int count) {
-    if (fAction == 0 && up.button == 1) {
+    if (fAction == actionNull && up.button == 1) {
         if ((count % 2) == 0) {
             setArmed(false, false);
             getFrame()->wmClose();
@@ -76,15 +73,17 @@ void YFrameButton::handleClick(const XButtonEvent &up, int count) {
 
 void YFrameButton::handleBeginDrag(const XButtonEvent &down, const XMotionEvent &/*motion*/) {
     if (down.button == 3 && getFrame()->canMove()) {
-        if (!isPopupActive())
-            getFrame()->startMoveSize(1, 1,
+        if (!isPopupActive()) {
+            YFrameTitleBar* tbar = getFrame()->titlebar();
+            getFrame()->startMoveSize(true, true,
                                       0, 0,
-                                      down.x + x() + getFrame()->titlebar()->x(),
-                                      down.y + y() + getFrame()->titlebar()->y());
+                                      down.x + x() + (tbar ? tbar->x() : 0),
+                                      down.y + y() + (tbar ? tbar->y() : 0));
+        }
     }
 }
 
-void YFrameButton::setActions(YAction *action, YAction *action2) {
+void YFrameButton::setActions(YAction action, YAction action2) {
     fAction2 = action2;
     if (action != fAction) {
         fAction = action;
@@ -96,8 +95,8 @@ void YFrameButton::updatePopup() {
     getFrame()->updateMenu();
 }
 
-void YFrameButton::actionPerformed(YAction * /*action*/, unsigned int modifiers) {
-    if ((modifiers & ShiftMask) && fAction2 != 0)
+void YFrameButton::actionPerformed(YAction /*action*/, unsigned int modifiers) {
+    if ((modifiers & ShiftMask) && fAction2 != actionNull)
         getFrame()->actionPerformed(fAction2, modifiers);
     else
         getFrame()->actionPerformed(fAction, modifiers);
@@ -112,15 +111,13 @@ ref<YPixmap> YFrameButton::getPixmap(int pn) const {
         return restorePixmap[pn];
     else if (fAction == actionClose)
         return closePixmap[pn];
-#ifndef CONFIG_PDA
     else if (fAction == actionHide)
         return hidePixmap[pn];
-#endif
     else if (fAction == actionRollup)
         return getFrame()->isRollup() ? rolldownPixmap[pn] : rollupPixmap[pn];
     else if (fAction == actionDepth)
         return depthPixmap[pn];
-    else if (fAction == 0 &&
+    else if (fAction == actionNull &&
              LOOK(lookPixmap | lookMetal | lookGtk | lookFlat | lookMotif))
         return menuButton[pn];
     else
@@ -129,8 +126,7 @@ ref<YPixmap> YFrameButton::getPixmap(int pn) const {
 
 void YFrameButton::paint(Graphics &g, const YRect &/*r*/) {
     int xPos = 1, yPos = 1;
-    int pn = LOOK(lookPixmap | lookMetal | lookGtk | lookFlat)
-        && getFrame()->focused() ? 1 : 0;
+    int pn = LOOK(lookPixmap | lookMetal | lookGtk | lookFlat) && focused();
     const bool armed(isArmed());
 
     g.setColor(titleButtonBg);
@@ -144,48 +140,41 @@ void YFrameButton::paint(Graphics &g, const YRect &/*r*/) {
     }
 
     int iconSize =
-#ifdef LITE
-        0;
-#else
-    YIcon::smallSize();
-#endif
-#ifdef LITE
-    ref<YIcon> icon;
-#else
+        YIcon::smallSize();
     ref<YIcon> icon =
-        (fAction == 0) ? getFrame()->clientIcon() : null;
-#endif
+        (fAction == actionNull) ? getFrame()->clientIcon() : null;
 
     ref<YPixmap> pixmap = getPixmap(pn);
     if (pixmap == null && pn) {
         pixmap = getPixmap(0);
     }
 
+    if (pixmap != null && pixmap->depth() != g.rdepth()) {
+        tlog("YFrameButton::%s: attempt to use pixmap 0x%lx of depth %d with gc of depth %d\n",
+                __func__, pixmap->pixmap(), pixmap->depth(), g.rdepth());
+    }
+
     if (wmLook == lookWarp4) {
-        if (fAction == 0) {
-            g.fillRect(0, 0, width(), height());
+        g.fillRect(0, 0, width(), height());
 
-            if (armed)
-                g.setColor(activeTitleBarBg);
-
+        if (armed) {
+            g.setColor(background(true));
             g.fillRect(1, 1, width() - 2, height() - 2);
+        }
 
-#ifndef LITE
+        if (fAction == actionNull) {
             if (icon != null && showFrameIcon) {
                 icon->draw(g,
-                           (width() - iconSize) / 2,
-                           (height() - iconSize) / 2,
+                           ((int) width() - iconSize) / 2,
+                           ((int) height() - iconSize) / 2,
                            iconSize);
             }
-#endif
         } else {
-            g.fillRect(0, 0, width(), height());
-
             if (pixmap != null)
                 g.copyPixmap(pixmap, 0, armed ? 20 : 0,
                              pixmap->width(), pixmap->height() / 2,
-                             (width() - pixmap->width()) / 2,
-                             (height() - pixmap->height() / 2));
+                             ((int) width() - (int) pixmap->width()) / 2,
+                             ((int) height() - (int) pixmap->height() / 2));
         }
     }
     else if (LOOK(lookMotif | lookWarp3 | lookNice)) {
@@ -209,16 +198,13 @@ void YFrameButton::paint(Graphics &g, const YRect &/*r*/) {
         unsigned const w(LOOK(lookMotif) ? width() - 2 : width() - 4);
         unsigned const h(LOOK(lookMotif) ? height() - 2 : height() - 4);
 
-        if (fAction == 0) {
-            g.fillRect(xPos, yPos, w, h);
-
+        g.fillRect(xPos, yPos, w, h);
+        if (fAction == actionNull) {
             if (icon != null && showFrameIcon) {
-#ifndef LITE
                 icon->draw(g,
-                           xPos + (w - iconSize) / 2,
-                           yPos + (h - iconSize) / 2,
+                           xPos + ((int) w - iconSize) / 2,
+                           yPos + ((int) h - iconSize) / 2,
                            iconSize);
-#endif
             }
             else if (pixmap != null) {
                 g.drawCenteredPixmap(xPos, yPos, w, h, pixmap);
@@ -229,24 +215,17 @@ void YFrameButton::paint(Graphics &g, const YRect &/*r*/) {
         }
     }
     else if (wmLook == lookWin95) {
-        if (fAction == 0) {
-            if (!armed) {
-                YColor * bg(getFrame()->focused() ? activeTitleBarBg
-                            : inactiveTitleBarBg);
-                g.setColor(bg);
-            }
-
+        if (fAction == actionNull) {
+            g.setColor(background(focused()));
             g.fillRect(0, 0, width(), height());
-
-#ifndef LITE
             if (icon != null && showFrameIcon) {
                 icon->draw(g,
-                           (width() - iconSize) / 2,
-                           (height() - iconSize) / 2,
+                           ((int) width() - iconSize) / 2,
+                           ((int) height() - iconSize) / 2,
                            iconSize);
             }
-#endif
         } else {
+            g.fillRect(0, 0, width(), height());
             g.drawBorderW(0, 0, width() - 1, height() - 1, !armed);
 
             if (armed)
@@ -258,39 +237,36 @@ void YFrameButton::paint(Graphics &g, const YRect &/*r*/) {
         }
     }
     else if (LOOK(lookPixmap | lookMetal | lookFlat | lookGtk)) {
-        if (pixmap != null) {
-            if ( getPixmap(1) != null ) {
-                int const h(pixmap->height() / 2);
-                g.copyPixmap(pixmap, 0, armed ? h : 0, pixmap->width(), h, 0, 0);
-            } else {
-                // If we have only an image we change
-                // the over or armed color and paint it.
-               g.fillRect(0, 0, width(), height());
-               if (armed)
-                   g.setColor(activeTitleBarBg->darker());
-               else if (rolloverTitleButtons && fOver)
-                   g.setColor(activeTitleBarBg->brighter());
-               g.fillRect(1, 1, width()-2, height()-3);
+        if (pixmap != null && getPixmap(1) != null) {
+            int const h(pixmap->height() / 2);
+            g.copyPixmap(pixmap, 0, armed ? h : 0, pixmap->width(), h, 0, 0);
+        } else {
+            // If we have only an image we change
+            // the over or armed color and paint it.
+           g.fillRect(0, 0, width(), height());
+           if (armed)
+               g.setColor(background(true).darker());
+           else if (rolloverTitleButtons && fOver)
+               g.setColor(background(true).brighter());
+           g.fillRect(1, 1, width()-2, height()-3);
+           if (pixmap != null) {
                int x(((int)width()  - (int)pixmap->width())  / 2);
                int y(((int)height() - (int)pixmap->height()) / 2);
                g.drawPixmap(pixmap, x, y);
             }
         }
-        else {
-            g.fillRect(0, 0, width(), height());
-        }
 
-#ifndef LITE
-        if (fAction == 0 && icon != null && showFrameIcon) {
+        if (fAction == actionNull && icon != null && showFrameIcon) {
             icon->draw(g,
                        ((int)width() - (int)iconSize) / 2,
                        ((int)height() - (int)iconSize) / 2,
                        iconSize);
         }
-#endif
     }
 }
 
 
 void YFrameButton::paintFocus(Graphics &/*g*/, const YRect &/*r*/) {
 }
+
+// vim: set sw=4 ts=4 et:

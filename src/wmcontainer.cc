@@ -81,7 +81,7 @@ void YClientContainer::handleButton(const XButtonEvent &button) {
             if ((doMove && getFrame()->canMove()) ||
                 (!doMove && getFrame()->canSize()))
             {
-                getFrame()->startMoveSize(doMove, 1,
+                getFrame()->startMoveSize(doMove, true,
                                           gx, gy,
                                           mx, my);
             }
@@ -92,7 +92,7 @@ void YClientContainer::handleButton(const XButtonEvent &button) {
             if (getFrame()->canMove()) {
                 int px = button.x + x();
                 int py = button.y + y();
-                getFrame()->startMoveSize(1, 1,
+                getFrame()->startMoveSize(true, true,
                                           0, 0,
                                           px, py);
             }
@@ -105,12 +105,8 @@ void YClientContainer::handleButton(const XButtonEvent &button) {
     }
 #endif
     ///!!! do this first?
-    if (doActivate) {
-        bool input = getFrame() ? getFrame()->getInputFocusHint() : true;
-
-        if (input)
-            getFrame()->activate();
-    }
+    if (doActivate)
+        getFrame()->activate();
     if (doRaise)
         getFrame()->wmRaise();
     ///!!! it might be nice if this was per-window option (app-request)
@@ -118,8 +114,7 @@ void YClientContainer::handleButton(const XButtonEvent &button) {
         XAllowEvents(xapp->display(), ReplayPointer, CurrentTime);
     else
         XAllowEvents(xapp->display(), AsyncPointer, CurrentTime);
-    XSync(xapp->display(), 0);
-    return ;
+    XSync(xapp->display(), False);
 }
 
 // manage button grab on frame window to capture clicks to client window
@@ -140,7 +135,17 @@ void YClientContainer::grabButtons() {
         fHaveGrab = true;
 
         XGrabButton(xapp->display(),
-                    AnyButton, AnyModifier,
+                    Button1, AnyModifier,
+                    handle(), True,
+                    ButtonPressMask,
+                    GrabModeSync, GrabModeAsync, None, None);
+        XGrabButton(xapp->display(),
+                    Button2, AnyModifier,
+                    handle(), True,
+                    ButtonPressMask,
+                    GrabModeSync, GrabModeAsync, None, None);
+        XGrabButton(xapp->display(),
+                    Button3, AnyModifier,
                     handle(), True,
                     ButtonPressMask,
                     GrabModeSync, GrabModeAsync, None, None);
@@ -151,14 +156,18 @@ void YClientContainer::releaseButtons() {
     if (fHaveGrab) {
         fHaveGrab = false;
 
-        XUngrabButton(xapp->display(), AnyButton, AnyModifier, handle());
+        XUngrabButton(xapp->display(), Button1, AnyModifier, handle());
+        XUngrabButton(xapp->display(), Button2, AnyModifier, handle());
+        XUngrabButton(xapp->display(), Button3, AnyModifier, handle());
         fHaveActionGrab = false;
     }
     grabActions();
 }
 
 void YClientContainer::regrabMouse() {
-    XUngrabButton(xapp->display(), AnyButton, AnyModifier, handle());
+    XUngrabButton(xapp->display(), Button1, AnyModifier, handle());
+    XUngrabButton(xapp->display(), Button2, AnyModifier, handle());
+    XUngrabButton(xapp->display(), Button3, AnyModifier, handle());
 
     if (fHaveActionGrab)  {
         fHaveActionGrab = false;
@@ -172,18 +181,17 @@ void YClientContainer::regrabMouse() {
 }
 
 void YClientContainer::grabActions() {
-    if (clientMouseActions) {
-        if (!fHaveActionGrab) {
-            fHaveActionGrab = true;
-#ifndef NO_KEYBIND
-            if (gMouseWinMove.key != 0)
-                grabVButton(gMouseWinMove.key - XK_Pointer_Button1 + 1, gMouseWinMove.mod);
-            if (gMouseWinSize.key != 0)
-                grabVButton(gMouseWinSize.key - XK_Pointer_Button1 + 1, gMouseWinSize.mod);
-            if (gMouseWinRaise.key != 0)
-                grabVButton(gMouseWinRaise.key - XK_Pointer_Button1 + 1, gMouseWinRaise.mod);
-#endif
-        }
+    if (clientMouseActions && fHaveActionGrab == false) {
+        fHaveActionGrab = true;
+        const KeySym minButton = XK_Pointer_Button1;
+        const KeySym maxButton = XK_Pointer_Button3;
+        const KeySym xkButton0 = XK_Pointer_Button1 - 1;
+        if (inrange(gMouseWinMove.key, minButton, maxButton))
+            grabVButton(gMouseWinMove.key - xkButton0, gMouseWinMove.mod);
+        if (inrange(gMouseWinSize.key, minButton, maxButton))
+            grabVButton(gMouseWinSize.key - xkButton0, gMouseWinSize.mod);
+        if (inrange(gMouseWinRaise.key, minButton, maxButton))
+            grabVButton(gMouseWinRaise.key - xkButton0, gMouseWinRaise.mod);
     }
 }
 
@@ -229,3 +237,5 @@ void YClientContainer::handleCrossing(const XCrossingEvent &crossing) {
     }
 }
 
+
+// vim: set sw=4 ts=4 et:

@@ -4,6 +4,8 @@
 #include "ypaint.h"
 #include "ycursor.h"
 #include "yarray.h"
+#include "ylist.h"
+#include "yrect.h"
 
 class YPopupWindow;
 class YToolTip;
@@ -17,27 +19,25 @@ extern "C" {
 }
 #endif
 
-#ifdef CONFIG_GRADIENTS
-#define INIT_GRADIENT(Member, Value) , Member(Value)
-#else
-#define INIT_GRADIENT(Member, Value)
-#endif
-
 struct DesktopScreenInfo {
     int screen_number;
     int x_org;
     int y_org;
-    int width;
-    int height;
+    unsigned width;
+    unsigned height;
 };
 
-class YWindow {
+class YWindow : protected YWindowList, private YWindowNode {
 public:
-    YWindow(YWindow *aParent = 0, Window win = 0);
+    YWindow(YWindow *aParent = 0, Window win = 0, int depth = CopyFromParent, Visual *visual = CopyFromParent);
     virtual ~YWindow();
 
-    void setStyle(unsigned long aStyle);
+    void setStyle(unsigned aStyle);
+    unsigned getStyle() const { return fStyle; }
+    long getEventMask() const { return fEventMask; }
+    void addEventMask(long mask);
 
+    void setVisible(bool enable);
     void show();
     void hide();
     virtual void raise();
@@ -46,18 +46,24 @@ public:
     void repaint();
     void repaintFocus();
     void repaintSync();
-
+    void readAttributes();
     void reparent(YWindow *parent, int x, int y);
+    bool getWindowAttributes(XWindowAttributes* attr);
 
     void setWindowFocus();
-    
+
     void setTitle(char const * title);
     void setClassHint(char const * rName, char const * rClass);
 
     void setGeometry(const YRect &r);
-    void setSize(int width, int height);
+    void setSize(unsigned width, unsigned height);
     void setPosition(int x, int y);
+    void setBorderWidth(unsigned width);
+    void setBackground(unsigned long pixel);
+    void setBackgroundPixmap(Pixmap pixmap);
+    void setParentRelative(void);
     virtual void configure(const YRect &r);
+
 
     virtual void paint(Graphics &g, const YRect &r);
     virtual void paintFocus(Graphics &, const YRect &) {}
@@ -78,17 +84,18 @@ public:
     virtual void handleSelectionClear(const XSelectionClearEvent &clear);
     virtual void handleSelectionRequest(const XSelectionRequestEvent &request);
     virtual void handleSelection(const XSelectionEvent &selection);
-#if 0
     virtual void handleVisibility(const XVisibilityEvent &visibility);
+#if 0
     virtual void handleCreateWindow(const XCreateWindowEvent &createWindow);
 #endif
-    void handleMapNotify(const XMapEvent &map);
+    virtual void handleGravityNotify(const XGravityEvent &gravity);
+    virtual void handleMapNotify(const XMapEvent &map);
     virtual void handleUnmapNotify(const XUnmapEvent &unmap);
     virtual void handleUnmap(const XUnmapEvent &unmap);
     virtual void handleDestroyWindow(const XDestroyWindowEvent &destroyWindow);
     virtual void handleReparentNotify(const XReparentEvent &) {}
     virtual void handleConfigureRequest(const XConfigureRequestEvent &);
-    virtual void handleMapRequest(const XMapRequestEvent &) {}
+    virtual void handleMapRequest(const XMapRequestEvent &);
 #ifdef CONFIG_SHAPE
     virtual void handleShapeNotify(const XShapeEvent &) {}
 #endif
@@ -122,8 +129,9 @@ public:
     void captureEvents();
     void releaseEvents();
 
-    Window handle();
+    Window handle() { return (flags & wfCreated) ? fHandle : create(); }
     YWindow *parent() const { return fParentWindow; }
+    YWindow *window() { return this; }
 
     ref<YPixmap> beginPaint(YRect &r);
     void endPaint(Graphics &g, ref<YPixmap> pixmap, YRect &r);
@@ -131,15 +139,16 @@ public:
 
     Graphics & getGraphics();
 
-#ifdef CONFIG_GRADIENTS
     virtual ref<YImage> getGradient() const {
         return (parent() ? parent()->getGradient() : null); }
-#endif    
 
     int x() const { return fX; }
     int y() const { return fY; }
-    int width() const { return fWidth; }
-    int height() const { return fHeight; }
+    unsigned width() const { return fWidth; }
+    unsigned height() const { return fHeight; }
+    unsigned depth() const { return fDepth; }
+    Visual *visual() const { return fVisual; }
+    YRect geometry() const { return YRect(fX, fY, fWidth, fHeight); }
 
     bool visible() const { return (flags & wfVisible); }
     bool created() const { return (flags & wfCreated); }
@@ -149,15 +158,16 @@ public:
 
     virtual void donePopup(YPopupWindow * /*command*/);
 
-    typedef enum {
+    enum WindowStyle {
         wsOverrideRedirect = 1 << 0,
         wsSaveUnder        = 1 << 1,
         wsManager          = 1 << 2,
         wsInputOnly        = 1 << 3,
         wsOutputOnly       = 1 << 4,
         wsPointerMotion    = 1 << 5,
-        wsDesktopAware     = 1 << 6
-    } WindowStyle;
+        wsDesktopAware     = 1 << 6,
+        wsToolTip          = 1 << 7,
+    };
 
     virtual bool isFocusTraversable();
     bool isFocused();
@@ -211,39 +221,42 @@ public:
 
     bool hasPopup();
     void setDoubleBuffer(bool doubleBuffer);
-    
+
     KeySym keyCodeToKeySym(unsigned int keycode, int index = 0);
+    static unsigned long getLastEnterNotifySerial();
+
+    void unmanageWindow() { removeWindow(); }
 
 private:
-    typedef enum {
+    enum WindowFlags {
         wfVisible   = 1 << 0,
         wfCreated   = 1 << 1,
         wfAdopted   = 1 << 2,
         wfDestroyed = 1 << 3,
         wfNullSize  = 1 << 5,
         wfFocused   = 1 << 6
-    } WindowFlags;
+    };
 
-    void create();
+    Window create();
     void destroy();
 
     void insertWindow();
     void removeWindow();
 
     bool nullGeometry();
-    
+
+    unsigned fDepth;
+    Visual *fVisual;
+    Colormap fAllocColormap;
+
     YWindow *fParentWindow;
-    YWindow *fNextWindow;
-    YWindow *fPrevWindow;
-    YWindow *fFirstWindow;
-    YWindow *fLastWindow;
     YWindow *fFocusedWindow;
 
     Window fHandle;
-    unsigned long flags;
-    unsigned long fStyle;
+    unsigned flags;
+    unsigned fStyle;
     int fX, fY;
-    int fWidth, fHeight;
+    unsigned fWidth, fHeight;
     YCursor fPointer;
     int unmapCount;
     Graphics *fGraphics;
@@ -254,17 +267,15 @@ private:
     bool fToplevel;
     bool fDoubleBuffer;
 
-    typedef struct _YAccelerator {
+    struct YAccelerator {
         unsigned key;
         unsigned mod;
         YWindow *win;
-        struct _YAccelerator *next;
-    } YAccelerator;
+        YAccelerator *next;
+    };
 
     YAccelerator *accel;
-#ifdef CONFIG_TOOLTIP
     YToolTip *fToolTip;
-#endif
 
     static XButtonEvent fClickEvent;
     static YWindow *fClickWindow;
@@ -273,14 +284,16 @@ private:
     static int fClickDrag;
     static unsigned fClickButton;
     static unsigned fClickButtonDown;
-    static YTimer *fToolTipTimer;
+    static lazy<YTimer> fToolTipTimer;
+    static unsigned long lastEnterNotifySerial;
+    static void updateEnterNotifySerial(const XEvent& event);
 
     bool fDND;
     Window XdndDragSource;
     Window XdndDropTarget;
 
     static YAutoScroll *fAutoScroll;
-    
+
     void addIgnoreUnmap(Window w);
     bool ignoreUnmap(Window w);
     void removeAllIgnoreUnmap(Window w);
@@ -290,15 +303,13 @@ class YDesktop: public YWindow {
 public:
     YDesktop(YWindow *aParent = 0, Window win = 0);
     virtual ~YDesktop();
-    
-    virtual void resetColormapFocus(bool active);
 
-    void updateXineramaInfo(int &w, int &h);
+    void updateXineramaInfo(unsigned &w, unsigned &h);
 
     void getScreenGeometry(int *x, int *y,
-                           int *width, int *height,
+                           unsigned *width, unsigned *height,
                            int screen_no = -1);
-    int getScreenForRect(int x, int y, int width, int height);
+    int getScreenForRect(int x, int y, unsigned width, unsigned height);
 
     int getScreenCount();
 
@@ -357,3 +368,5 @@ extern Atom XA_XdndDrop;
 extern Atom XA_XdndFinished;
 
 #endif
+
+// vim: set sw=4 ts=4 et:

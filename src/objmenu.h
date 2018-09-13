@@ -10,12 +10,12 @@
 class DObject;
 class YSMListener;
 
-class DObjectMenuItem: public YMenuItem, public YAction {
+class DObjectMenuItem: public YMenuItem {
 public:
     DObjectMenuItem(DObject *object);
     virtual ~DObjectMenuItem();
 
-    virtual void actionPerformed(YActionListener *listener, YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YActionListener *listener, YAction action, unsigned int modifiers);
 private:
     DObject *fObject;
 };
@@ -26,13 +26,13 @@ public:
     virtual ~ObjectMenu();
 
     virtual void addObject(DObject *object);
-#ifndef LITE
     virtual void addObject(DObject *object, const char *icons);
-#endif
     virtual void addSeparator();
-    virtual void addContainer(const ustring &name, ref<YIcon> icon, ObjectContainer *container);
-protected: 
+    virtual void addContainer(const ustring &name, ref<YIcon> icon, ObjectMenu *container);
+protected:
     YActionListener *wmActionListener;
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

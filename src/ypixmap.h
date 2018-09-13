@@ -9,49 +9,56 @@ class YImage;
 
 class YPixmap: public virtual refcounted {
 public:
-    static ref<YPixmap> create(int w, int h, bool mask = false);
+    static ref<YPixmap> create(unsigned w, unsigned h, unsigned depth, bool mask = false);
     static ref<YPixmap> load(upath filename);
 //    static ref<YPixmap> scale(ref<YPixmap> source, int width, int height);
-    static ref<YPixmap> createFromImage(ref<YImage> image);
+    static ref<YPixmap> createFromImage(ref<YImage> image, unsigned width);
     static ref<YPixmap> createFromPixmapAndMask(Pixmap pixmap,
                                                 Pixmap mask,
-                                                int w, int h);
-#if 1
+                                                unsigned w, unsigned h);
     static ref<YPixmap> createFromPixmapAndMaskScaled(Pixmap pix, Pixmap mask,
-                                                      int width, int height,
-                                                      int nw, int nh);
-#endif
+                                                      unsigned width, unsigned height,
+                                                      unsigned nw, unsigned nh);
 
-#if 1
     void replicate(bool horiz, bool copyMask);
-#endif
 
-#if 1
     Pixmap pixmap() const { return fPixmap; }
     Pixmap mask() const { return fMask; }
-#endif
-    int width() const { return fWidth; }
-    int height() const { return fHeight; }
-    ref<YPixmap> scale(int w, int h);
+    unsigned width() const { return fWidth; }
+    unsigned height() const { return fHeight; }
+    unsigned depth() const { return fDepth; }
+    ref<YImage> image();
+    Pixmap pixmap32();
+    ref<YPixmap> scale(unsigned w, unsigned h);
 
-protected:
-    YPixmap(Pixmap pixmap, Pixmap mask, int w, int h) {
-        fPixmap = pixmap;
-        fMask = mask;
-        fWidth = w;
-        fHeight = h;
+private:
+    YPixmap(Pixmap pixmap, Pixmap mask,
+            unsigned width, unsigned height,
+            unsigned depth, ref<YImage> image):
+        fWidth(width),
+        fHeight(height),
+        fDepth(depth),
+        fPixmap(pixmap),
+        fMask(mask),
+        fImage(image),
+        fPixmap32()
+    {
     }
     virtual ~YPixmap();
 
     friend class YImage;
 
 private:
-    int fWidth;
-    int fHeight;
-#if 1
+    unsigned fWidth;
+    unsigned fHeight;
+    unsigned fDepth;
+
     Pixmap fPixmap;
     Pixmap fMask;
-#endif
+    ref<YImage> fImage;
+    ref<YPixmap> fPixmap32;
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

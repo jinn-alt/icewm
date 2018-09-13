@@ -4,12 +4,7 @@
  * Copyright (C) 1999-2002 Marko Macek
  */
 #include "config.h"
-
-#ifndef NO_CONFIGURE_MENUS
 #include "objmenu.h"
-#endif
-
-#ifdef CONFIG_TASKBAR
 #include "objbar.h"
 #include "objbutton.h"
 #include "ybutton.h"
@@ -20,15 +15,11 @@
 #include "yrect.h"
 #include "yicon.h"
 
-YColor * ObjectBar::bgColor(NULL);
-
 ref<YFont> ObjectButton::font;
-YColor * ObjectButton::bgColor(NULL);
-YColor * ObjectButton::fgColor(NULL);
+YColorName ObjectButton::bgColor(&clrToolButton);
+YColorName ObjectButton::fgColor(&clrToolButtonText);
 
 ObjectBar::ObjectBar(YWindow *parent): YWindow(parent) {
-    if (bgColor == 0)
-        bgColor = new YColor(clrDefaultTaskBar);
     setSize(1, 1);
 }
 
@@ -37,16 +28,14 @@ ObjectBar::~ObjectBar() {
 
 void ObjectBar::addButton(const ustring &name, ref<YIcon> icon, YButton *button) {
     button->setToolTip(name);
-#ifndef LITE
     if (icon != null) {
         button->setIcon(icon, YIcon::smallSize());
         button->setSize(button->width() + 4, button->width() + 4);
     } else
-#endif
         button->setText(name);
 
     button->setPosition(width(), 0);
-    int h = button->height();
+    unsigned h = button->height();
     if (h < height())
         h = height();
 
@@ -61,19 +50,17 @@ void ObjectBar::addButton(const ustring &name, ref<YIcon> icon, YButton *button)
 }
 
 void ObjectBar::paint(Graphics &g, const YRect &/*r*/) {
-#ifdef CONFIG_GRADIENTS
     ref<YImage> gradient(parent()->getGradient());
 
     if (gradient != null)
         g.drawImage(gradient, this->x(), this->y(), width(), height(), 0, 0);
     else
-#endif
-        if (taskbackPixmap != null)
-            g.fillPixmap(taskbackPixmap, 0, 0, width(), height());
-        else {
-            g.setColor(bgColor);
-            g.fillRect(0, 0, width(), height());
-        }
+    if (taskbackPixmap != null)
+        g.fillPixmap(taskbackPixmap, 0, 0, width(), height());
+    else {
+        g.setColor(taskBarBg);
+        g.fillRect(0, 0, width(), height());
+    }
 }
 
 void ObjectBar::addObject(DObject *object) {
@@ -86,9 +73,9 @@ void ObjectBar::addSeparator() {
     objects.append(0);
 }
 
-void ObjectBar::addContainer(const ustring &name, ref<YIcon> icon, ObjectContainer *container) {
+void ObjectBar::addContainer(const ustring &name, ref<YIcon> icon, ObjectMenu *container) {
     if (container) {
-        YButton *button = new ObjectButton(this, (YMenu*) container);
+        YButton *button = new ObjectButton(this, container);
         addButton(name, icon, button);
     }
 }
@@ -114,33 +101,21 @@ ref<YFont> ObjectButton::getFont() {
          : YButton::getFont());
 }
 
-YColor * ObjectButton::getColor() {
-    return *clrToolButtonText
-        ? fgColor ? fgColor : fgColor = new YColor(clrToolButtonText)
-        : YButton::getColor();
+YColor ObjectButton::getColor() {
+    return fgColor ? fgColor : YButton::getColor();
 }
 
 YSurface ObjectButton::getSurface() {
-    if (bgColor == 0)
-        bgColor = new YColor(*clrToolButton ? clrToolButton : clrNormalButton);
-
-#ifdef CONFIG_GRADIENTS
-    return YSurface(bgColor, toolbuttonPixmap, toolbuttonPixbuf);
-#else
-    return YSurface(bgColor, toolbuttonPixmap);
-#endif
+    return YSurface(bgColor ? bgColor : YButton::normalButtonBg,
+                    toolbuttonPixmap, toolbuttonPixbuf);
 }
 
-void ObjectButton::actionPerformed(YAction * action, unsigned modifiers) {
-#ifdef CONFIG_GUIEVENTS
+void ObjectButton::actionPerformed(YAction action, unsigned modifiers) {
     wmapp->signalGuiEvent(geLaunchApp);
-#endif
     if (fObject) fObject->open();
     else YButton::actionPerformed(action, modifiers);
 }
 
-#endif /* CONFIG_TASKBAR */
-
-#ifndef NO_CONFIGURE_MENUS
 ObjectMenu *rootMenu(NULL);
-#endif
+
+// vim: set sw=4 ts=4 et:

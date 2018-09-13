@@ -2,11 +2,12 @@
 #define ATASKS_H_
 
 #include "ywindow.h"
-#include "wmclient.h"
+#include "ytimer.h"
 
 class TaskPane;
 class TaskBarApp;
 class IAppletContainer;
+class ClientData;
 
 class TaskBarApp: public YWindow, public YTimerListener {
 public:
@@ -24,29 +25,36 @@ public:
     virtual bool handleTimer(YTimer *t);
     virtual void handleBeginDrag(const XButtonEvent &down, const XMotionEvent &motion);
 
+    void activate() const;
     ClientData *getFrame() const { return fFrame; }
 
     void setShown(bool show);
     bool getShown() const { return fShown || fFlashing; }
 
+    int getOrder() const;
     void setFlash(bool urgent);
-    
-    TaskBarApp *getNext() const { return fNext; }
-    TaskBarApp *getPrev() const { return fPrev; }
-    void setNext(TaskBarApp *next) { fNext = next; }
-    void setPrev(TaskBarApp *prev) { fPrev = prev; }
+    void switchToPrev();
+    void switchToNext();
+
+    static unsigned maxHeight();
 
 private:
     ClientData *fFrame;
     TaskPane *fTaskPane;
-    TaskBarApp *fPrev, *fNext;
     bool fShown;
     bool fFlashing;
     bool fFlashOn;
-    time_t fFlashStart;
+    timeval fFlashStart;
     int selected;
-    YTimer *fFlashTimer;
-    static YTimer *fRaiseTimer;
+    lazy<YTimer> fFlashTimer;
+    static lazy<YTimer> fRaiseTimer;
+
+    ref<YFont> getFont();
+    static ref<YFont> getNormalFont();
+    static ref<YFont> getActiveFont();
+
+    static ref<YFont> normalTaskBarFont;
+    static ref<YFont> activeTaskBarFont;
 };
 
 class TaskPane: public YWindow {
@@ -57,10 +65,13 @@ public:
     void insert(TaskBarApp *tapp);
     void remove(TaskBarApp *tapp);
     TaskBarApp *addApp(YFrameWindow *frame);
+    TaskBarApp *findApp(YFrameWindow *frame);
+    TaskBarApp *getActive();
+    TaskBarApp *predecessor(TaskBarApp *tapp);
+    TaskBarApp *successor(TaskBarApp *tapp);
     void removeApp(YFrameWindow *frame);
-    TaskBarApp *getFirst() const { return fFirst; }
-    TaskBarApp *getLast() const { return fLast; }
 
+    static unsigned maxHeight();
     void relayout() { fNeedRelayout = true; }
     void relayoutNow();
 
@@ -72,15 +83,23 @@ public:
     void startDrag(TaskBarApp *drag, int byMouse, int sx, int sy);
     void processDrag(int mx, int my);
     void endDrag();
+    TaskBarApp* dragging() const { return fDragging; }
 
     virtual void handleDrag(const XButtonEvent &down, const XMotionEvent &motion)//LXP
                  {parent()->handleDrag(down,motion);}//LXP
     virtual void handleEndDrag(const XButtonEvent &down, const XButtonEvent &up)//LXP
                  {parent()->handleEndDrag(down,up);}//LXP
+    void switchToPrev();
+    void switchToNext();
+    void movePrev();
+    void moveNext();
 private:
     IAppletContainer *fTaskBar;
-    TaskBarApp *fFirst, *fLast;
-    int fCount;
+
+    typedef YObjectArray<TaskBarApp> AppsType;
+    typedef AppsType::IterType IterType;
+    AppsType fApps;
+
     bool fNeedRelayout;
 
     TaskBarApp *fDragging;
@@ -89,3 +108,5 @@ private:
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

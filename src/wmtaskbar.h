@@ -7,18 +7,16 @@
 #include "ytimer.h"
 #include "wmclient.h"
 #include "yxtray.h"
+#include "base.h"
+#include "ypointer.h"
+#include "applet.h"
 
 class ObjectBar;
-#ifdef CONFIG_APPLET_MEM_STATUS
 class MEMStatus;
-#endif
-#ifdef CONFIG_APPLET_CPU_STATUS
-class CPUStatus;
-#endif
-#ifdef CONFIG_APPLET_NET_STATUS
-class NetStatus;
-#endif
+class CPUStatusControl;
+class NetStatusControl;
 class AddressBar;
+class MailBoxControl;
 class MailBoxStatus;
 class YClock;
 class YApm;
@@ -29,15 +27,6 @@ class YXTray;
 class YSMListener;
 class IApp;
 
-class IAppletContainer {
-public:
-    virtual void relayout() = 0;
-    virtual void contextMenu(int x_root, int y_root) = 0;
-protected:
-    virtual ~IAppletContainer() {}
-};
-
-#ifdef CONFIG_TASKBAR
 class TaskBar;
 
 class EdgeTrigger: public YWindow, public YTimerListener {
@@ -55,7 +44,7 @@ public:
     virtual bool handleTimer(YTimer *t);
 private:
     TaskBar *fTaskBar;
-    YTimer *fAutoHideTimer;
+    lazy<YTimer> fAutoHideTimer;
     bool fDoShow;
 };
 
@@ -70,6 +59,7 @@ public:
     TaskBar(IApp *app, YWindow *aParent, YActionListener *wmActionListener, YSMListener *smActionListener);
     virtual ~TaskBar();
 
+private:
     virtual void paint(Graphics &g, const YRect &r);
     virtual bool handleKey(const XKeyEvent &key);
     virtual void handleButton(const XButtonEvent &button);
@@ -82,20 +72,17 @@ public:
     virtual bool handleTimer(YTimer *t);
 #endif
 
-    virtual void actionPerformed(YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual void handlePopDown(YPopupWindow *popup);
     virtual void handleEndPopup(YPopupWindow *popup);
 
-#ifdef WMSPEC_HINTS
     void updateWMHints();
-#endif
     void updateLocation();
     void configure(const YRect &r);
 
-#ifdef CONFIG_APPLET_CLOCK
     YClock *clock() { return fClock; }
-#endif
 
+public:
     bool windowTrayRequestDock(Window w);
     void setWorkspaceActive(long workspace, int active);
 
@@ -108,29 +95,14 @@ public:
     void popupStartMenu();
     void popupWindowListMenu();
 
-    void popOut();
     void showAddressBar();
     void showBar(bool visible);
     void handleCollapseButton();
-
-    AddressBar *addressBar() const { return fAddressBar; }
-    TaskPane *taskPane() const { return fTasks; }
-#ifdef CONFIG_TRAY
-    TrayPane *windowTrayPane() const { return fWindowTray; }
-#endif
-
-#ifdef CONFIG_GRADIENTS
-    virtual ref<YImage> getGradient() const { return fGradient; }
-#endif    
-
-    void contextMenu(int x_root, int y_root);
 
     void relayout() { fNeedRelayout = true; }
     void relayoutNow();
 
     void detachDesktopTray();
-    void trayChanged();
-    YXTray *netwmTray() { return fDesktopTray; }
 
     void relayoutTray();
     class TrayApp *addTrayApp(YFrameWindow *w);
@@ -139,40 +111,40 @@ public:
     bool autoTimer(bool show);
     void updateFullscreen(bool fullscreen);
     Window edgeTriggerWindow() { return fEdgeTrigger->handle(); }
+    void switchToPrev();
+    void switchToNext();
+    void movePrev();
+    void moveNext();
+
+private:
+    void popOut();
+
+    AddressBar *addressBar() const { return fAddressBar; }
+    TaskPane *taskPane() const { return fTasks; }
+    TrayPane *windowTrayPane() const { return fWindowTray; }
+
+    virtual ref<YImage> getGradient() const { return fGradient; }
+
+    void contextMenu(int x_root, int y_root);
+
+    void trayChanged();
+    YXTray *netwmTray() { return fDesktopTray; }
 
 private:
     TaskPane *fTasks;
 
     YButton *fCollapseButton;
-#ifdef CONFIG_TRAY
     TrayPane *fWindowTray;
-#endif
-#ifdef CONFIG_APPLET_CLOCK
     YClock *fClock;
-#endif
-#ifdef CONFIG_APPLET_MAILBOX
-    MailBoxStatus **fMailBoxStatus;
-#endif
-#ifdef CONFIG_APPLET_MEM_STATUS
+    MailBoxControl *fMailBoxStatus;
     MEMStatus *fMEMStatus;
-#endif
-#ifdef CONFIG_APPLET_CPU_STATUS
-    CPUStatus **fCPUStatus;
-#endif
-#ifdef CONFIG_APPLET_APM
+    CPUStatusControl *fCPUStatus;
     YApm *fApm;
-#endif
-#ifdef CONFIG_APPLET_NET_STATUS
-    NetStatus **fNetStatus;
-#endif
+    ref<NetStatusControl> fNetStatus;
 
-#ifndef NO_CONFIGURE_MENUS
     ObjectBar *fObjectBar;
     YButton *fApplications;
-#endif
-#ifdef CONFIG_WINMENU
     YButton *fWinList;
-#endif
     YButton *fShowDesktop;
     AddressBar *fAddressBar;
     WorkspacesPane *fWorkspaces;
@@ -194,22 +166,22 @@ private:
 
     friend class WindowList;
     friend class WindowListBox;
-    
-#ifdef CONFIG_GRADIENTS
+
     ref<YImage> fGradient;
-#endif
 
     bool fNeedRelayout;
 
     void initMenu();
     void initApplets();
-    void updateLayout(int &size_w, int &size_h);
+    void updateLayout(unsigned &size_w, unsigned &size_h);
 
     EdgeTrigger *fEdgeTrigger;
 };
 
 extern TaskBar *taskBar; // !!! get rid of this
 
-#endif
+extern YColorName taskBarBg;
 
 #endif
+
+// vim: set sw=4 ts=4 et:

@@ -14,12 +14,13 @@ public:
 
     virtual void paint(Graphics &g, const YRect &r);
     virtual bool handleKey(const XKeyEvent &key);
-    virtual void actionPerformed(YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
 
     void activate();
     void deactivate();
 private:
     YActionButton *lockButton;
+    YActionButton *suspendButton;
     YActionButton *logoutButton;
     YActionButton *restartButton;
     YActionButton *cancelButton;
@@ -28,8 +29,9 @@ private:
     YActionButton *aboutButton;
     YActionButton *windowListButton;
     IApp *app;
+    YActionButton *addButton(const ustring& str, unsigned& maxW, unsigned& maxH);
 };
 
-extern CtrlAltDelete *ctrlAltDelete; // !!! remove
-
 #endif
+
+// vim: set sw=4 ts=4 et:

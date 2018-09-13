@@ -7,8 +7,6 @@
  */
 #include "config.h"
 
-#ifndef LITE
-
 #include "ylib.h"
 #include "ymsgbox.h"
 
@@ -49,13 +47,9 @@ YMsgBox::YMsgBox(int buttons, YWindow *owner): YDialog(owner) {
         }
     }
     autoSize();
-#if defined(GNOME1_HINTS) || defined(WMSPEC_HINTS)
     setWinLayerHint(WinLayerAboveDock);
-#endif
-#if defined(GNOME1_HINTS)
+    setWinWorkspaceHint(-1);
     setWinHintsHint(WinHintsSkipWindowMenu);
-#endif
-    setWinStateHint(WinStateAllWorkspaces, WinStateAllWorkspaces);
     {
 
         Atom protocols[2];
@@ -64,20 +58,12 @@ YMsgBox::YMsgBox(int buttons, YWindow *owner): YDialog(owner) {
         XSetWMProtocols(xapp->display(), handle(), protocols, 2);
         getProtocols(true);
     }
-    {
-        MwmHints mwm;
-
-        memset(&mwm, 0, sizeof(mwm));
-        mwm.flags =
-            MWM_HINTS_FUNCTIONS |
-            MWM_HINTS_DECORATIONS;
-        mwm.functions =
-            MWM_FUNC_MOVE | MWM_FUNC_CLOSE;
-        mwm.decorations =
-            MWM_DECOR_BORDER | MWM_DECOR_TITLE | MWM_DECOR_MENU;
-
-        setMwmHints(mwm);
-    }
+    setMwmHints(MwmHints(
+       MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS,
+       MWM_FUNC_MOVE | MWM_FUNC_CLOSE,
+       MWM_DECOR_BORDER | MWM_DECOR_TITLE | MWM_DECOR_MENU,
+       0,
+       0));
 }
 
 YMsgBox::~YMsgBox() {
@@ -87,22 +73,22 @@ YMsgBox::~YMsgBox() {
 }
 
 void YMsgBox::autoSize() {
-    int lw = fLabel ? fLabel->width() : 0;
-    int w = lw + 24, h;
+    unsigned lw = fLabel ? fLabel->width() : 0;
+    unsigned w = lw + 24, h;
 
-    w = clamp(w, 240, desktop->width());
-    
+    w = clamp(w, 240U, desktop->width());
+
     h = 12;
     if (fLabel) {
         fLabel->setPosition((w - lw) / 2, h);
         h += fLabel->height();
     }
     h += 18;
-    
+
     unsigned const hh(max(fButtonOK ? fButtonOK->height() : 0,
                           fButtonCancel ? fButtonCancel->height() : 0));
     unsigned const ww(max(fButtonOK ? fButtonOK->width() : 0,
-                          fButtonCancel ? fButtonCancel->width() : 0) + 3);
+                          fButtonCancel ? fButtonCancel->width() : 3));
 
     if (fButtonOK) {
         fButtonOK->setSize(ww, hh);
@@ -116,7 +102,7 @@ void YMsgBox::autoSize() {
     h += fButtonOK ? fButtonOK->height() :
         fButtonCancel ? fButtonCancel->height() : 0;
     h += 12;
-    
+
     setSize(w, h);
 }
 
@@ -135,18 +121,25 @@ void YMsgBox::setText(const ustring &text) {
 void YMsgBox::setPixmap(ref<YPixmap>/*pixmap*/) {
 }
 
-void YMsgBox::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+void YMsgBox::actionPerformed(YAction action, unsigned int /*modifiers*/) {
     if (fListener) {
-        if (action == fButtonOK) {
+        if (fButtonOK && action == *fButtonOK) {
             fListener->handleMsgBox(this, mbOK);
-        } else if (action == fButtonCancel) {
+        }
+        else if (fButtonCancel && action == *fButtonCancel) {
             fListener->handleMsgBox(this, mbCancel);
         }
+        else TLOG(("unknown action %d for msgbox", action.ident()));
     }
 }
 
 void YMsgBox::handleClose() {
-    fListener->handleMsgBox(this, 0);
+    if (fListener)
+        fListener->handleMsgBox(this, 0);
+    else {
+        manager->unmanageClient(handle());
+        manager->focusTopWindow();
+    }
 }
 
 void YMsgBox::handleFocus(const XFocusChangeEvent &/*focus*/) {
@@ -164,7 +157,8 @@ void YMsgBox::showFocused() {
     if (getFrame() == 0)
         manager->manageClient(handle(), false);
     if (getFrame()) {
-        int dx, dy, dw, dh;
+        int dx, dy;
+        unsigned dw, dh;
         desktop->getScreenGeometry(&dx, &dy, &dw, &dh);
         getFrame()->setNormalPositionOuter(
             dx + dw / 2 - getFrame()->width() / 2,
@@ -172,4 +166,5 @@ void YMsgBox::showFocused() {
         getFrame()->activateWindow(true);
     }
 }
-#endif
+
+// vim: set sw=4 ts=4 et:

@@ -8,7 +8,7 @@ public:
     virtual void pipeError(int error) = 0;
     virtual void pipeDataRead(char *buf, int len) = 0;
 protected:
-    virtual ~YPipeListener() {};
+    virtual ~YPipeListener() {}
 };
 
 class YPipeReader: public YPollBase {
@@ -18,11 +18,11 @@ public:
 
     int spawnvp(const char *prog, char **args);
     int read(char *buf, int len);
+    void pipeClose();
 
     void setListener(YPipeListener *l) { fListener = l; }
-private:
-    friend class YApplication;
 
+private:
     YPipeListener *fListener;
     char *rdbuf;
     int rdbuflen;
@@ -36,3 +36,5 @@ private:
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

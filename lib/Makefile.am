@@ -35,6 +35,8 @@ nobase_dist_pkgdata_DATA = \
 	icons/file_32x32.xpm \
 	icons/focus_16x16.xpm \
 	icons/focus_32x32.xpm \
+	icons/focus_16x16.png \
+	icons/focus_32x32.png \
 	icons/folder_16x16.xpm \
 	icons/folder_32x32.xpm \
 	icons/fte_16x16.xpm \
@@ -47,6 +49,8 @@ nobase_dist_pkgdata_DATA = \
 	icons/java_16x16.xpm \
 	icons/java_32x32.xpm \
 	icons/kde_16x16.xpm \
+	icons/key_16x16.png \
+	icons/key_32x32.png \
 	icons/koules_16x16.xpm \
 	icons/koules_32x32.xpm \
 	icons/lock_16x16.xpm \
@@ -60,6 +64,8 @@ nobase_dist_pkgdata_DATA = \
 	icons/netscape_32x32.xpm \
 	icons/pdf_16x16.xpm \
 	icons/pdf_32x32.xpm \
+	icons/pref_16x16.png \
+	icons/pref_32x32.png \
 	icons/programs_16x16.xpm \
 	icons/programs_32x32.xpm \
 	icons/reboot_16x16.xpm \
@@ -68,6 +74,8 @@ nobase_dist_pkgdata_DATA = \
 	icons/restart_32x32.xpm \
 	icons/run_16x16.xpm \
 	icons/run_32x32.xpm \
+	icons/save_16x16.png \
+	icons/save_32x32.png \
 	icons/settings_16x16.xpm \
 	icons/settings_32x32.xpm \
 	icons/shutdown_16x16.xpm \
@@ -509,5 +517,23 @@ nobase_dist_pkgdata_DATA = \
 	themes/NanoBlue/icons/thunderbird_32x32.xpm \
 	themes/NanoBlue/icons/xterm_16x16.xpm \
 	themes/NanoBlue/icons/xterm_32x32.xpm \
+	themes/NanoBlue/ledclock/a.xpm \
+	themes/NanoBlue/ledclock/colon.xpm \
+	themes/NanoBlue/ledclock/dot.xpm \
+	themes/NanoBlue/ledclock/m.xpm \
+	themes/NanoBlue/ledclock/n0.xpm \
+	themes/NanoBlue/ledclock/n1.xpm \
+	themes/NanoBlue/ledclock/n2.xpm \
+	themes/NanoBlue/ledclock/n3.xpm \
+	themes/NanoBlue/ledclock/n4.xpm \
+	themes/NanoBlue/ledclock/n5.xpm \
+	themes/NanoBlue/ledclock/n6.xpm \
+	themes/NanoBlue/ledclock/n7.xpm \
+	themes/NanoBlue/ledclock/n8.xpm \
+	themes/NanoBlue/ledclock/n9.xpm \
+	themes/NanoBlue/ledclock/p.xpm \
+	themes/NanoBlue/ledclock/slash.xpm \
+	themes/NanoBlue/ledclock/space.xpm \
+	themes/NanoBlue/taskbar/collapse.xpm \
+	themes/NanoBlue/taskbar/expand.xpm \
 	themes/NanoBlue/default.theme
-

@@ -7,6 +7,7 @@
 class AboutDlg: public YDialog {
 public:
     AboutDlg();
+    ~AboutDlg();
 
     void autoSize();
     void showFocused();
@@ -26,6 +27,6 @@ private:
     YLabel *fLanguage;
 };
 
-extern AboutDlg *aboutDlg;
-
 #endif
+
+// vim: set sw=4 ts=4 et:

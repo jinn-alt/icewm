@@ -15,10 +15,10 @@
 #define HOSTCPU "@CMAKE_HOST_SYSTEM_PROCESSOR@"
 #define HOSTOS "@CMAKE_HOST_SYSTEM_NAME@"
 
-// autoconf declares them but I couldn't find any good reason to use them. Wiping out...
-#define SELECT_TYPE_ARG1
-#define SELECT_TYPE_ARG234
-#define SELECT_TYPE_ARG5
+// just hardcoding the POSIX-2001 version
+#define SELECT_TYPE_ARG1 int
+#define SELECT_TYPE_ARG234 (fd_set *)
+#define SELECT_TYPE_ARG5 (struct timeval *)
 
 #define SIZEOF_CHAR @SIZEOF_CHAR@
 #define SIZEOF_INT @SIZEOF_INT@
@@ -26,11 +26,12 @@
 #define SIZEOF_SHORT @SIZEOF_SHORT@
 
 #cmakedefine HAVE_ABORT 1
+#cmakedefine HAVE_BACKTRACE_SYMBOLS_FD 1
 #cmakedefine HAVE_BASENAME 1
 #cmakedefine HAVE_DUP2 1
 #cmakedefine HAVE_GETHOSTBYNAME 1
 #cmakedefine HAVE_GETHOSTNAME 1
-#cmakedefine HAVE_GETLOADAVG 1
+#cmakedefine HAVE_GETLOADAVG2 1
 #cmakedefine HAVE_GETTIMEOFDAY 1
 #cmakedefine HAVE_MBLEN 1
 #cmakedefine HAVE_MEMCHR 1
@@ -50,6 +51,7 @@
 #cmakedefine HAVE_STRLCPY 1
 #cmakedefine HAVE_STRNCASECMP 1
 #cmakedefine HAVE_STRRCHR 1
+#cmakedefine HAVE_STRSIGNAL 1
 #cmakedefine HAVE_STRSTR 1
 #cmakedefine HAVE_STRTOL 1
 #cmakedefine HAVE_STRTOUL 1
@@ -65,6 +67,7 @@
 #cmakedefine HAVE_LOCALE_H 1
 #cmakedefine HAVE_NETDB_H 1
 #cmakedefine HAVE_NETINET_IN_H 1
+#cmakedefine HAVE_SNDFILE_H 1
 #cmakedefine HAVE_STDDEF_H 1
 #cmakedefine HAVE_STDLIB_H 1
 #cmakedefine HAVE_STRING_H 1
@@ -72,6 +75,7 @@
 #cmakedefine HAVE_SYS_IOCTL_H 1
 #cmakedefine HAVE_SYS_PARAM_H 1
 #cmakedefine HAVE_SYS_SOCKET_H 1
+#cmakedefine HAVE_SYS_SOUNDCARD_H 1
 #cmakedefine HAVE_SYS_TIME_H 1
 #cmakedefine HAVE_UNISTD_H 1
 #cmakedefine HAVE_WCHAR_H 1
@@ -92,58 +96,31 @@
 #define DATADIR "@DATADIR@"
 #define ICEHELPIDX "@ICEHELPIDX@"
 
-#cmakedefine NO_CONFIGURE_MENUES 1
 #cmakedefine CONFIG_XPM 1
 #cmakedefine CONFIG_IMLIB  1
+#cmakedefine CONFIG_LIBPNG  1
+#cmakedefine CONFIG_LIBJPEG  1
 #cmakedefine CONFIG_GDK_PIXBUF_XLIB 1
+#cmakedefine CONFIG_LIBRSVG 1
 #cmakedefine CONFIG_I18N 1
 #cmakedefine ENABLE_NLS 1
 #cmakedefine CONFIG_SESSION 1
 #cmakedefine CONFIG_SHAPE 1
-#cmakedefine CONFIG_SHAPED_DECORATION 1
-
 #cmakedefine CONFIG_UNICODE_SET "@CONFIG_UNICODE_SET@"
-
 #cmakedefine HAVE_XINTERNATOMS 1
-
-
-#cmakedefine CONFIG_ANTIALIASING 1
-#cmakedefine CONFIG_GRADIENTS 1
+#cmakedefine CONFIG_RENDER 1
 #cmakedefine CONFIG_XRANDR 1
-
 #cmakedefine CONFIG_XFREETYPE @CONFIG_XFREETYPE_VALUE@
-
 #cmakedefine CONFIG_COREFONTS 1
-#cmakedefine CONFIG_PDA 1
-
-#cmakedefine CONFIG_GUIEVENTS 1
-#cmakedefine CONFIG_OSS 1
+#cmakedefine CONFIG_EXTERNAL_TRAY 1
 #cmakedefine ENABLE_ALSA 1
-#cmakedefine ENABLE_YIFF 1
+#cmakedefine ENABLE_AO 1
 #cmakedefine ENABLE_ESD 1
+#cmakedefine ENABLE_OSS 1
 #cmakedefine XINERAMA 1
 #cmakedefine CONFIG_FRIBIDI 1
-
-#cmakedefine NO_CONFIGURE 1
-#cmakedefine NO_KEYBIND 1
-#cmakedefine NO_CONFIGURE_MENUS 1
-#cmakedefine NO_WINDOW_OPTIONS 1
-#cmakedefine LITE 1
-#cmakedefine CONFIG_TOOLTIP 1
-#cmakedefine CONFIG_WINLIST 1
-#cmakedefine CONFIG_TASKBAR 1
-#cmakedefine CONFIG_APPLET_MEM_STATUS 1
-#cmakedefine CONFIG_ADDRESSBAR 1
-#cmakedefine CONFIG_TRAY 1
-#cmakedefine CONFIG_APPLET_MAILBOX 1
-#cmakedefine CONFIG_APPLET_CPU_STATUS 1
-#cmakedefine CONFIG_APPLET_NET_STATUS 1
-#cmakedefine CONFIG_APPLET_CLOCK 1
-#cmakedefine CONFIG_APPLET_APM 1
-#cmakedefine CONFIG_WINMENU 1
-
-#cmakedefine WMSPEC_HINTS 1
-#cmakedefine GNOME1_HINTS 1
 #cmakedefine DEBUG 1
+
+#define CONFIG_DEFAULT_THEME "@CONFIG_DEFAULT_THEME@"
 
 #endif // __CONFIG_H__

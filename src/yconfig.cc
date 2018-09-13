@@ -13,11 +13,7 @@
 #include "ascii.h"
 #include "argument.h"
 
-upath findPath(ustring path, int mode, upath name, bool /*path_relative*/) {
-#ifdef __EMX__
-    if (mode & X_OK)
-        name = name.addExtension(".exe");
-#endif
+upath findPath(ustring path, int mode, upath name) {
     if (name.isAbsolute()) { // check for root in XFreeOS/2
         if (name.fileExists() && name.access(mode) == 0)
             return name;
@@ -33,23 +29,10 @@ upath findPath(ustring path, int mode, upath name, bool /*path_relative*/) {
             upath prog = upath(s).relative(name);
             if (prog.access(mode) == 0)
                 return prog;
-
-#if 0
-            if (!(mode & X_OK) &&
-                !prog.path().endsWith(".xpm") &&
-                !prog.path().endsWith(".png"))
-            {
-                upath prog_png = prog.addExtension(".png");
-                if (prog_png.access(mode) == 0)
-                    return prog_png;
-            }
-#endif
         }
     }
     return null;
 }
-
-#if !defined(NO_CONFIGURE) || !defined(NO_CONFIGURE_MENUS)
 
 char *YConfig::getArgument(Argument *dest, char *source, bool comma) {
     char *p = source;
@@ -87,8 +70,6 @@ char *YConfig::getArgument(Argument *dest, char *source, bool comma) {
     return p;
 }
 
-#endif
-
 // FIXME: P1 - parse keys later, not when loading
 bool YConfig::parseKey(const char *arg, KeySym *key, unsigned int *mod) {
     const char *orig_arg = arg;
@@ -104,6 +85,7 @@ bool YConfig::parseKey(const char *arg, KeySym *key, unsigned int *mod) {
         { "Shift+", kfShift },
         { "Super+", kfSuper },
     };
+    *key = NoSymbol;
     *mod = 0;
     for (int k = 0; k < (int) ACOUNT(mods); ++k) {
         for (int i = 0; arg[i] == mods[k].key[i]; ++i) {
@@ -149,7 +131,6 @@ bool YConfig::parseKey(const char *arg, KeySym *key, unsigned int *mod) {
     return true;
 }
 
-#ifndef NO_CONFIGURE
 
 static char *setOption(cfoption *options, char *name, const char *arg, bool append, char *rest) {
     unsigned int a;
@@ -159,16 +140,12 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
     for (a = 0; options[a].type != cfoption::CF_NONE; a++) {
         if (strcmp(name, options[a].name) != 0)
             continue;
-        if (options[a].notify) {
-            options[a].notify(name, arg, append);
-            return rest;
-        }
 
         switch (options[a].type) {
         case cfoption::CF_BOOL:
-            if (options[a].v.bool_value) {
+            if (options[a].v.b.bool_value) {
                 if ((arg[0] == '1' || arg[0] == '0') && arg[1] == 0) {
-                    *(options[a].v.bool_value) = (arg[0] == '1') ? true : false;
+                    *(options[a].v.b.bool_value) = (arg[0] == '1');
                 } else {
                     msg(_("Bad argument: %s for %s"), arg, name);
                     return rest;
@@ -189,6 +166,19 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
                 return rest;
             }
             break;
+        case cfoption::CF_UINT:
+            if (options[a].v.u.uint_value) {
+                unsigned const v(strtoul(arg, NULL, 0));
+
+                if (v >= options[a].v.u.min && v <= options[a].v.u.max)
+                    *(options[a].v.u.uint_value) = v;
+                else {
+                    msg(_("Bad argument: %s for %s"), arg, name);
+                    return rest;
+                }
+                return rest;
+            }
+            break;
         case cfoption::CF_STR:
             if (options[a].v.s.string_value) {
                 if (!options[a].v.s.initial)
@@ -198,7 +188,6 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
                 return rest;
             }
             break;
-#ifndef NO_KEYBIND
         case cfoption::CF_KEY:
             if (options[a].v.k.key_value) {
                 WMKey *wk = options[a].v.k.key_value;
@@ -212,7 +201,9 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
                 return rest;
             }
             break;
-#endif
+        case cfoption::CF_FUNC:
+            options[a].fun()(name, arg, append);
+            return rest;
         case cfoption::CF_NONE:
             break;
         }
@@ -290,12 +281,13 @@ bool YConfig::loadConfigFile(cfoption *options, upath fileName) {
 }
 
 void YConfig::freeConfig(cfoption *options) {
-    for (unsigned int a = 0; options[a].type != cfoption::CF_NONE; a++) {
-        if (!options[a].v.s.initial) {
-            if (options[a].v.s.string_value) {
-                delete[] (char *)*options[a].v.s.string_value;
-                *options[a].v.s.string_value = 0;
-            }
+    for (cfoption* o = options; o->type != cfoption::CF_NONE; ++o) {
+        if (o->type == cfoption::CF_STR &&
+            !o->v.s.initial &&
+            *o->v.s.string_value)
+        {
+            delete[] (char *)*o->v.s.string_value;
+            *o->v.s.string_value = 0;
         }
     }
 }
@@ -314,4 +306,8 @@ bool YConfig::findLoadThemeFile(IApp *app, cfoption *options, upath name) {
     return conf.nonempty() && YConfig::loadConfigFile(options, conf);
 }
 
-#endif
+size_t YConfig::cfoptionSize() {
+    return sizeof(cfoption);
+}
+
+// vim: set sw=4 ts=4 et:
