@@ -448,7 +448,6 @@ void operator delete[](void *p) {
 #endif
 
 /* Prefer this as a safer alternative over strcpy. Return strlen(from). */
-#ifndef HAVE_STRLCPY
 size_t strlcpy(char *dest, const char *from, size_t dest_size)
 {
     const char *in = from;
@@ -462,10 +461,8 @@ size_t strlcpy(char *dest, const char *from, size_t dest_size)
     while (*in) ++in;
     return in - from;
 }
-#endif
 
 /* Prefer this over strcat. Return strlen(dest) + strlen(from). */
-#ifndef HAVE_STRLCAT
 size_t strlcat(char *dest, const char *from, size_t dest_size)
 {
     char *to = dest;
@@ -473,7 +470,6 @@ size_t strlcat(char *dest, const char *from, size_t dest_size)
     while (to < stop && *to) ++to;
     return to - dest + strlcpy(to, from, dest_size - (to - dest));
 }
-#endif
 
 char *newstr(char const *str) {
     return (str != NULL ? newstr(str, strlen(str)) : NULL);
