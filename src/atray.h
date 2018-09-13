@@ -8,14 +8,16 @@
 #ifndef ATRAY_H_
 #define ATRAY_H_
 
-#ifdef CONFIG_TRAY
-
 #include "ywindow.h"
-#include "wmclient.h"
+#include "ypointer.h"
+#include "ytimer.h"
+
+class TrayPane;
+class ClientData;
 
 class TrayApp: public YWindow, public YTimerListener {
 public:
-    TrayApp(ClientData *frame, YWindow *aParent);
+    TrayApp(ClientData *frame, TrayPane *trayPane, YWindow *aParent);
     virtual ~TrayApp();
 
     virtual bool isFocusTraversable();
@@ -28,28 +30,23 @@ public:
     virtual void handleDNDLeave();
     virtual bool handleTimer(YTimer *t);
 
+    void activate() const;
     ClientData *getFrame() const { return fFrame; }
 
     void setShown(bool show);
     bool getShown() const { return fShown; }
-    
-    TrayApp *getNext() const { return fNext; }
-    TrayApp *getPrev() const { return fPrev; }
-    void setNext(TrayApp *next) { fNext = next; }
-    void setPrev(TrayApp *prev) { fPrev = prev; }
+    int getOrder() const;
 
 private:
     ClientData *fFrame;
-    TrayApp *fPrev, *fNext;
+    TrayPane *fTrayPane;
     bool fShown;
     int selected;
-    static YTimer *fRaiseTimer;
-    
-#ifdef CONFIG_GRADIENTS
+    lazy<YTimer> fRaiseTimer;
+
     static ref<YImage> taskMinimizedGradient;
     static ref<YImage> taskActiveGradient;
     static ref<YImage> taskNormalGradient;
-#endif    
 };
 
 class IAppletContainer;
@@ -59,12 +56,12 @@ public:
     TrayPane(IAppletContainer *taskBar, YWindow *parent);
     ~TrayPane();
 
-    void insert(TrayApp *tapp);
-    void remove(TrayApp *tapp);
     TrayApp *addApp(YFrameWindow *frame);
+    TrayApp *findApp(YFrameWindow *frame);
+    TrayApp *getActive();
+    TrayApp *predecessor(TrayApp *tapp);
+    TrayApp *successor(TrayApp *tapp);
     void removeApp(YFrameWindow *frame);
-    TrayApp *getFirst() const { return fFirst; }
-    TrayApp *getLast() const { return fLast; }
     int getRequiredWidth();
 
     void relayout() { fNeedRelayout = true; }
@@ -72,13 +69,16 @@ public:
 
     virtual void handleClick(const XButtonEvent &up, int count);
     virtual void paint(Graphics &g, const YRect &r);
+
 private:
     IAppletContainer *fTaskBar;
-    TrayApp *fFirst, *fLast;
-    int fCount;
     bool fNeedRelayout;
+
+    typedef YObjectArray<TrayApp> AppsType;
+    typedef AppsType::IterType IterType;
+    AppsType fApps;
 };
 
 #endif
 
-#endif
+// vim: set sw=4 ts=4 et:

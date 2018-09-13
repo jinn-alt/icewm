@@ -32,7 +32,7 @@
  *     this has the advantage of being slightly faster, but
  *     demands that all hints are handled at one place. WM ignores
  *     other hints of the same type if these two are present.
- 
+
  *   - check out WMaker and KDE hints to make a superset of all
  *   - virtual desktop, handling of virtual (>screen) scrolling
  *     desktops and pages (fvwm like?)
@@ -81,7 +81,7 @@
  *
  * Icon Mask can be None if transparency is not required.
  *
- * Icewm currenty needs/uses icons of size 16x16 and 32x32 with default
+ * Icewm currently needs/uses icons of size 16x16 and 32x32 with default
  * depth. Applications are recommended to set several icons sizes
  * (recommended 16x16,32x32,48x48 at least)
  *
@@ -111,7 +111,7 @@
  *     XSendEvent(display, root, False, SubstructureNotifyMask, (XEvent *) &xev);
  *
  */
- 
+
 #define XA_WIN_WORKSPACE_COUNT "_WIN_WORKSPACE_COUNT"
 /* Type: CARD32
  *       workspace count, set by window manager
@@ -122,7 +122,7 @@
 #define XA_WIN_WORKSPACE_NAMES "_WIN_WORKSPACE_NAMES"
 /* Type: StringList (TextPropery)
  *
- * 
+ *
  * IMPLEMENTED but not FINALIZED.
  * perhaps the name should be separate for each workspace (like KDE).
  * this where WIN_WORKSPACE_COUNT comes into play.
@@ -183,11 +183,11 @@
  * TODO: A few available layers could be used for WMaker menus/submenus
  * (comments?)
  *
- * Partially implemented. Currently requires all docked windows to be 
+ * Partially implemented. Currently requires all docked windows to be
  * sticky (only one workarea for all workspaces). Otherwise non-docked sticky
  * windows could (?) move when switching workspaces (annoying).
  */
- 
+
 #define WinLayerCount          16
 #define WinLayerInvalid        -1L
 
@@ -269,7 +269,7 @@
 #define WIN_STATE_ARRANGE_IGNORE    (1<<9) /* ignore for auto arranging */
 #endif
 
-#define WinStateAllWorkspaces  (1 << 0)   /* appears on all workspaces */
+#define WinStateSticky         (1 << 0)   /* sticks to virtual desktop */
 #define WinStateMinimized      (1 << 1)   /* to iconbox,taskbar,... */
 #define WinStateMaximizedVert  (1 << 2)   /* maximized vertically */
 #define WinStateMaximizedHoriz (1 << 3)   /* maximized horizontally */
@@ -292,7 +292,7 @@
 #define WinStateWasMinimized   (1 << 30)  /* was minimized when parent was minimized/hidden */
 #define WinStateWithdrawn      (1 << 31)  /* managed, but not available to user */
 
-#define WIN_STATE_ALL (WinStateAllWorkspaces | WinStateMinimized |\
+#define WIN_STATE_ALL (WinStateSticky | WinStateMinimized |\
                        WinStateMaximizedVert | WinStateMaximizedHoriz |\
                        WinStateHidden | WinStateRollup | WinStateHidWorkspace |\
                        WinStateHidTransient | WinStateFixedPosition |\
@@ -308,10 +308,10 @@
 // #define WIN_HINTS_FOCUS_ON_CLICK    (1<<4) /* app only accepts focus if clicked */
 
 #define XA_WIN_HINTS            "_WIN_HINTS"
-#define WinHintsSkipFocus       (1 << 0)
-#define WinHintsSkipWindowMenu  (1 << 1)
-#define WinHintsSkipTaskBar     (1 << 2)
-#define WinHintsGroupTransient  (1 << 3)
+#define WinHintsSkipFocus       (1 << 0) /* "alt-tab" skips this win */
+#define WinHintsSkipWindowMenu  (1 << 1) /* do not show in window list */
+#define WinHintsSkipTaskBar     (1 << 2) /* do not show on taskbar */
+#define WinHintsGroupTransient  (1 << 3) /* Reserved - definition is unclear */
 #define WinHintsFocusOnClick    (1 << 4) /* app only accepts focus when clicked */
 #define WinHintsDoNotCover      (1 << 5) /* attempt to not cover this window */
 #define WinHintsDockHorizontal  (1 << 6) /* docked horizontally */
@@ -380,3 +380,5 @@
 #define XA_WIN_EXPANDED_SIZE "_WIN_EXPANDED_SIZE"
 
 #endif
+
+// vim: set sw=4 ts=4 et:

@@ -9,7 +9,6 @@
 #include "yinputline.h"
 #include "wmmgr.h"
 #include "yrect.h"
-#include "ypixbuf.h"
 #include "ypaint.h"
 #include "sysdep.h"
 #include "yicon.h"
@@ -62,7 +61,7 @@ char *ObjectListItem::getLocation() {
     char *npath;
 
     npath = new char[nlen];
-    strcpy(npath, dir);
+    memcpy(npath, dir, dlen + 1);
     if (dlen == 0 || dir[dlen - 1] != '/') {
         strcpy(npath + dlen, "/");
         dlen++;
@@ -76,11 +75,6 @@ class ObjectListBox: public YListBox, public YActionListener {
 public:
     ObjectListBox(ObjectList *list, YScrollView *view, YWindow *aParent): YListBox(view, aParent) {
         fObjList = list;
-
-        actionOpenList = new YAction();
-        actionOpenIcon = new YAction();
-        actionOpen = new YAction();
-        actionClose = new YAction();
 
         YMenu *openMenu = new YMenu();
         openMenu->addItem(_("List View"), 0, null, actionOpenList);
@@ -111,17 +105,17 @@ public:
 
     virtual void activateItem(YListItem *item);
 
-    virtual void actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+    virtual void actionPerformed(YAction action, unsigned int /*modifiers*/) {
         if (action == actionOpenList) {
         }
     }
 private:
     ObjectList *fObjList;
     YMenu *folderMenu;
-    YAction *actionClose;
-    YAction *actionOpen;
-    YAction *actionOpenList;
-    YAction *actionOpenIcon;
+    YAction actionClose;
+    YAction actionOpen;
+    YAction actionOpenList;
+    YAction actionOpenIcon;
 };
 
 class ObjectList: public YWindow {
@@ -242,10 +236,10 @@ public:
         list->setGeometry(YRect(0, TH, r.width(), r.height() - TH));
     }
 private:
-    YColor *titleBg;
-    YColor *titleFg;
+    YColorName titleBg;
+    YColorName titleFg;
+    YColorName bg;
 
-    YColor *bg;
     char *title;
     int dragY;
     ObjectList *list;
@@ -277,11 +271,13 @@ public:
 };
 
 
-Pane::Pane(const char *atitle, const char *path, Panes *aParent): YWindow(aParent) {
+Pane::Pane(const char *atitle, const char *path, Panes *aParent):
+    YWindow(aParent),
+    titleBg("#6666CC"),
+    titleFg("#FFFFFF"),
+    bg("#CCCCCC")
+{
     title = strdup(atitle);
-    titleBg = new YColor("#6666CC");
-    titleFg = YColor::white;
-    bg = new YColor("#CCCCCC");
     list = new ObjectList(path, this);
     list->show();
     owner = aParent;
@@ -384,10 +380,8 @@ void Panes::movePane(Pane *pane, int delta) {
 int main(int argc, char **argv) {
     YLocale locale;
 
-#ifdef ENABLE_NLS
     bindtextdomain(PACKAGE, LOCDIR);
     textdomain(PACKAGE);
-#endif
 
     YXApplication app(&argc, &argv);
     YWindow *w;
@@ -415,3 +409,5 @@ int main(int argc, char **argv) {
 
     return app.mainLoop();
 }
+
+// vim: set sw=4 ts=4 et:

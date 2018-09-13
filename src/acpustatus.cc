@@ -16,19 +16,23 @@
  *    -stibor-
  */
 #include "config.h"
-
-#ifdef CONFIG_APPLET_CPU_STATUS
 #include "ylib.h"
 #include "wmapp.h"
-
+#include "applet.h"
+#include "ypointer.h"
 #include "acpustatus.h"
+
+#if IWM_STATES
+
 #include "sysdep.h"
 #include "default.h"
+#include "ascii.h"
+#include "ymenuitem.h"
 
-#if defined(__linux__)
-//#include <linux/kernel.h>
+#if __linux__
 #include <sys/sysinfo.h>
-#endif
+#else
+
 #if defined(sun) && defined(SVR4)
 #include <sys/loadavg.h>
 #endif
@@ -53,48 +57,52 @@
 #ifdef HAVE_SCHED_H
 #include <sched.h>
 #endif
+#ifdef HAVE_SYS_SCHED_H
+#include <sys/sched.h>
+#endif
+#if defined(HW_PHYSMEM) && !defined(HW_PHYSMEM64)
+#define HW_PHYSMEM64 HW_PHYSMEM
+#endif
+#if defined(HW_USERMEM) && !defined(HW_USERMEM64)
+#define HW_USERMEM64 HW_USERMEM
+#endif
+
+#endif /*__linux__*/
+
 #include "udir.h"
 #include "intl.h"
-
-#if defined(__linux__) || defined(HAVE_KSTAT_H) || defined(HAVE_SYSCTL_CP_TIME)
 
 extern ref<YPixmap> taskbackPixmap;
 
 ref<YFont> CPUStatus::tempFont;
 
-CPUStatus::CPUStatus(YSMListener *smActionListener, YWindow *aParent, int cpuid) : YWindow(aParent)
+CPUStatus::CPUStatus(YWindow *aParent, CPUStatusHandler *aHandler, int cpuid) :
+    IApplet(this, aParent),
+    fCpuID(cpuid),
+    statusUpdateCount(0),
+    unchanged(taskBarCPUSamples),
+    cpu(taskBarCPUSamples, IWM_STATES),
+    fHandler(aHandler)
 {
-    fCpuID = cpuid;
-    this->smActionListener = smActionListener;
-    cpu = new unsigned long long *[taskBarCPUSamples];
+    cpu.clear();
     for (int a(0); a < taskBarCPUSamples; a++) {
-        cpu[a] = new unsigned long long[IWM_STATES];
-        memset(cpu[a], 0, IWM_STATES * sizeof(cpu[0][0]));
         cpu[a][IWM_IDLE] = 1;
     }
     memset(last_cpu, 0, sizeof(last_cpu));
 
-    fUpdateTimer = new YTimer(taskBarCPUDelay);
-    if (fUpdateTimer) {
-        fUpdateTimer->setTimerListener(this);
-        fUpdateTimer->startTimer();
-    }
+    fUpdateTimer->setTimer(taskBarCPUDelay, this, true);
 
-    if (tempFont == null)
-        tempFont = YFont::getFont(XFA(tempFontName));
+    tempColor = &clrCpuTemp;
 
-    tempColor = new YColor(clrCpuTemp);
-
-    color[IWM_USER] = new YColor(clrCpuUser);
-    color[IWM_NICE] = new YColor(clrCpuNice);
-    color[IWM_SYS]  = new YColor(clrCpuSys);
-    color[IWM_INTR] = new YColor(clrCpuIntr);
-    color[IWM_IOWAIT] = new YColor(clrCpuIoWait);
-    color[IWM_SOFTIRQ] = new YColor(clrCpuSoftIrq);
-    color[IWM_IDLE] = *clrCpuIdle
-        ? new YColor(clrCpuIdle) : NULL;
-    color[IWM_STEAL] = new YColor(clrCpuSteal);
-    setSize(taskBarCPUSamples, 20);
+    color[IWM_USER] = &clrCpuUser;
+    color[IWM_NICE] = &clrCpuNice;
+    color[IWM_SYS]  = &clrCpuSys;
+    color[IWM_INTR] = &clrCpuIntr;
+    color[IWM_IOWAIT] = &clrCpuIoWait;
+    color[IWM_SOFTIRQ] = &clrCpuSoftIrq;
+    color[IWM_IDLE] = &clrCpuIdle;
+    color[IWM_STEAL] = &clrCpuSteal;
+    setSize(taskBarCPUSamples, taskBarGraphHeight);
     ShowRamUsage = cpustatusShowRamUsage;
     ShowSwapUsage = cpustatusShowSwapUsage;
     ShowAcpiTemp = cpustatusShowAcpiTemp;
@@ -103,28 +111,58 @@ CPUStatus::CPUStatus(YSMListener *smActionListener, YWindow *aParent, int cpuid)
     getStatus();
     updateStatus();
     updateToolTip();
+    char buf[99];
+    snprintf(buf, 99, "CPU%d", cpuid);
+    setTitle(buf);
 }
 
 CPUStatus::~CPUStatus() {
-    for (int a(0); a < taskBarCPUSamples; a++) {
-        delete cpu[a]; cpu[a] = 0;
-    }
-    delete cpu; cpu = 0;
-    delete color[IWM_USER]; color[IWM_USER] = 0;
-    delete color[IWM_NICE]; color[IWM_NICE] = 0;
-    delete color[IWM_SYS];  color[IWM_SYS]  = 0;
-    delete color[IWM_IDLE]; color[IWM_IDLE] = 0;
-    delete color[IWM_INTR]; color[IWM_INTR] = 0;
-    delete color[IWM_IOWAIT]; color[IWM_IOWAIT] = 0;
-    delete color[IWM_SOFTIRQ]; color[IWM_SOFTIRQ] = 0;
-    delete color[IWM_STEAL]; color[IWM_STEAL] = 0;
-    delete tempColor;
 }
 
-void CPUStatus::paint(Graphics &g, const YRect &/*r*/) {
-    int h = height();
+void CPUStatus::paint(Graphics &g, const YRect& r) {
+    IApplet::paint(g, r);
+    temperature(g);
+}
 
-    for (int i(0); i < taskBarCPUSamples; i++) {
+bool CPUStatus::picture() {
+    bool create = (hasPixmap() == None);
+
+    Graphics G(getPixmap(), width(), height(), depth());
+
+    if (create)
+        fill(G);
+
+    return (statusUpdateCount && unchanged < taskBarCPUSamples)
+         ? draw(G), true : (create || ShowAcpiTempInGraph);
+}
+
+void CPUStatus::fill(Graphics& g) {
+    if (color[IWM_IDLE]) {
+        g.setColor(color[IWM_IDLE]);
+        g.fillRect(0, 0, width(), height());
+    } else {
+        ref<YImage> gradient(parent()->getGradient());
+
+        if (gradient != null)
+            g.drawImage(gradient,
+                        x(), y(), width(), height(), 0, 0);
+        else
+            if (taskbackPixmap != null)
+                g.fillPixmap(taskbackPixmap,
+                             0, 0, width(), height(), x(), y());
+    }
+}
+
+void CPUStatus::draw(Graphics& g) {
+    int h = height();
+    int first = max(0, taskBarCPUSamples - statusUpdateCount);
+    if (0 < first && first < taskBarCPUSamples)
+        g.copyArea(taskBarCPUSamples - first, 0, first, h, 0, 0);
+    const int limit = (statusUpdateCount <= (1 + unchanged) / 2)
+                    ? taskBarCPUSamples - statusUpdateCount : taskBarCPUSamples;
+    statusUpdateCount = 0;
+
+    for (int i = first; i < limit; i++) {
         unsigned long long
             user    = cpu[i][IWM_USER],
             nice    = cpu[i][IWM_NICE],
@@ -207,26 +245,29 @@ void CPUStatus::paint(Graphics &g, const YRect &/*r*/) {
                 g.setColor(color[IWM_IDLE]);
                 g.drawLine(i, 0, i, y);
             } else {
-#ifdef CONFIG_GRADIENTS
                 ref<YImage> gradient = parent()->getGradient();
 
                 if (gradient != null)
                     g.drawImage(gradient,
                                  this->x() + i, this->y(), width(), y + 1, i, 0);
                 else
-#endif
                     if (taskbackPixmap != null)
                         g.fillPixmap(taskbackPixmap,
                                      i, 0, width(), y + 1, this->x() + i, this->y());
             }
         }
     }
+}
 
+void CPUStatus::temperature(Graphics& g) {
     if (ShowAcpiTempInGraph) {
         char test[10];
         getAcpiTemp(test, sizeof(test));
         g.setColor(tempColor);
+        if (tempFont == null)
+            tempFont = YFont::getFont(XFA(tempFontName));
         g.setFont(tempFont);
+        int h = height();
         int y =  (h - 1 - tempFont->height()) / 2 + tempFont->ascent();
         // If we draw three characters we can get temperatures above 100
         // without including the "C".
@@ -249,10 +290,10 @@ void CPUStatus::updateToolTip() {
         snprintf(cpuid, sizeof(cpuid), "%d", fCpuID);
 #ifdef __linux__
     char fmt[255] = "";
-#define ___checkspace if(more<0 || rest-more<=0) return; pos+=more; rest-=more;
+#define ___checkspace if (more<0 || rest-more<=0) return; pos+=more; rest-=more;
     struct sysinfo sys;
 
-    if(0==sysinfo(&sys))
+    if (0==sysinfo(&sys))
     {
         char *pos=fmt;
         int rest=sizeof(fmt);
@@ -264,13 +305,14 @@ void CPUStatus::updateToolTip() {
         ___checkspace;
         if (ShowRamUsage) {
 #define MBnorm(x) ((float)x * (float)sys.mem_unit / 1048576.0f)
-            more=snprintf(pos, rest, _("\nRam (free): %5.2f (%.2f) M"),
-                    MBnorm(sys.totalram), MBnorm(sys.freeram));
+#define GBnorm(x) ((double)x * (double)sys.mem_unit / 1073741824.0)
+            more=snprintf(pos, rest, _("\nRam (free): %5.3f (%.3f) G"),
+                    GBnorm(sys.totalram), GBnorm(sys.freeram));
             ___checkspace;
         }
         if (ShowSwapUsage) {
-            more=snprintf(pos, rest, _("\nSwap (free): %.2f (%.2f) M"),
-                    MBnorm(sys.totalswap), MBnorm(sys.freeswap));
+            more=snprintf(pos, rest, _("\nSwap (free): %.3f (%.3f) G"),
+                    GBnorm(sys.totalswap), GBnorm(sys.freeswap));
             ___checkspace;
         }
         if (ShowAcpiTemp) {
@@ -278,7 +320,7 @@ void CPUStatus::updateToolTip() {
             more=snprintf(pos, rest, _("\nACPI Temp: "));
             ___checkspace;
             more=getAcpiTemp(pos, rest);
-            if(more)
+            if (more)
             {
               ___checkspace;
             }
@@ -297,28 +339,47 @@ void CPUStatus::updateToolTip() {
             const char *const form = _("\nCPU Freq: %.3fGHz");
             const char *const perc = strstr(form, "%.3f");
             if (cpus < 2 || perc == NULL) {
-                more=snprintf(pos, rest, form, maxf / 1e6);
+                snprintf(pos, rest, form, maxf / 1e6);
             } else {
-                more=snprintf(pos, rest, "%.*s%.3f %.3f %s", (int)(perc - form),
+                snprintf(pos, rest, "%.*s%.3f %.3f %s", (int)(perc - form),
                         form, maxf / 1e6, minf / 1e6, perc + 4);
             }
         }
         setToolTip(ustring(fmt));
     }
-#elif defined HAVE_GETLOADAVG2
-    char load[sizeof("999.99 999.99 999.99")];
+#elif HAVE_GETLOADAVG2
+    char buf[99];
     double loadavg[3];
     if (getloadavg(loadavg, 3) < 0)
         return;
-    snprintf(load, sizeof(load), "%3.2g %3.2g %3.2g",
+    snprintf(buf, sizeof buf, "%s %s %s %3.2g %3.2g %3.2g",
+             _("CPU"), cpuid, _("Load: "),
             loadavg[0], loadavg[1], loadavg[2]);
-    {
-        char id[10];
-        snprintf(id, sizeof[id], " %d ", cpuid);
-        char *loadmsg = cstrJoin(_("CPU"), id ,_("Load: "), load, NULL);
-        setToolTip(ustring(loadmsg));
-        delete [] loadmsg;
+
+#if HAVE_SYSCTL && defined(HW_PHYSMEM64) && defined(HW_USERMEM64)
+    const int M = 2;
+    int mib[M][2] = { { CTL_HW, HW_PHYSMEM64 }, { CTL_HW, HW_USERMEM64 }, };
+    int64_t data[M] = { 0, 0, };
+    size_t len[M] = { sizeof(data[0]), sizeof(data[1]), };
+
+    for (int i = 0; i < M; ++i)
+        if (sysctl(mib[i], 2, data + i, len + i, NULL, 0) == -1)
+            if (ONCE) tlog("sysctl %d, %d", mib[i][0], mib[i][1]);
+
+    if (data[0] && data[1]) {
+        snprintf(buf + strlen(buf), sizeof buf - strlen(buf),
+                _("\nRam (user): %5.3f (%.3f) G"),
+                (data[0] >> 20) * 1e-3, (data[1] >> 20) * 1e-3);
     }
+#endif
+
+    float freq = getCpuFreq(0);
+    if (freq > 1e6 && strlen(buf) + 20 < sizeof buf) {
+        snprintf(buf + strlen(buf), sizeof buf - strlen(buf),
+                 _("\nCPU Freq: %.3fGHz"), freq * 1e-9);
+    }
+
+    setToolTip(buf);
 #endif
 }
 
@@ -326,14 +387,17 @@ void CPUStatus::handleClick(const XButtonEvent &up, int count) {
     if (up.button == 1) {
         if (cpuCommand && cpuCommand[0] &&
             (taskBarLaunchOnSingleClick ? count == 1 : !(count % 2)))
-            smActionListener->runCommandOnce(cpuClassHint, cpuCommand);
+            fHandler->runCommandOnce(cpuClassHint, cpuCommand);
+    }
+    else if (up.button == Button3) {
+        fHandler->handleClick(up, fCpuID);
     }
 }
 
 void CPUStatus::updateStatus() {
     for (int i(1); i < taskBarCPUSamples; i++)
-        memcpy(cpu[i - 1], cpu[i], IWM_STATES * sizeof(cpu[0][0]));
-    getStatus(),
+        cpu.copyTo(i, i - 1);
+    getStatus();
     repaint();
 }
 
@@ -343,24 +407,13 @@ int CPUStatus::getAcpiTemp(char *tempbuf, int buflen) {
     char buf[64];
 
     memset(tempbuf, 0, buflen);
-    cdir dir("/proc/acpi/thermal_zone");
-    if (dir.isOpen()) {
+
+#if __linux__
+    cdir dir;
+    if (dir.open("/sys/class/thermal")) {
         while (dir.next()) {
-            int len, seglen = 7;
-            snprintf(namebuf, sizeof namebuf,
-                    "/proc/acpi/thermal_zone/%s/temperature", dir.entry());
-            len = read_file(namebuf, buf, sizeof(buf));
-            if (len > seglen) {
-                if (retbuflen + seglen >= buflen) {
-                    break;
-                }
-                retbuflen += seglen;
-                strncat(tempbuf, buf + len - seglen, seglen);
-            }
-        }
-    } 
-    else if (dir.open("/sys/class/thermal")) {
-        while (dir.next()) {
+            if (strncmp(dir.entry(), "thermal", 7))
+                continue;
             int len;
 
             snprintf(namebuf, sizeof namebuf,
@@ -388,13 +441,32 @@ int CPUStatus::getAcpiTemp(char *tempbuf, int buflen) {
             tempbuf[retbuflen] = '\0';
         }
     }
+    else if (dir.open("/proc/acpi/thermal_zone")) {
+        while (dir.next()) {
+            int len, seglen = 7;
+            snprintf(namebuf, sizeof namebuf,
+                    "/proc/acpi/thermal_zone/%s/temperature", dir.entry());
+            len = read_file(namebuf, buf, sizeof(buf));
+            if (len > seglen) {
+                if (retbuflen + seglen >= buflen) {
+                    break;
+                }
+                retbuflen += seglen;
+                strncat(tempbuf, buf + len - seglen, seglen);
+            }
+        }
+    }
+#endif
+
     return retbuflen;
 }
 
 float CPUStatus::getCpuFreq(unsigned int cpu) {
+
+#if __linux__
     char buf[16], namebuf[100];
     const char * categories[] = { "cpuinfo", "scaling" };
-    for(unsigned i = 0; i < ACOUNT(categories); ++i)
+    for (unsigned i = 0; i < ACOUNT(categories); ++i)
     {
         float cpufreq = 0;
         snprintf(namebuf, sizeof namebuf,
@@ -405,41 +477,51 @@ float CPUStatus::getCpuFreq(unsigned int cpu) {
             return cpufreq;
         }
     }
+
+#elif HAVE_SYSCTL && defined(CTL_HW) && defined(HW_CPUSPEED) /*OpenBSD*/
+    int mib[2] = { CTL_HW, HW_CPUSPEED };
+    int speed = 0;
+    size_t len = sizeof(speed);
+
+    if (sysctl(mib, 2, &speed, &len, NULL, 0) == -1) {
+        if (ONCE) tlog("sysctl hw cpuspeed");
+    }
+    else {
+        return (float) speed * 1e6;
+    }
+#endif
+
     return 0;
 }
 
 
-void CPUStatus::getStatus() {
-    memset(cpu[taskBarCPUSamples - 1], 0, IWM_STATES * sizeof(cpu[0][0]));
+void CPUStatus::getStatusPlatform() {
 #ifdef __linux__
-    char *p, buf[4096], *tok;
+    char *p = 0, buf[4096], *end = 0;
     unsigned long long cur[IWM_STATES];
     int s;
 
-    char cpuname[32] = "cpu";
-    if (fCpuID >= 0)
-        snprintf(cpuname, sizeof(cpuname), "cpu%d", fCpuID);
-
-    FILE *fd = fopen("/proc/stat", "r");
+    fileptr fd(fopen("/proc/stat", "r"));
     if (fd == NULL)
-    {
-        fclose(fd);
         return;
-    }
 
-    /* find the line that starts with `cpuname` */
-    do {
-        if (!fgets(buf, sizeof(buf) - 1, fd)) {
-            fclose(fd);
-            return;
+    while (fgets(buf, sizeof buf, fd) && 0 == strncmp(buf, "cpu", 3)) {
+        if (fCpuID == -1) {
+            if (ASCII::isSpaceOrTab(buf[3]))
+                p = buf + 4;
+            break;
         }
-        tok = strtok_r(buf, " \t", &p);
-        if (!tok) {
-            fclose(fd);
-            return;
+        if (ASCII::isDigit(buf[3]) && strtol(buf + 3, &end, 10) == fCpuID) {
+            if (end > buf && ASCII::isSpaceOrTab(*end)) {
+                p = 1 + end;
+                break;
+            }
         }
-    } while (strcmp(tok, cpuname));
-    fclose(fd);
+    }
+    fd.close();
+    if (p == 0)
+        return;
+
     s = sscanf(p, "%llu %llu %llu %llu %llu %llu %llu %llu",
                &cur[IWM_USER],    &cur[IWM_NICE],
                &cur[IWM_SYS],     &cur[IWM_IDLE],
@@ -466,8 +548,11 @@ void CPUStatus::getStatus() {
         cpu[taskBarCPUSamples - 1][i] = cur[i] - last_cpu[i];
         last_cpu[i] = cur[i];
     }
-#endif /* __linux__ */
-#ifdef HAVE_KSTAT_H
+
+    return;
+
+#elif HAVE_KSTAT_H
+
 #ifdef HAVE_OLD_KSTAT
 #define ui32 ul
 #endif
@@ -627,8 +712,10 @@ void CPUStatus::getStatus() {
     cpu[taskBarCPUSamples-1][IWM_SYS]  = cp_pct[CPU_KERNEL];
     cpu[taskBarCPUSamples-1][IWM_IDLE] = cp_pct[CPU_IDLE];
 
-#endif /* have_kstat_h */
-#if defined HAVE_SYSCTL_CP_TIME && defined CP_INTR
+    return;
+
+#elif __OpenBSD__ || __NetBSD__ || __FreeBSD__
+
 #if defined __NetBSD__
     typedef u_int64_t cp_time_t;
 #else
@@ -645,20 +732,25 @@ void CPUStatus::getStatus() {
     cp_time_t cp_time[CPUSTATES];
     size_t len = sizeof( cp_time );
 #if defined HAVE_SYSCTLBYNAME
-    if (sysctlbyname("kern.cp_time", cp_time, &len, NULL, 0) < 0)
+    if (sysctlbyname("kern.cp_time", cp_time, &len, NULL, 0) < 0) {
+        if (ONCE)
+            fail("sysctlbyname kern.cp_time");
         return;
+    }
 #else
-    if (sysctl(mib, 2, cp_time, &len, NULL, 0) < 0)
+    if (sysctl(mib, 2, cp_time, &len, NULL, 0) < 0) {
+        if (ONCE)
+            fail("sysctl kern cp_time");
         return;
+    }
 #endif
 
     unsigned long long cur[IWM_STATES];
     cur[IWM_USER]    = cp_time[CP_USER];
     cur[IWM_NICE]    = cp_time[CP_NICE];
     cur[IWM_SYS]     = cp_time[CP_SYS];
-    cur[IWM_IDLE]    = cp_time[CP_IDLE];
-    cur[IWM_IOWAIT]  = 0;
     cur[IWM_INTR]    = cp_time[CP_INTR];
+    cur[IWM_IOWAIT]  = 0;
     cur[IWM_SOFTIRQ] = 0;
     cur[IWM_IDLE]    = cp_time[CP_IDLE];
     cur[IWM_STEAL]   = 0;
@@ -668,8 +760,14 @@ void CPUStatus::getStatus() {
         last_cpu[i] = cur[i];
     }
 #endif
-    MSG((_("%s: %llu %llu %llu %llu %llu %llu %llu %llu"),
-        cpuname,
+}
+
+void CPUStatus::getStatus() {
+    cpu.clear(taskBarCPUSamples - 1);
+
+    getStatusPlatform();
+
+    MSG((_("CPU: %llu %llu %llu %llu %llu %llu %llu %llu"),
         cpu[taskBarCPUSamples - 1][IWM_USER],
         cpu[taskBarCPUSamples - 1][IWM_NICE],
         cpu[taskBarCPUSamples - 1][IWM_SYS],
@@ -678,10 +776,27 @@ void CPUStatus::getStatus() {
         cpu[taskBarCPUSamples - 1][IWM_INTR],
         cpu[taskBarCPUSamples - 1][IWM_SOFTIRQ],
         cpu[taskBarCPUSamples - 1][IWM_STEAL]));
+
+    ++statusUpdateCount;
+
+    int last = taskBarCPUSamples - 1;
+    bool same = 0 < last && 0 == cpu.compare(last, last - 1);
+    unchanged = same ? 1 + unchanged : 0;
 }
-void CPUStatus::GetCPUStatus(YSMListener *smActionListener, YWindow *aParent, CPUStatus **&fCPUStatus, bool combine) {
+
+CPUStatusControl::CPUStatusControl(YSMListener *smActionListener,
+                                   IAppletContainer *iapp,
+                                   YWindow *aParent):
+    smActionListener(smActionListener),
+    iapp(iapp),
+    aParent(aParent)
+{
+    GetCPUStatus(cpuCombine);
+}
+
+void CPUStatusControl::GetCPUStatus(bool combine) {
     if (combine) {
-        CPUStatus::getCPUStatusCombined(smActionListener, aParent, fCPUStatus);
+        getCPUStatusCombined();
         return;
     }
 #if defined(__linux__)
@@ -689,45 +804,95 @@ void CPUStatus::GetCPUStatus(YSMListener *smActionListener, YWindow *aParent, CP
     unsigned cnt = 0;
     FILE *fd = fopen("/proc/stat", "r");
     if (!fd) {
-        CPUStatus::getCPUStatusCombined(smActionListener, aParent, fCPUStatus);
+        getCPUStatusCombined();
         return;
     }
-    /* skip first line for combined cpu */
-    if (fgets(buf, sizeof(buf), fd)) {};
-    /* count lines that begins with "cpu" */
-    while (1) {
-        if (!fgets(buf, sizeof(buf), fd))
-            break;
-        if (strncmp(buf, "cpu", 3))
-            break;
-        cnt++;
-    };
+    while (fgets(buf, sizeof buf, fd) && 0 == strncmp(buf, "cpu", 3))
+        cnt += ASCII::isDigit(buf[3]);
     fclose(fd);
-    CPUStatus::getCPUStatus(smActionListener, aParent, fCPUStatus, cnt);
+    getCPUStatus(cnt);
 #elif defined(HAVE_KSTAT_H)
     kstat_named_t       *kn = NULL;
     kn = (kstat_named_t *)kstat_data_lookup(ks, "ncpus");
     if (kn) {
-        CPUStatus::getCPUStatus(aParent, fCPUStatus, kn->value.ui32);
+        getCPUStatus(kn->value.ui32);
     } else {
-        CPUStatus::getCPUStatusCombined(aParent, fCPUStatus);
+        getCPUStatusCombined();
     }
-#elif defined(HAVE_SYSCTL_CP_TIME)
-    CPUStatus::getCPUStatusCombined(aParent, fCPUStatus);
+
+#elif defined(HAVE_SYSCTL) || defined(HAVE_SYSCTLBYNAME)
+    getCPUStatusCombined();
 #endif
 }
-void CPUStatus::getCPUStatusCombined(YSMListener *smActionListener, YWindow *aParent, CPUStatus **&fCPUStatus) {
-    fCPUStatus = new CPUStatus*[2];
-    fCPUStatus[0] = new CPUStatus(smActionListener, aParent);
-    fCPUStatus[1] = NULL;
+
+void CPUStatusControl::getCPUStatusCombined()
+{
+    fCPUStatus += createStatus();
 }
-void CPUStatus::getCPUStatus(YSMListener *smActionListener, YWindow *aParent, CPUStatus **&fCPUStatus, unsigned ncpus) {
-    fCPUStatus = new CPUStatus*[ncpus + 1];
+
+void CPUStatusControl::getCPUStatus(unsigned ncpus)
+{
     /* we must reverse the order, so that left is cpu(0) and right is cpu(ncpus-1) */
     for (unsigned i(0); i < ncpus; i++)
-        fCPUStatus[i] = new CPUStatus(smActionListener, aParent, ncpus - 1 - i);
-    fCPUStatus[ncpus] = NULL;
+        fCPUStatus += createStatus(ncpus - 1 - i);
 }
-#endif
+
+CPUStatus* CPUStatusControl::createStatus(unsigned cpu)
+{
+    return new CPUStatus(aParent, this, cpu);
+}
+
+void CPUStatusControl::runCommandOnce(const char *resource, const char *cmdline)
+{
+    smActionListener->runCommandOnce(resource, cmdline);
+}
+
+void CPUStatusControl::handleClick(const XButtonEvent &up, int cpuid) {
+    if (up.button == Button3) {
+        fMenu = new YMenu();
+        fMenu->setActionListener(this);
+
+        char title[24];
+        if (cpuid < 0) strlcpy(title, _("CPU"), sizeof title);
+        else snprintf(title, sizeof title, _("CPU%d"), cpuid);
+        fMenu->addItem(title, -2, null, actionNull)->setEnabled(false);
+
+        fMenu->addItem(_("_Disable"), -2, null, actionClose);
+        if (cpuid >= 0) {
+            fMenu->addItem(_("_Combine"), -2, null, actionArrange);
+        } else {
+            fMenu->addItem(_("_Separate"), -2, null, actionCascade);
+        }
+        fMenuCPU = cpuid;
+        fMenu->popup(0, 0, 0, up.x_root, up.y_root,
+                     YPopupWindow::pfCanFlipVertical |
+                     YPopupWindow::pfCanFlipHorizontal |
+                     YPopupWindow::pfPopupMenu);
+    }
+}
+
+void CPUStatusControl::actionPerformed(YAction action, unsigned int modifiers) {
+    if (action == actionClose) {
+        for (IterType iter = getIterator(); ++iter; ) {
+            if (iter->getCpuID() == fMenuCPU) {
+                iter.remove();
+                iapp->relayout();
+                break;
+            }
+        }
+    }
+    else if (action == actionArrange) {
+        fCPUStatus.clear();
+        GetCPUStatus(true);
+        iapp->relayout();
+    }
+    else if (action == actionCascade) {
+        fCPUStatus.clear();
+        GetCPUStatus(false);
+        iapp->relayout();
+    }
+}
+
 #endif
 
+// vim: set sw=4 ts=4 et:

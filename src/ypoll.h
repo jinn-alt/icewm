@@ -15,9 +15,8 @@ public:
     void unregisterPoll();
 
     int fd() const { return fFd; }
-protected:
-    friend class YApplication;
 
+protected:
     int fFd;
     YPollBase *fPrev;
     YPollBase *fNext;
@@ -36,7 +35,9 @@ public:
 private:
     T *fOwner;
 protected:
-    virtual ~YPoll() {};
+    virtual ~YPoll() {}
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

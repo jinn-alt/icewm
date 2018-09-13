@@ -39,6 +39,10 @@
 #define defgKeyWinSmartPlace            XK_KP_Begin, kfCtrl+kfAlt+kfShift, "Ctrl+Alt+Shift+KP_5"
 #define defgKeySysSwitchNext            XK_Tab, kfAlt, "Alt+Tab"
 #define defgKeySysSwitchLast            XK_Tab, kfAlt+kfShift, "Alt+Shift+Tab"
+#define defgKeyTaskBarSwitchNext       '1', kfAlt, "Alt+1"
+#define defgKeyTaskBarSwitchPrev        XK_grave, kfAlt, "Alt+grave"
+#define defgKeyTaskBarMoveNext		'1', kfAlt+kfShift, "Alt+Shift+1"
+#define defgKeyTaskBarMovePrev		XK_grave, kfAlt+kfShift, "Alt+Shift+grave"
 #define defgKeySysWinNext               XK_Escape, kfAlt, "Alt+Esc"
 #define defgKeySysWinPrev               XK_Escape, kfAlt+kfShift, "Alt+Shift+Esc"
 #define defgKeySysWinMenu               XK_Escape, kfShift, "Shift+Esc"
@@ -89,20 +93,6 @@
 #define defgKeySysUndoArrange           XK_F7, kfAlt+kfShift, "Alt+Shift+F7"
 #define defgKeySysShowDesktop           'd', kfAlt+kfCtrl, "Alt+Ctrl+d"
 #define defgKeySysCollapseTaskBar       'h', kfAlt+kfCtrl, "Alt+Ctrl+h"
-
-#ifdef NO_KEYBIND
-
-#define IS_WMKEYx2(k,vm,k1,vm1,d) ((k) == (k1) && ((vm) == (vm1)))
-#define IS_WMKEYx(k,vm,b) IS_WMKEYx2(k,vm,b)
-#define IS_WMKEY(k,vm,b) IS_WMKEYx(k,vm,def##b)
-#define GRAB_WMKEYx2(k,vm,d) grabVKey(k,vm)
-#define GRAB_WMKEYx(k) GRAB_WMKEYx2(k)
-#define GRAB_WMKEY(k) GRAB_WMKEYx(def##k)
-#define KEY_NAMEx2(k,m,s) (s)
-#define KEY_NAMEx(k) KEY_NAMEx2(k)
-#define KEY_NAME(k) KEY_NAMEx(def##k)
-
-#else
 
 #ifdef CFGDEF
 #define DEF_WMKEY(k) WMKey k = { def##k, true }
@@ -159,6 +149,10 @@ DEF_WMKEY(gKeySysSwitchNext);
 DEF_WMKEY(gKeySysSwitchLast);
 DEF_WMKEY(gKeySysWinNext);
 DEF_WMKEY(gKeySysWinPrev);
+DEF_WMKEY(gKeyTaskBarSwitchNext);
+DEF_WMKEY(gKeyTaskBarSwitchPrev);
+DEF_WMKEY(gKeyTaskBarMoveNext);
+DEF_WMKEY(gKeyTaskBarMovePrev);
 DEF_WMKEY(gKeySysWinMenu);
 DEF_WMKEY(gKeySysDialog);
 DEF_WMKEY(gKeySysMenu);
@@ -209,4 +203,4 @@ DEF_WMKEY(gKeySysCollapseTaskBar);
 
 #undef DEF_WMKEY
 
-#endif
+// vim: set sw=4 ts=4 et:

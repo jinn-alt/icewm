@@ -1,18 +1,20 @@
 
+########
+########    WARNING: DO NOT CHANGE THIS FILE WITHOUT RUNNING dist.sh SUCCESSFULLY
+########    BEFORE PUSHING YOUR CHANGES!
+########
+
+
 AM_CPPFLAGS = -include ../config.h
-AM_CXXFLAGS = $(CORE_CFLAGS) $(XSM_CFLAGS) $(IMAGE_CFLAGS) $(AUDIO_CFLAGS) $(GNOME1_CFLAGS) $(GNOME2_CFLAGS) $(GIO_CFLAGS) -DEXEEXT=$(EXEEXT)
+AM_CXXFLAGS = $(CORE_CFLAGS) $(XSM_CFLAGS) $(IMAGE_CFLAGS) $(AUDIO_CFLAGS) $(GIO_CFLAGS) -DEXEEXT=$(EXEEXT)
 
 EXTRA_DIST = \
-	ylibrary.cc \
-	ylibrary.h \
 	ypointer.h \
 	globit.c
 
 EXTRA_PROGRAMS = \
 	icehelp \
 	icesound \
-	icewm-menu-gnome1 \
-	icewm-menu-gnome2 \
 	icewm-menu-fdo \
 	testarray \
 	testlocale \
@@ -25,7 +27,6 @@ EXTRA_PROGRAMS = \
 	iceicon \
 	icerun \
 	icelist \
-	icebar \
 	strtest \
 	iceskt \
 	iceclock
@@ -38,17 +39,12 @@ bin_PROGRAMS = \
 	icewm \
 	icewm-session \
 	icesh \
+	icehelp \
 	icewmhint \
 	icewmbg \
 	icewmtray
 
-AM_INSTALLCHECK_STD_OPTIONS_EXEMPT = \
-	icewm-session \
-	icesh \
-	icewmhint \
-	icewmbg \
-	icewmtray
-
+AM_INSTALLCHECK_STD_OPTIONS_EXEMPT = icewmtray
 
 noinst_PROGRAMS = \
 	genpref
@@ -66,27 +62,15 @@ noinst_PROGRAMS += \
 	iceicon \
 	icerun \
 	icelist \
-	icebar \
 	strtest
-endif
-
-if BUILD_HELP
-bin_PROGRAMS += icehelp
-AM_INSTALLCHECK_STD_OPTIONS_EXEMPT += icehelp
 endif
 
 if BUILD_SOUND
 bin_PROGRAMS += icesound
 endif
 
-if BUILD_MENU_GNOME2
-bin_PROGRAMS += icewm-menu-gnome2
-AM_INSTALLCHECK_STD_OPTIONS_EXEMPT += icewm-menu-gnome2
-endif
-
 if BUILD_MENU_FDO
 bin_PROGRAMS += icewm-menu-fdo
-AM_INSTALLCHECK_STD_OPTIONS_EXEMPT += icewm-menu-fdo
 endif
 
 libice_la_SOURCES = \
@@ -119,8 +103,11 @@ libice_la_SOURCES = \
 	ytimer.cc \
 	ytimer.h \
 	ascii.h \
+	ylist.h \
 	ywindow.cc \
 	ywindow.h \
+	ycolor.cc \
+	ycolor.h \
 	ypaint.cc \
 	ypaint.h \
 	ypopup.cc \
@@ -132,12 +119,12 @@ libice_la_SOURCES = \
 	ysocket.h \
 	ypaths.cc \
 	ypaths.h \
-	ypixbuf.cc \
-	ypixbuf.h \
 	ylocale.cc \
 	ylocale.h \
 	yarray.cc \
 	yarray.h \
+	ycollections.h \
+	ycollections.cc \
 	ypipereader.cc \
 	ypipereader.h \
 	yxembed.cc \
@@ -153,11 +140,9 @@ libice_la_SOURCES = \
 	yfontxft.cc \
 	ypixmap.cc \
 	ypixmap.h \
-	yimage.cc \
 	yimage.h \
 	yimage_gdk.cc \
-	yimage_imlib.cc \
-	yimage_xpm.cc \
+	yximage.cc \
 	ytooltip.cc \
 	ytooltip.h
 
@@ -174,7 +159,6 @@ libitk_la_SOURCES = \
 	yaction.h \
 	yinputline.h \
 	ylib.h \
-	ypoint.h \
 	yrect.h \
 	ykey.h \
 	yfull.h \
@@ -200,7 +184,10 @@ libitk_la_SOURCES = \
 	yicon.cc \
 	yicon.h \
 	wmconfig.cc \
-	wmconfig.h
+	wmconfig.h \
+	wpixmaps.h \
+	wpixres.cc \
+	wpixres.h
 libitk_la_LIBADD = libice.la
 
 genpref_SOURCES = \
@@ -212,7 +199,7 @@ genpref_SOURCES = \
 	themable.h \
 	default.h \
 	genpref.cc
-genpref_LDADD = misc.$(OBJEXT)
+genpref_LDADD = libice.la @LIBINTL@
 
 icewm_SOURCES = \
 	intl.h \
@@ -239,7 +226,6 @@ icewm_SOURCES = \
 	binascii.h \
 	yurl.cc \
 	yurl.h \
-	ypoint.h \
 	yrect.h \
 	wmsession.cc \
 	wmsession.h \
@@ -259,7 +245,6 @@ icewm_SOURCES = \
 	wmstatus.h \
 	wmoption.cc \
 	wmoption.h \
-	wmaction.cc \
 	wmaction.h \
 	wmcontainer.cc \
 	wmcontainer.h \
@@ -270,9 +255,6 @@ icewm_SOURCES = \
 	wmmgr.h \
 	appnames.h \
 	guievent.h \
-	wpixmaps.h \
-	wpixres.cc \
-	wpixres.h \
 	wmapp.cc \
 	wmapp.h \
 	wmframe.cc \
@@ -290,6 +272,7 @@ icewm_SOURCES = \
 	decorate.cc \
 	browse.cc \
 	browse.h \
+	wmmenu.cc \
 	wmprog.cc \
 	wmprog.h \
 	atasks.cc \
@@ -304,6 +287,8 @@ icewm_SOURCES = \
 	acpustatus.h \
 	amemstatus.cc \
 	amemstatus.h \
+	applet.cc \
+	applet.h \
 	apppstatus.cc \
 	apppstatus.h \
 	aaddressbar.cc \
@@ -326,83 +311,59 @@ icesh_SOURCES = \
 	sysdep.h \
 	base.h \
 	WinMgr.h \
-	ylib.h \
 	icesh.cc
-icesh_LDADD = libice.la $(CORE_LIBS)
+icesh_LDADD = libice.la $(CORE_LIBS) @LIBINTL@
 
 icewm_session_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
+	appnames.h \
 	base.h \
+	debug.h \
+	intl.h \
+	sysdep.h \
+	yapp.h \
+	ytimer.h \
 	icesm.cc
-icewm_session_LDADD = libice.la $(IMAGE_LIBS) $(CORE_LIBS)
+icewm_session_LDADD = libice.la @LIBINTL@
 
 icewmhint_SOURCES = \
 	intl.h \
 	debug.h \
-	sysdep.h \
 	base.h \
-	guievent.h \
 	icewmhint.cc
-icewmhint_LDADD = misc.$(OBJEXT) $(CORE_LIBS)
+icewmhint_LDADD = libice.la $(CORE_LIBS) @LIBINTL@
 
 icewmbg_SOURCES = \
 	intl.h \
 	debug.h \
-	sysdep.h \
 	base.h \
 	themable.h \
 	default.h \
-	WinMgr.h \
 	ykey.h \
 	yfull.h \
+	yxapp.h \
+	yprefs.h \
+	ypaths.h \
 	icewmbg.cc \
 	icewmbg_prefs.h
-icewmbg_LDADD = libice.la $(IMAGE_LIBS) $(CORE_LIBS)
+icewmbg_LDADD = libice.la $(IMAGE_LIBS) $(CORE_LIBS) @LIBINTL@
 
 icesound_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
 	base.h \
+	debug.h \
 	guievent.h \
-	ylib.h \
-	icesound.cc \
-	ascii.h \
-	ycmdline.cc \
-	ycmdline.h
-icesound_LDADD = libice.la $(AUDIO_LIBS) $(CORE_LIBS)
-
-icewm_menu_gnome1_SOURCES = \
 	intl.h \
-	debug.h \
-	sysdep.h \
-	base.h \
-	themable.h \
-	default.h \
-	ylib.h \
-	gnome.cc \
-	ascii.h
-icewm_menu_gnome1_LDADD = libice.la $(GNOME1_LIBS) $(CORE_LIBS)
-
-icewm_menu_gnome2_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
-	base.h \
-	themable.h \
-	default.h \
-	ylib.h \
-	gnome2.cc \
-	ascii.h
-icewm_menu_gnome2_LDADD = libice.la $(GNOME2_LIBS) $(CORE_LIBS)
+	upath.h \
+	ypointer.h \
+	ytimer.h \
+	icesound.cc
+icesound_LDADD = libice.la $(AUDIO_LIBS) $(CORE_LIBS) @LIBINTL@
 
 icewm_menu_fdo_SOURCES = \
 	sysdep.h \
 	base.h \
+	fdospecgen.h \
 	fdomenu.cc
-icewm_menu_fdo_LDADD = misc.$(OBJEXT) $(GIO_LIBS)
+icewm_menu_fdo_LDADD = libice.la $(GIO_LIBS)
 
 icehelp_SOURCES = \
 	intl.h \
@@ -416,10 +377,9 @@ icehelp_SOURCES = \
 	prefs.h \
 	yaction.h \
 	ylib.h \
-	ypoint.h \
 	yrect.h \
 	icehelp.cc
-icehelp_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS)
+icehelp_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS) @LIBINTL@
 
 iceclock_SOURCES = \
 	intl.h \
@@ -433,49 +393,7 @@ iceclock_SOURCES = \
 	prefs.h \
 	aclock.cc \
 	aclock.h
-iceclock_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS)
-
-icebar_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
-	base.h \
-	obj.h \
-	yaction.h \
-	objmenu.h \
-	bindkey.h \
-	themable.h \
-	default.h \
-	prefs.h \
-	objbutton.h \
-	ylib.h \
-	wmtaskbar.cc \
-	wmtaskbar.h \
-	wmprog.cc \
-	wmprog.h \
-	browse.cc \
-	browse.h \
-	ascii.h \
-	themes.cc \
-	themes.h \
-	wmaction.cc \
-	wmaction.h \
-	amailbox.cc \
-	amailbox.h \
-	aclock.cc \
-	aclock.h \
-	acpustatus.cc \
-	acpustatus.h \
-	amemstatus.cc \
-	amemstatus.h \
-	apppstatus.cc \
-	apppstatus.h \
-	aaddressbar.cc \
-	aaddressbar.h \
-	objbar.cc \
-	objbar.h
-#	icebar.cc
-icebar_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS)
+iceclock_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS) @LIBINTL@
 
 strtest_SOURCES = \
 	intl.h \
@@ -498,6 +416,8 @@ icewmtray_SOURCES = \
 	prefs.h \
 	yxtray.cc \
 	yxtray.h \
+	wmoption.cc \
+	wmoption.h \
 	ylib.h \
 	icetray.cc
 icewmtray_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS)
@@ -509,7 +429,6 @@ icesame_SOURCES = \
 	base.h \
 	MwmUtil.h \
 	yaction.h \
-	ypoint.h \
 	yrect.h \
 	ykey.h \
 	yfull.h \
@@ -523,7 +442,6 @@ icelist_SOURCES = \
 	base.h \
 	yaction.h \
 	yinputline.h \
-	ypoint.h \
 	yrect.h \
 	ykey.h \
 	yfull.h \
@@ -541,7 +459,6 @@ iceview_SOURCES = \
 	prefs.h \
 	yaction.h \
 	ylib.h \
-	ypoint.h \
 	yrect.h \
 	iceview.cc
 iceview_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS)
@@ -553,7 +470,6 @@ iceicon_SOURCES = \
 	base.h \
 	yaction.h \
 	ylib.h \
-	ypoint.h \
 	yrect.h \
 	iceicon.cc
 iceicon_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS)
@@ -592,9 +508,9 @@ testmenus_SOURCES = \
 	themable.h \
 	default.h \
 	prefs.h \
+	wmmenu.cc \
 	wmprog.cc \
 	wmprog.h \
-	wmaction.cc \
 	wmaction.h \
 	ascii.h \
 	themes.cc \
@@ -637,7 +553,7 @@ testlocale_SOURCES = \
 	base.h \
 	ylib.h \
 	testlocale.cc
-testlocale_LDADD = libice.la
+testlocale_LDADD = libice.la $(CORE_LIBS) @LIBINTL@
 
 testarray_SOURCES = \
 	intl.h \
@@ -646,13 +562,13 @@ testarray_SOURCES = \
 	base.h \
 	ylib.h \
 	testarray.cc
-testarray_LDADD = libice.la
+testarray_LDADD = libice.la @LIBINTL@
 
 nodist_pkgdata_DATA = \
 	preferences
 
 preferences: genpref$(EXEEXT)
-	./genpref$(EXEEXT) >$@
+	$(AM_V_GEN)./genpref$(EXEEXT) >$@
 
 CLEANFILES = preferences
 

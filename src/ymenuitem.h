@@ -2,30 +2,28 @@
 #define __YMENUITEM_H
 
 #include "ypaint.h"
-#include "ypixbuf.h"
 #include "yicon.h"
+#include "yaction.h"
 
 class YMenu;
-class YAction;
-class YActionListener;
 
 class YMenuItem {
 public:
-    YMenuItem(const ustring &name, int hotCharPos, const ustring &param, YAction *action, YMenu *submenu);
+    YMenuItem(const ustring &name, int hotCharPos, const ustring &param, YAction action, YMenu *submenu);
     YMenuItem(const ustring &name);
     YMenuItem();
     virtual ~YMenuItem();
 
     ustring getName() const { return fName; }
     ustring getParam() const { return fParam; }
-    YAction *getAction() const { return fAction; }
+    YAction getAction() const { return fAction; }
     YMenu *getSubmenu() const { return fSubmenu; }
 
-    int getHotChar() const { 
+    int getHotChar() const {
         return (fName != null && fHotCharPos >= 0) ? fName.charAt(fHotCharPos) : -1;
     }
 
-    int getHotCharPos() const { 
+    int getHotCharPos() const {
         return fHotCharPos;
     }
 
@@ -36,7 +34,7 @@ public:
     void setEnabled(bool e) { fEnabled = e; }
     void setSubmenu(YMenu *submenu) { fSubmenu = submenu; }
 
-    virtual void actionPerformed(YActionListener *listener, YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YActionListener *listener, YAction action, unsigned int modifiers);
 
     int queryHeight(int &top, int &bottom, int &pad) const;
 
@@ -45,12 +43,12 @@ public:
     int getParamWidth() const;
 
     bool isSeparator() { return getName() == null && getSubmenu() == 0; }
-    
+
     void setIcon(ref<YIcon> icon);
 private:
     ustring fName;
     ustring fParam;
-    YAction *fAction;
+    YAction fAction;
     int fHotCharPos;
     YMenu *fSubmenu;
     ref<YIcon> fIcon;
@@ -59,3 +57,5 @@ private:
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

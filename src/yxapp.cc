@@ -1,20 +1,16 @@
 #include "config.h"
-
 #include "yxapp.h"
-
 #include "yfull.h"
-
-#include "wmprog.h"
+#include "ymenu.h"
 #include "wmmgr.h"
 #include "MwmUtil.h"
-#include "prefs.h"
-#include "yprefs.h"
-#include "ypixbuf.h"
-#include "yconfig.h"
 #include "ypointer.h"
 
+#ifdef CONFIG_RENDER
+#include <X11/extensions/Xrender.h>
+#endif
+
 #include <sys/resource.h>
-#include <stdlib.h>
 
 #include "intl.h"
 
@@ -72,9 +68,7 @@ Atom _XA_WIN_LAYER;
 Atom _XA_WIN_PROTOCOLS;
 Atom _XA_WIN_STATE;
 Atom _XA_WIN_SUPPORTING_WM_CHECK;
-#ifdef CONFIG_TRAY
 Atom _XA_WIN_TRAY;
-#endif
 Atom _XA_WIN_WORKAREA;
 Atom _XA_WIN_WORKSPACE_COUNT;
 Atom _XA_WIN_WORKSPACE_NAMES;
@@ -191,18 +185,23 @@ Atom XA_XdndPosition;
 Atom XA_XdndProxy;
 Atom XA_XdndStatus;
 
-YColor *YColor::black(NULL);
-YColor *YColor::white(NULL);
+#ifdef CONFIG_RENDER
+int renderSupported;
+int renderEventBase, renderErrorBase;
+int renderVersionMajor, renderVersionMinor;
+#endif
 
 #ifdef CONFIG_SHAPE
 int shapesSupported;
 int shapeEventBase, shapeErrorBase;
+int shapeVersionMajor, shapeVersionMinor;
 #endif
 
 #ifdef CONFIG_XRANDR
 int xrandrSupported;
-bool xrandr12 = false;
 int xrandrEventBase, xrandrErrorBase;
+int xrandrVersionMajor, xrandrVersionMinor;
+bool xrandr12 = false;
 #endif
 
 #ifdef DEBUG
@@ -345,9 +344,7 @@ void YXApplication::initAtoms() {
         { &_XA_WIN_PROTOCOLS                    , XA_WIN_PROTOCOLS                      },
         { &_XA_WIN_STATE                        , XA_WIN_STATE                          },
         { &_XA_WIN_SUPPORTING_WM_CHECK          , XA_WIN_SUPPORTING_WM_CHECK            },
-#ifdef CONFIG_TRAY
         { &_XA_WIN_TRAY                         , XA_WIN_TRAY                           },
-#endif
         { &_XA_WIN_WORKAREA                     , XA_WIN_WORKAREA                       },
         { &_XA_WIN_WORKSPACE_COUNT              , XA_WIN_WORKSPACE_COUNT                },
         { &_XA_WIN_WORKSPACE_NAMES              , XA_WIN_WORKSPACE_NAMES                },
@@ -486,16 +483,11 @@ void YXApplication::initPointers() {
     movePointer  = l->load("move.xpm",  XC_fleur);
 }
 
-void YXApplication::initColors() {
-    YColor::black = new YColor("rgb:00/00/00");
-    YColor::white = new YColor("rgb:FF/FF/FF");
-}
-
 void YXApplication::initModifiers() {
     XModifierKeymap *xmk = XGetModifierMapping(xapp->display());
     AltMask = MetaMask = WinMask = SuperMask = HyperMask =
         NumLockMask = ScrollLockMask = ModeSwitchMask = 0;
-    
+
     if (xmk) {
         KeyCode *c = xmk->modifiermap;
 
@@ -743,7 +735,6 @@ int YXApplication::grabEvents(YWindow *win, Cursor ptr, unsigned int eventMask, 
     if (win == 0)
         return 0;
 
-    XSync(display(), 0);
     fGrabTree = grabTree;
     if (grabMouse) {
         fGrabMouse = 1;
@@ -778,8 +769,6 @@ int YXApplication::grabEvents(YWindow *win, Cursor ptr, unsigned int eventMask, 
     }
     XAllowEvents(xapp->display(), SyncPointer, CurrentTime);
 
-    desktop->resetColormapFocus(false);
-
     fXGrabWindow = win;
     fGrabWindow = win;
     return 1;
@@ -796,7 +785,7 @@ int YXApplication::releaseEvents() {
         fGrabMouse = 0;
     }
     XUngrabKeyboard(display(), CurrentTime);
-    desktop->resetColormapFocus(true);
+
     return 1;
 }
 
@@ -860,10 +849,6 @@ Time YXApplication::getEventTime(const char */*debug*/) const {
     return lastEventTime;
 }
 
-
-extern void logEvent(const XEvent &xev);
-
-
 bool YXApplication::hasColormap() {
     XVisualInfo pattern;
     pattern.screen = DefaultScreen(display());
@@ -875,7 +860,7 @@ bool YXApplication::hasColormap() {
                                               &pattern, &nVisuals));
     XVisualInfo *visual = first_visual;
 
-    while(visual && nVisuals--) {
+    while (visual && nVisuals--) {
         if (visual->c_class & 1)
             rc = true;
         visual++;
@@ -903,25 +888,14 @@ void YXApplication::setClipboardText(const ustring &data) {
 
 const char* YXApplication::getHelpText() {
     return _(
-    "  --display=NAME      NAME of the X server to use.\n"
+    "  -d, --display=NAME  NAME of the X server to use.\n"
     "  --sync              Synchronize X11 commands.\n"
     );
 }
 
-YXApplication::YXApplication(int *argc, char ***argv, const char *displayName):
-    YApplication(argc, argv)
-{
-    xapp = this;
-    lastEventTime = CurrentTime;
-    fGrabWindow = 0;
-    fGrabTree = 0;
-    fXGrabWindow = 0;
-    fGrabMouse = 0;
-    fPopup = 0;
-    fClip = 0;
-    fReplayEvent = false;
-
-    bool runSynchronized(false);
+YXApplication::AppArgs
+YXApplication::parseArgs(int *argc, char ***argv, const char *displayName) {
+    AppArgs appArgs = { displayName, None, };
 
     for (char ** arg = *argv + 1; arg < *argv + *argc; ++arg) {
         if (**arg == '-') {
@@ -932,56 +906,103 @@ YXApplication::YXApplication(int *argc, char ***argv, const char *displayName):
             else if (is_version_switch(*arg)) {
                 print_version_exit(VERSION);
             }
-            else if (GetLongArgument(value, "display", arg, *argv+*argc)) {
-                displayName = value;
+            else if (is_copying_switch(*arg)) {
+                print_copying_exit();
+            }
+            else if (GetArgument(value, "d", "display", arg, *argv+*argc)) {
+                appArgs.displayName = value;
             }
             else if (is_long_switch(*arg, "sync"))
-                runSynchronized = true;
+                appArgs.runSynchronized = true;
         }
     }
 
-    if (displayName == 0)
-        displayName = getenv("DISPLAY");
+    if (appArgs.displayName == None)
+        appArgs.displayName = getenv("DISPLAY");
     else
-        setenv("DISPLAY", displayName, 1);
+        setenv("DISPLAY", appArgs.displayName, True);
 
-    if (!(fDisplay = XOpenDisplay(displayName)))
+    return appArgs;
+}
+
+Display* YXApplication::openDisplay() {
+    Display* display = XOpenDisplay(fArgs.displayName);
+    if (display == 0)
         die(1, _("Can't open display: %s. X must be running and $DISPLAY set."),
-            displayName ? displayName : _("<none>"));
+            fArgs.displayName ? fArgs.displayName : _("<none>"));
 
-    if (runSynchronized)
-        XSynchronize(display(), True);
+    if (fArgs.runSynchronized)
+        XSynchronize(display, True);
 
+    return display;
+}
+
+YXApplication::YXApplication(int *argc, char ***argv, const char *displayName):
+    YApplication(argc, argv),
+
+    fArgs( parseArgs(argc, argv, displayName)),
+    fDisplay( openDisplay()),
+    fScreen( DefaultScreen(display())),
+    fRoot(  RootWindow(display(), screen())),
+    fDepth( DefaultDepth(display(), screen())),
+    fVisual( DefaultVisual(display(), screen())),
+    fColormap( DefaultColormap(display(), screen())),
+    fBlack( BlackPixel(display(), screen())),
+    fWhite( WhitePixel(display(), screen())),
+
+    lastEventTime(CurrentTime),
+    fPopup(0),
+    fGrabTree(0),
+    fXGrabWindow(0),
+    fGrabMouse(0),
+    fGrabWindow(0),
+    fClip(0),
+    fReplayEvent(false)
+{
+    xapp = this;
     xfd.registerPoll(this, ConnectionNumber(display()));
 
     windowContext = XUniqueContext();
 
-    new YDesktop(0, RootWindow(display(), DefaultScreen(display())));
+    new YDesktop(0, root());
     extern void image_init();
     image_init();
 
     initAtoms();
     initModifiers();
     initPointers();
-    initColors();
+    initExtensions();
+}
+
+void YXApplication::initExtensions() {
 
 #ifdef CONFIG_SHAPE
-    shapesSupported = XShapeQueryExtension(display(),
-                                           &shapeEventBase, &shapeErrorBase);
-#endif
-#ifdef CONFIG_XRANDR
-    xrandrSupported = XRRQueryExtension(display(),
-                                        &xrandrEventBase, &xrandrErrorBase);
+    if ((shapesSupported = XShapeQueryExtension(display(),
+                                           &shapeEventBase, &shapeErrorBase)))
     {
-        int major = 0;
-        int minor = 0;
-        XRRQueryVersion(display(), &major, &minor);
-            
-        MSG(("XRRVersion: %d %d", major, minor)); 
-        if (major > 1 || (major == 1 && minor >= 2)) {
-            xrandrSupported = 1;
+        XShapeQueryVersion(display(),
+                &shapeVersionMajor, &shapeVersionMinor);
+    }
+#endif
+
+#ifdef CONFIG_RENDER
+    if ((renderSupported = XRenderQueryExtension(display(),
+                    &renderEventBase, &renderErrorBase)))
+    {
+        XRenderQueryVersion(display(),
+                &renderVersionMajor, &renderVersionMinor);
+    }
+#endif
+
+#ifdef CONFIG_XRANDR
+    if ((xrandrSupported = XRRQueryExtension(display(),
+                                        &xrandrEventBase, &xrandrErrorBase)))
+    {
+        XRRQueryVersion(display(), &xrandrVersionMajor, &xrandrVersionMinor);
+
+        MSG(("XRRVersion: %d %d", xrandrVersionMajor, xrandrVersionMinor));
+        if (12 <= 10 * xrandrVersionMajor + xrandrVersionMinor)
             xrandr12 = true;
-        }
     }
 #endif
 }
@@ -989,12 +1010,13 @@ YXApplication::YXApplication(int *argc, char ***argv, const char *displayName):
 YXApplication::~YXApplication() {
     xfd.unregisterPoll();
     XCloseDisplay(display());
-    fDisplay = 0;
     xapp = 0;
 }
 
 bool YXApplication::handleXEvents() {
-    if (XPending(display()) > 0) {
+    const int prratio = 3;
+    int retrieved = 0;
+    for (; retrieved < XPending(display()); retrieved += prratio - 1) {
         XEvent xev;
 
         XNextEvent(display(), &xev);
@@ -1005,19 +1027,18 @@ bool YXApplication::handleXEvents() {
 
         saveEventTime(xev);
 
-#ifdef DEBUG
-        DBG logEvent(xev);
-#endif
+        logEvent(xev);
+
         if (filterEvent(xev)) {
             ;
         } else {
-            int ge = (xev.type == ButtonPress ||
+            bool ge = xev.type == ButtonPress ||
                       xev.type == ButtonRelease ||
                       xev.type == MotionNotify ||
                       xev.type == KeyPress ||
                       xev.type == KeyRelease /*||
                       xev.type == EnterNotify ||
-                      xev.type == LeaveNotify*/) ? 1 : 0;
+                      xev.type == LeaveNotify*/;
 
             fReplayEvent = false;
 
@@ -1029,7 +1050,9 @@ bool YXApplication::handleXEvents() {
                 handleWindowEvent(xev.xany.window, xev);
             }
             if (fGrabWindow) {
-                if (xev.type == ButtonPress || xev.type == ButtonRelease || xev.type == MotionNotify)
+                if (xev.type == ButtonPress ||
+                    xev.type == ButtonRelease ||
+                    xev.type == MotionNotify)
                 {
                     if (!fReplayEvent) {
                         XAllowEvents(xapp->display(), SyncPointer, CurrentTime);
@@ -1038,15 +1061,14 @@ bool YXApplication::handleXEvents() {
             }
         }
         XFlush(display());
-        return true;
     }
-    return false;
+    return retrieved > 0;
 }
 
 bool YXApplication::handleIdle() {
     return handleXEvents();
 }
- 
+
 void YXApplication::handleWindowEvent(Window xwindow, XEvent &xev) {
     int rc = 0;
     union {
@@ -1060,7 +1082,7 @@ void YXApplication::handleWindowEvent(Window xwindow, XEvent &xev) {
                            &(window.xptr))) == 0)
     {
         if ((xev.type == KeyPress || xev.type == KeyRelease)
-            && window.ptr->toplevel() != 0) 
+            && window.ptr->toplevel() != 0)
         {
             YWindow *w = window.ptr;
 
@@ -1077,16 +1099,29 @@ void YXApplication::handleWindowEvent(Window xwindow, XEvent &xev) {
         if (xev.type == MapRequest) {
             // !!! java seems to do this ugliness
             //YFrameWindow *f = getFrame(xev.xany.window);
-            msg("APP BUG? mapRequest for window %lX sent to destroyed frame %lX!",
+            tlog("APP BUG? mapRequest for window %lX sent to destroyed frame %lX!",
                 xev.xmaprequest.parent,
                 xev.xmaprequest.window);
             desktop->handleEvent(xev);
         } else if (xev.type == ConfigureRequest) {
-            msg("APP BUG? configureRequest for window %lX sent to destroyed frame %lX!",
+            tlog("APP BUG? configureRequest for window %lX sent to destroyed frame %lX!",
                 xev.xmaprequest.parent,
                 xev.xmaprequest.window);
             desktop->handleEvent(xev);
-        } else if (xev.type != DestroyNotify) {
+        }
+        else if (xev.type == ClientMessage && desktop != 0) {
+            Atom mesg = xev.xclient.message_type;
+            if (mesg == _XA_NET_REQUEST_FRAME_EXTENTS) {
+                desktop->handleEvent(xev);
+            }
+            else
+            {
+                MSG(("Unknown client message %ld, win 0x%lX, data %ld,%ld",
+                     mesg, xev.xclient.window,
+                     xev.xclient.data.l[0], xev.xclient.data.l[1]));
+            }
+        }
+        else if (xev.type != DestroyNotify) {
             MSG(("unknown window 0x%lX event=%d", xev.xany.window, xev.type));
         }
     }
@@ -1095,7 +1130,7 @@ void YXApplication::handleWindowEvent(Window xwindow, XEvent &xev) {
 }
 
 void YXApplication::flushXEvents() {
-    XSync(display(), False);
+    XFlush(display());
 }
 
 void YXPoll::notifyRead() {
@@ -1109,3 +1144,21 @@ bool YXPoll::forRead() {
 }
 
 bool YXPoll::forWrite() { return false; }
+
+void YAtom::atomize() {
+    if (screen) {
+        char buf[256];
+        snprintf(buf, sizeof buf, "%s%d", name, xapp->screen());
+        atom = xapp->atom(buf);
+    } else {
+        atom = xapp->atom(name);
+    }
+}
+
+YAtom::operator Atom() {
+    if (atom == None)
+        atomize();
+    return atom;
+}
+
+// vim: set sw=4 ts=4 et:

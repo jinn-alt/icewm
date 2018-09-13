@@ -8,7 +8,6 @@
 #include "yxapp.h"
 #include "yaction.h"
 #include "wmmgr.h"
-#include "ypixbuf.h"
 #include "yrect.h"
 #include "sysdep.h"
 #include "ylocale.h"
@@ -77,8 +76,8 @@ public:
     YIconItem *findItemByPoint(int x, int y);
     int findItem(YIconItem *item);
 
-    virtual int contentWidth();
-    virtual int contentHeight();
+    virtual unsigned contentWidth();
+    virtual unsigned contentHeight();
     virtual YWindow *getWindow();
 
     virtual void activateItem(YIconItem *item);
@@ -95,14 +94,14 @@ private:
     int fOffsetX;
     int fOffsetY;
 
-    int conWidth;
-    int conHeight;
+    unsigned conWidth;
+    unsigned conHeight;
 
     void resetScrollBars();
     void freeItems();
     void updateItems();
 
-    YColor *bg, *fg;
+    YColorName bg, fg;
     ref<YFont> font;
     int fontWidth, fontHeight;
 };
@@ -184,17 +183,19 @@ void YIconView::updateItems() {
     }
 }
 
-YIconView::YIconView(YScrollView *view, YWindow *aParent): YWindow(aParent) {
+YIconView::YIconView(YScrollView *view, YWindow *aParent):
+    YWindow(aParent),
+    bg("rgb:CC/CC/CC"),
+    fg(YColor::black)
+{
     fView = view;
 
-    bg = new YColor("rgb:CC/CC/CC");
-    fg = YColor::black; //new YColor("rgb:00/00/00");
     font = YFont::getFont("-*-lucida-medium-r-*-*-*-120-*-*-*-*-*-*", "monospace:size=10");
     fontWidth = font->textWidth("M");
     fontHeight = font->height();
 
     if (fView) {
-        fVerticalScroll = view->getVerticalScrollBar();;
+        fVerticalScroll = view->getVerticalScrollBar();
         fHorizontalScroll = view->getHorizontalScrollBar();
     } else {
         fHorizontalScroll = 0;
@@ -277,8 +278,8 @@ bool YIconView::layout() {
         cx += aw;
         thisLine++;
 
-        if (cx > conWidth)
-            conWidth = cx;
+        if (cx > int(conWidth))
+            conWidth = unsigned(cx);
         icon = icon->getNext();
         conHeight = cy + ah;
     }
@@ -378,11 +379,11 @@ void YIconView::resetScrollBars() {
         fView->layout();
 }
 
-int YIconView::contentWidth() {
+unsigned YIconView::contentWidth() {
     return conWidth;
 }
 
-int YIconView::contentHeight() {
+unsigned YIconView::contentHeight() {
     return conHeight;
 }
 
@@ -425,7 +426,7 @@ char *ObjectIconItem::getLocation() {
     char *npath;
 
     npath = new char[nlen];
-    strcpy(npath, dir);
+    memcpy(npath, dir, dlen + 1);
     if (dlen == 0 || dir[dlen - 1] != '/') {
         strcpy(npath + dlen, "/");
         dlen++;
@@ -554,10 +555,8 @@ void ObjectIconView::activateItem(YIconItem *item) {
 int main(int argc, char **argv) {
     YLocale locale;
 
-#ifdef ENABLE_NLS
     bindtextdomain(PACKAGE, LOCDIR);
     textdomain(PACKAGE);
-#endif
 
     YXApplication app(&argc, &argv);
 
@@ -569,3 +568,5 @@ int main(int argc, char **argv) {
 
     return app.mainLoop();
 }
+
+// vim: set sw=4 ts=4 et:

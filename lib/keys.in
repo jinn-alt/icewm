@@ -15,26 +15,32 @@ key "Alt+Ctrl+x"		xchat
 key "Alt+Ctrl+l"		xscreensaver-command -lock
 key "Alt+Ctrl+e"		nedit
 key "Alt+Ctrl+g"		gimp
-key "Alt+Ctrl+b"		firefox
+key "Alt+Ctrl+b"		xbrowser
 key "Alt+Ctrl+m"		thunderbird
 key "Print"			scrot -b
 key "Alt+Print"			scrot -s
 
-key "Alt+Ctrl+KP_Divide"	amixer sset Master 5- >/dev/null 2>&1 # lower volume
-key "Alt+Ctrl+KP_Multiply"	amixer sset Master 5+ >/dev/null 2>&1 # raise volume
+key "Alt+Ctrl+KP_Divide"	amixer sset Master 5%- >/dev/null 2>&1 # lower volume
+key "Alt+Ctrl+KP_Multiply"	amixer sset Master 5%+ >/dev/null 2>&1 # raise volume
 
-# "Multimedia key" bindings for XFree86. Gather the keycodes of your
+# "Multimedia key" bindings for Xorg. Gather the keycodes of your
 # advanced function keys by watching the output of the xev command whilest
 # pressing those keys and map those symbols by using xmodmap.
 
+# Note: some of them might have unwanted side effects through concurrency with
+# other listeners like systemd for the suspend key events
+#
 key "XF86Standby"		killall -QUIT icewm
-key "XF86Sleep"			/bin/sh -c "{ test -e /run/systemd/system && systemctl suspend; } ||:"
-key "XF86AudioLowerVolume"	amixer sset Master 5- >/dev/null 2>&1
-key "XF86AudioRaiseVolume"	amixer sset Master 5+ >/dev/null 2>&1
-key "XF86AudioMute"		amixer sset Master toggle >/dev/null
+#key "XF86Sleep"			/bin/sh -c "{ test -e /run/systemd/system && systemctl suspend; } ||:"
+key "XF86AudioLowerVolume"	amixer sset Master 5%- >/dev/null 2>&1
+key "XF86AudioRaiseVolume"	amixer sset Master 5%+ >/dev/null 2>&1
+key "XF86AudioMute"		amixer sset Master toggle >/dev/null 2>&1
 key "XF86AudioPlay"		cdplay play 1
 key "XF86AudioStop"		cdplay stop
 key "XF86HomePage"		xdg-open file:///usr/share/doc/indexhtml/index.html
 key "XF86Mail"			thunderbird
 key "XF86Search"		xdg-open http://search.altlinux.org/
 key "XF86Eject"			eject
+key "XF86Calculator"			/bin/sh -c "gnome-calculator || xcalc || ( type bc >/dev/null 2>&1 && xterm -e bc -l)"
+
+switchkey "Super+p"			icewm-menu-xrandr

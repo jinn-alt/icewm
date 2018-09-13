@@ -4,6 +4,7 @@
 #include "ywindow.h"
 #include "ytimer.h"
 #include "yaction.h"
+#include "ypointer.h"
 
 class YMenu;
 
@@ -22,18 +23,18 @@ public:
     virtual void handleFocus(const XFocusChangeEvent &focus);
     virtual void handleClickDown(const XButtonEvent &down, int count);
     virtual void handleClick(const XButtonEvent &up, int count);
-    virtual void actionPerformed(YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual void handleSelection(const XSelectionEvent &selection);
 
-    bool move(int pos, bool extend);
+    bool move(unsigned pos, bool extend);
     bool hasSelection() const { return (curPos != markPos) ? true : false; }
     void replaceSelection(const ustring &str);
     bool deleteSelection();
     bool deleteNextChar();
     bool deletePreviousChar();
     bool insertChar(char ch);
-    int nextWord(int pos, bool sep);
-    int prevWord(int pos, bool sep);
+    unsigned nextWord(unsigned pos, bool sep);
+    unsigned prevWord(unsigned pos, bool sep);
     bool deleteNextWord();
     bool deletePreviousWord();
     bool deleteToEnd();
@@ -45,29 +46,36 @@ public:
     void complete();
 
 private:
-    ustring fText;
-    int markPos;
-    int curPos;
-    int leftOfs;
-    bool fHasFocus;
-    bool fCursorVisible;
-    bool fSelecting;
-
-    static int fAutoScrollDelta;
-
-    void limit();
-    int offsetToPos(int offset);
-    void autoScroll(int delta, const XMotionEvent *mouse);
     virtual bool handleTimer(YTimer *timer);
     virtual bool handleAutoScroll(const XMotionEvent &mouse);
 
-    static YColor *inputBg;
-    static YColor *inputFg;
-    static YColor *inputSelectionBg;
-    static YColor *inputSelectionFg;
-    static ref<YFont> inputFont;
-    static YTimer *cursorBlinkTimer;
-    static YMenu *inputMenu;
+    void limit();
+    void autoScroll(int delta, const XMotionEvent *mouse);
+    unsigned offsetToPos(int offset);
+
+    ustring fText;
+    unsigned markPos;
+    unsigned curPos;
+    int leftOfs;
+    int fAutoScrollDelta;
+    bool fHasFocus;
+    bool fCursorVisible;
+    bool fSelecting;
+    const short fBlinkTime;
+
+    ref<YFont> inputFont;
+    YColorName inputBg;
+    YColorName inputFg;
+    YColorName inputSelectionBg;
+    YColorName inputSelectionFg;
+    lazy<YTimer> cursorBlinkTimer;
+    osmart<YMenu> inputMenu;
+
+    YAction actionCut;
+    YAction actionCopy;
+    YAction actionPaste;
+    YAction actionSelectAll;
+    YAction actionPasteSelection;
 
 private: // not-used
     YInputLine(const YInputLine &);
@@ -76,3 +84,5 @@ private: // not-used
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

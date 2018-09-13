@@ -2,14 +2,14 @@
 #define __YBUTTON_H
 
 #include "ywindow.h"
+#include "yaction.h"
 
-class YAction;
-class YActionListener;
 class YMenu;
+class YIcon;
 
 class YButton: public YWindow {
 public:
-    YButton(YWindow *parent, YAction *action, YMenu *popup = 0);
+    YButton(YWindow *parent, YAction action, YMenu *popup = 0);
     virtual ~YButton();
 
     virtual void paint(Graphics &g, const YRect &r);
@@ -18,7 +18,8 @@ public:
     virtual void handleButton(const XButtonEvent &button);
     virtual void handleCrossing(const XCrossingEvent &crossing);
 
-    void setAction(YAction * action);
+    YAction getAction() const { return fAction; }
+    void setAction(YAction action);
     void setPopup(YMenu * popup);
     void setIcon(ref<YIcon> image, int size);
     void setImage(ref<YImage> image);
@@ -40,24 +41,25 @@ public:
     void setOver(bool over);
 
     void setArmed(bool armed, bool mousedown);
-    bool isPressed() const { return fPressed; } 
+    bool isPressed() const { return fPressed; }
     bool isSelected() const { return fSelected; }
     bool isArmed() const { return fArmed; }
     bool isPopupActive() const { return fPopupActive; }
 
-    virtual void actionPerformed(YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual ref<YFont> getFont();
-    virtual YColor * getColor();
+    virtual YColor   getColor();
     virtual YSurface getSurface();
 
+    void setEnabled(bool enabled);
+
+protected:
     bool fOver;
 
-    void setEnabled(bool enabled);
-    
 private:
     void paint(Graphics &g, int const d, const YRect &r);
 
-    YAction *fAction;
+    YAction fAction;
     YMenu *fPopup;
     ref<YIcon> fIcon;
     int fIconSize;
@@ -78,14 +80,18 @@ private:
     void popup(bool mouseDown);
     void popdown();
 
-    static YColor *normalButtonBg;
-    static YColor *normalButtonFg;
-    
-    static YColor *activeButtonBg;
-    static YColor *activeButtonFg;
-    
+protected:
+    static YColorName normalButtonBg;
+    static YColorName normalButtonFg;
+
+    static YColorName activeButtonBg;
+    static YColorName activeButtonFg;
+
+private:
     static ref<YFont> normalButtonFont;
     static ref<YFont> activeButtonFont;
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

@@ -120,7 +120,7 @@ globit_best(const char *pattern_, char **result)
 	    GLOB_NOSORT;
 	int is_absolute = 0;
 	char *pattern, *pf = NULL, *pp = NULL, *pathpfx = NULL, *pathstr = NULL;
-	size_t pathlen = 0;
+	size_t pathlen = 0, joinlen;
 	glob_t glob_block;
 	const char *errstr = NULL;
 
@@ -143,7 +143,9 @@ globit_best(const char *pattern_, char **result)
 	} else if (*pattern == '~') {
 		/* yes, tilde */
 		is_absolute = 2;
+#ifdef GLOB_TILDE
 		glob_flags |= GLOB_TILDE;
+#endif
 		/* any slash in the pattern? */
 		while (*cp && *cp != '/')
 			++cp;
@@ -176,12 +178,13 @@ globit_best(const char *pattern_, char **result)
 			goto oom;
 		free(pathpfx);
 		pathpfx = cp;
-		cp = (char *) malloc(strlen(pathpfx) + strlen(pattern) + 2);
+		joinlen = strlen(pathpfx) + strlen(pattern) + 2;
+		cp = (char *) malloc(joinlen);
 		if (!cp) {
 			errstr = "could not compose path";
 			goto errout;
 		}
-		sprintf(cp, "%s/%s", pathpfx, pattern);
+		snprintf(cp, joinlen, "%s/%s", pathpfx, pattern);
 		free(pf);
 		pf = cp;
 	}

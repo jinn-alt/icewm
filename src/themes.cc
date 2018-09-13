@@ -4,10 +4,7 @@
  * Copyright (C) 1997-2002 Marko Macek
  */
 #include "config.h"
-
-#ifndef NO_CONFIGURE_MENUS
 #include "themes.h"
-
 #include "yapp.h"
 #include "ymenu.h"
 #include "wmmgr.h"
@@ -73,19 +70,16 @@ void ThemesMenu::refresh() {
     upath libThemes = YApplication::getLibDir() + themes;
     upath cnfThemes = YApplication::getConfigDir() + themes;
     upath prvThemes = YApplication::getPrivConfDir() + themes;
-    upath xdgThemes = YApplication::getXdgConfDir() + themes;
 
     if (nestedThemeMenuMinNumber)
         themeCount =
             countThemes(libThemes) +
             countThemes(cnfThemes) +
-            countThemes(prvThemes) +
-            countThemes(xdgThemes);
+            countThemes(prvThemes);
 
-    findThemes(libThemes, this);
-    findThemes(cnfThemes, this);
     findThemes(prvThemes, this);
-    findThemes(xdgThemes, this);
+    findThemes(cnfThemes, this);
+    findThemes(libThemes, this);
 
     addSeparator();
     add(newThemeItem(app, smActionListener, _("Default"), CONFIG_DEFAULT_THEME));
@@ -123,10 +117,12 @@ YMenuItem * ThemesMenu::newThemeItem(
 void ThemesMenu::findThemes(const upath& path, YMenu *container) {
     ustring defTheme("/default.theme");
 
-    bool bNesting = nestedThemeMenuMinNumber && themeCount>nestedThemeMenuMinNumber;
+    bool bNesting = inrange(nestedThemeMenuMinNumber, 1, themeCount - 1);
+    char subName[5] = { 'X', '.','.','.', 0};
 
     for (udir dir(path); dir.next(); ) {
         YMenuItem *im(NULL);
+        YMenu* targetMenu = container;
         upath subdir = path + dir.entry();
         upath defThemePath = subdir + defTheme;
 
@@ -134,32 +130,60 @@ void ThemesMenu::findThemes(const upath& path, YMenu *container) {
             ustring relThemeName = dir.entry() + defTheme;
             im = newThemeItem(app, smActionListener, dir.entry(), relThemeName);
         }
-        if (im && bNesting) {
-            char fLetter = ASCII::toUpper(dir.entry()[0]);
-            int targetItem = container->findFirstLetRef(fLetter, 0, 1);
-            if (targetItem < 0) // no submenu for us yet, create one
-            {
-                char smname[] = "....";
-                smname[0] = fLetter;
 
-                YMenu *smenu = new YMenu();
-                YMenuItem *smItem = new YMenuItem(smname, 0, null, NULL, smenu);
-                if(smItem && smenu)
-                    container->addSorted(smItem, false);
-                targetItem = container->findFirstLetRef(fLetter, 0, 1);
-                if (targetItem < 0)
-                {
-                    warn("Failed to add submenu");
-                    return;
-                }
+        // maybe shift some stuff around to create a simple structure
+        if (im && bNesting) {
+                char fLetter = ASCII::toUpper(dir.entry()[0]);
+                subName[0] = fLetter;
+            int relatedItemPos = -2;
+
+            YMenuItem *subMenuItemTest = container->findName(subName);
+            if (subMenuItemTest && subMenuItemTest->getSubmenu())
+            {
+                targetMenu = subMenuItemTest->getSubmenu();
+                if (im->isChecked())
+                        subMenuItemTest->setChecked(true);
             }
-            container->getItem(targetItem)->getSubmenu()->addSorted(im, false);
+            else if (subMenuItemTest)
+            {
+                // looks like a submenu but is an item
+                // of that kind... weird, ignore
+            }
+            else if (0 > (relatedItemPos = container->findFirstLetRef(fLetter, 0, 1)))
+            {
+                MSG(("adding: %s to main menu", subdir.string().c_str()));
+            }
+            else
+            {
+                // ok, have the position of the related entry
+                // which needs to be moved to submenu
+                YMenuItem *relatedItem = container->getItem(relatedItemPos);
+                MSG(("Moving %s to submenu to prepare for %s",
+                                cstring(relatedItem->getName()).c_str(),
+                                subdir.string().c_str()));
+                YMenu *smenu = new YMenu();
+                smenu->addSorted(relatedItem, false, true);
+                YMenuItem *newItem = new YMenuItem(subName, 0, null, actionNull, smenu);
+                newItem->setChecked(relatedItem->isChecked() || im->isChecked());
+                container->setItem(relatedItemPos, newItem);
+                targetMenu = smenu;
+            }
         }
-        else if (im) { //the default method without Extra SubMenues
-            container->addSorted(im, false);
+
+        if (im) {
+            if (targetMenu->addSorted(im, false, true) == 0) {
+                delete im;
+                im = 0;
+            }
         }
         if (im) {
             findThemeAlternatives(app, smActionListener, subdir, dir.entry(), im);
+            if (im->isChecked()) {
+                YMenuItem *sub = container->findName(subName);
+                if (sub && sub->getSubmenu()) {
+                    sub->setChecked(true);
+                }
+            }
         }
     }
 }
@@ -189,11 +213,15 @@ void ThemesMenu::findThemeAlternatives(
                     int prefixLength = entry.length() - extension.length();
                     ustring tname(entry.substring(0, prefixLength));
                     ustring relThemeName = upath(relName) + entry;
-                    sub->add(newThemeItem(app, smActionListener,
-                                tname, relThemeName));
+                    YMenuItem *im = newThemeItem(app, smActionListener,
+                                tname, relThemeName);
+                    sub->add(im);
+                    if (im->isChecked())
+                        item->setChecked(true);
                 }
             }
         }
     }
 }
-#endif
+
+// vim: set sw=4 ts=4 et:

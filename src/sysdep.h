@@ -1,20 +1,15 @@
 #ifndef __SYSDEP_H
 #define __SYSDEP_H
 
-#ifdef __EMX__
-#define PATHSEP ';'
-#define SLASH '\\'
-#define ISSLASH(c) ((c) == '/' || (c) == '\\')
-#else
 #define PATHSEP ':'
 #define SLASH '/'
-#define ISSLASH(c) ((c) == '/')
-#endif
+#define ISSLASH(c) ((c) == SLASH)
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <errno.h>
 #include <sys/types.h>
 #ifdef NEED_TIME_H
@@ -43,5 +38,10 @@
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
+#ifndef HOST_NAME_MAX
+# define HOST_NAME_MAX 64
+#endif
 
 #endif
+
+// vim: set sw=4 ts=4 et:

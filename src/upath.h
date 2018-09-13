@@ -12,10 +12,11 @@ class upath {
 public:
     upath(const class null_ref &): fPath(null) {}
     upath(const pstring& path): fPath(path) {}
+    upath(const cstring& path): fPath(path.m_str()) {}
     upath(const char *path): fPath(path) {}
     upath(const char *path, int len): fPath(path, len) {}
-    upath(const upath& path): fPath(path.fPath) {};
-    upath(): fPath(null) {};
+    upath(const upath& path): fPath(path.fPath) {}
+    upath(): fPath(null) {}
 
     int length() const { return fPath.length(); }
     bool isEmpty() const { return fPath.isEmpty(); }
@@ -38,12 +39,14 @@ public:
     bool isHttp() const;
     bool hasProtocol() const;
     int access(int mode = 0) const;
-    int mkdir(int mode = 0777) const;
+    int mkdir(int mode = 0700) const;
     int open(int flags, int mode = 0666) const;
     FILE* fopen(const char *mode) const;
     int stat(struct stat *st) const;
     int remove() const;
     int renameAs(const pstring& dest) const;
+    off_t fileSize() const;
+    bool glob(const char* pattern, class YStringArray& list) const;
 
     upath& operator=(const upath& p) {
         fPath = p.fPath;
@@ -79,4 +82,19 @@ private:
     static const upath rootPath;
 };
 
+class fileptr {
+    FILE* fp;
+public:
+    fileptr(FILE* fp) : fp(fp) { }
+    ~fileptr() { close(); }
+    void close() { if (fp) { fclose(fp); fp = 0; } }
+    fileptr& operator=(FILE* ptr) { close(); fp = ptr; return *this; }
+    operator FILE*() const { return fp; }
+    FILE* operator->() const { return fp; }
+};
+
+upath findPath(ustring path, int mode, upath name);
+
 #endif
+
+// vim: set sw=4 ts=4 et:

@@ -4,6 +4,11 @@
 #include "ywindow.h"
 #include "ymenu.h"
 #include "MwmUtil.h"
+#ifndef InputHint
+#include <X11/Xutil.h>
+#endif
+
+#define InvalidFrameState   (-1)
 
 class YFrameWindow;
 class WindowListItem;
@@ -13,38 +18,38 @@ typedef int FrameState;
 
 class ClientData {
 public:
-#ifdef CONFIG_WINLIST
     virtual void setWinListItem(WindowListItem *i) = 0;
-#endif
     virtual YFrameWindow *owner() const = 0;
-#ifndef LITE
     virtual ref<YIcon> getIcon() const = 0;
-#endif
     virtual ustring getTitle() const = 0;
     virtual ustring getIconTitle() const = 0;
     virtual void activateWindow(bool raise) = 0;
     virtual bool isHidden() const = 0;
     virtual bool isMinimized() const = 0;
-    virtual void actionPerformed(YAction *action, unsigned int modifiers) = 0;
+    virtual void actionPerformed(YAction action, unsigned int modifiers) = 0;
     virtual bool focused() const = 0;
     virtual bool visibleNow() const = 0;
     virtual bool canRaise() = 0;
     virtual void wmRaise() = 0;
     virtual void wmLower() = 0;
     virtual void wmMinimize() = 0;
-    virtual long getWorkspace() const = 0;
+    virtual int getWorkspace() const = 0;
+    virtual int getTrayOrder() const = 0;
     virtual bool isSticky() const = 0;
-    virtual void wmOccupyWorkspace(long workspace) = 0;
-    virtual void wmOccupyOnlyWorkspace(long workspace) = 0;
+    virtual bool isAllWorkspaces() const = 0;
+    virtual void wmOccupyWorkspace(int workspace) = 0;
+    virtual void wmOccupyOnlyWorkspace(int workspace) = 0;
     virtual void popupSystemMenu(YWindow *owner) = 0;
     virtual void popupSystemMenu(YWindow *owner, int x, int y,
                          unsigned int flags,
                          YWindow *forWindow = 0) = 0;
 protected:
-    virtual ~ClientData() {};
+    virtual ~ClientData() {}
 };
 
-class YFrameClient: public YWindow  {
+class YFrameClient: public YWindow
+                  , public YTimerListener
+{
 public:
     YFrameClient(YWindow *parent, YFrameWindow *frame, Window win = 0);
     virtual ~YFrameClient();
@@ -65,19 +70,23 @@ public:
 
     enum {
         wpDeleteWindow = 1 << 0,
-        wpTakeFocus    = 1 << 1
+        wpTakeFocus    = 1 << 1,
+        wpPing         = 1 << 2,
     } WindowProtocols;
 
     void sendMessage(Atom msg, Time timeStamp);
     bool sendTakeFocus();
     bool sendDelete();
+    bool sendPing();
+    void recvPing(const XClientMessageEvent &message);
+    bool killPid();
 
     enum {
         csKeepX = 1,
         csKeepY = 2,
         csRound = 4
     };
-    
+
     void constrainSize(int &w, int &h, int flags);
 
     void gravityOffsets(int &xp, int &yp);
@@ -93,13 +102,13 @@ public:
 
     void getSizeHints();
     XSizeHints *sizeHints() const { return fSizeHints; }
-    
+
     // for going fullscreen and back
     XSizeHints savedSizeHints;
     void saveSizeHints();
     void restoreSizeHints();
 
-    unsigned long protocols() const { return fProtocols; }
+    unsigned protocols() const { return fProtocols; }
     void getProtocols(bool force);
 
     void getTransient();
@@ -126,28 +135,19 @@ public:
     void setWinWorkspaceHint(long workspace);
     bool getWinWorkspaceHint(long *workspace);
 
-#if defined(GNOME1_HINTS) || defined(WMSPEC_HINTS)
     void setWinLayerHint(long layer);
-#endif
-#if defined(GNOME1_HINTS)
     bool getWinLayerHint(long *layer);
-#endif
 
-#ifdef CONFIG_TRAY
     void setWinTrayHint(long tray_opt);
     bool getWinTrayHint(long *tray_opt);
-#endif
 
     void setWinStateHint(long mask, long state);
     bool getWinStateHint(long *mask, long *state);
 
-#if defined(GNOME1_HINTS)
     void setWinHintsHint(long hints);
     bool getWinHintsHint(long *hints);
-#endif
     long winHints() const { return fWinHints; }
 
-#ifdef WMSPEC_HINTS
     bool getNetWMIcon(int *count, long **elem);
     bool getNetWMStateHint(long *mask, long *state);
     bool getNetWMDesktopHint(long *workspace);
@@ -158,26 +158,26 @@ public:
     bool getNetStartupId(unsigned long &time);
     bool getNetWMUserTime(Window window, unsigned long &time);
     bool getNetWMUserTimeWindow(Window &window);
+    bool getNetWMWindowOpacity(long &opacity);
     bool getNetWMWindowType(Atom *window_type);
     void setNetWMFullscreenMonitors(int top, int bottom, int left, int right);
     void setNetFrameExtents(int left, int right, int top, int bottom);
     void setNetWMAllowedActions(Atom *actions, int count);
-#endif
 
-#ifndef NO_MWM_HINTS
+    bool isPinging() const { return fPinging; }
+    bool pingTime() const { return fPingTime; }
+    virtual bool handleTimer(YTimer *t);
+
     MwmHints *mwmHints() const { return fMwmHints; }
     void getMwmHints();
     void setMwmHints(const MwmHints &mwm);
     long mwmFunctions();
     long mwmDecors();
-#endif
 
-#ifndef NO_KWM_HINTS
     bool getKwmIcon(int *count, Pixmap **pixmap);
-#endif
 
-#ifdef CONFIG_SHAPE
     bool shaped() const { return fShaped; }
+#ifdef CONFIG_SHAPE
     void queryShape();
 #endif
 
@@ -191,22 +191,28 @@ public:
     ustring getClientId(Window leader);
     void getPropertiesList();
 
-    void configure(const YRect &/*r*/);
+    virtual void configure(const YRect &rect);
+    virtual void handleGravityNotify(const XGravityEvent &gravity);
 
     bool isKdeTrayWindow() { return prop.kde_net_wm_system_tray_window_for; }
 
     bool isEmbed() { return prop.xembed_info; }
-    
+
 private:
     YFrameWindow *fFrame;
     int fProtocols;
     int haveButtonGrab;
     unsigned int fBorder;
+    FrameState fSavedFrameState;
+    long fSavedWinState[2];
     XSizeHints *fSizeHints;
     XClassHint *fClassHint;
     XWMHints *fHints;
     Colormap fColormap;
     bool fShaped;
+    bool fPinging;
+    long fPingTime;
+    lazy<YTimer> fPingTimer;
     long fWinHints;
 
     ustring fWindowTitle;
@@ -236,7 +242,6 @@ private:
         bool sm_client_id : 1;
         bool kwm_win_icon : 1;
         bool kde_net_wm_system_tray_window_for : 1;
-#ifdef WMSPEC_HINTS
         bool net_wm_name : 1;
         bool net_wm_icon_name : 1;
         bool net_wm_icon : 1;
@@ -248,17 +253,13 @@ private:
         bool net_startup_id : 1; // no property notify
         bool net_wm_user_time : 1;
         bool net_wm_user_time_window : 1;
-#endif
-#ifndef NO_MWM_HINTS
+        bool net_wm_window_opacity : 1;
         bool mwm_hints : 1;
-#endif
-#ifdef GNOME1_HINTS
         bool win_hints : 1;
         bool win_workspace : 1; // no property notify
         bool win_state : 1; // no property notify
         bool win_layer : 1; // no property notify
         bool win_icons : 1;
-#endif
         bool xembed_info : 1;
     } prop;
 private: // not-used
@@ -267,3 +268,5 @@ private: // not-used
 };
 
 #endif // YCLIENT_H
+
+// vim: set sw=4 ts=4 et:

@@ -32,4 +32,10 @@
 #define ICEHELPEXE "icehelp" QUOTE(EXEEXT)
 #endif
 
+#ifndef ICESOUNDEXE
+#define ICESOUNDEXE "icesound" QUOTE(EXEEXT)
 #endif
+
+#endif
+
+// vim: set sw=4 ts=4 et:

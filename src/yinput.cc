@@ -5,79 +5,52 @@
  */
 #include "config.h"
 #include "globit.h"
-
-#ifndef LITE
-#include "ykey.h"
 #include "yinputline.h"
 #include "ymenu.h"
 #include "ymenuitem.h"
-
 #include "yxapp.h"
 #include "prefs.h"
-
-#include <string.h>
-#include <stdlib.h>
-#include <limits.h>
-
 #include "intl.h"
 
-ref<YFont> YInputLine::inputFont;
-YColor *YInputLine::inputBg = 0;
-YColor *YInputLine::inputFg = 0;
-YColor *YInputLine::inputSelectionBg = 0;
-YColor *YInputLine::inputSelectionFg = 0;
-YTimer *YInputLine::cursorBlinkTimer = 0;
-YMenu *YInputLine::inputMenu = 0;
+#ifndef UINT_MAX
+#include <limits.h>
+#endif
 
-int YInputLine::fAutoScrollDelta = 0;
+YInputLine::YInputLine(YWindow *parent):
+    YWindow(parent),
+    fText(null),
+    markPos(0),
+    curPos(0),
+    leftOfs(0),
+    fAutoScrollDelta(0),
+    fHasFocus(false),
+    fCursorVisible(true),
+    fSelecting(false),
+    fBlinkTime(333),
+    inputFont(YFont::getFont(XFA(inputFontName))),
+    inputBg(&clrInput),
+    inputFg(&clrInputText),
+    inputSelectionBg(&clrInputSelection),
+    inputSelectionFg(&clrInputSelectionText),
+    inputMenu(new YMenu())
+{
+    inputMenu->setActionListener(this);
+    inputMenu->addItem(_("_Copy"), -2, _("Ctrl+C"), actionCopy)
+             ->setEnabled(true);
+    inputMenu->addItem(_("Cu_t"), -2, _("Ctrl+X"), actionCut)
+             ->setEnabled(true);
+    inputMenu->addItem(_("_Paste"), -2, _("Ctrl+V"), actionPaste)
+             ->setEnabled(true);
+    inputMenu->addItem(_("Paste _Selection"), -2, _("Ctrl+P"), actionPasteSelection)
+             ->setEnabled(true);
+    inputMenu->addSeparator();
+    inputMenu->addItem(_("Select _All"), -2, _("Ctrl+A"), actionSelectAll);
 
-static YAction *actionCut, *actionCopy, *actionPaste, *actionSelectAll, *actionPasteSelection;
-
-YInputLine::YInputLine(YWindow *parent): YWindow(parent), fText(null) {
-    if (inputFont == null)
-        inputFont = YFont::getFont(XFA(inputFontName));
-    if (inputBg == 0)
-        inputBg = new YColor(clrInput);
-    if (inputFg == 0)
-        inputFg = new YColor(clrInputText);
-    if (inputSelectionBg == 0)
-        inputSelectionBg = new YColor(clrInputSelection);
-    if (inputSelectionFg == 0)
-        inputSelectionFg = new YColor(clrInputSelectionText);
-    if (inputMenu == 0) {
-        inputMenu = new YMenu();
-        if (inputMenu) {
-            actionCut = new YAction();
-            actionCopy = new YAction();
-            actionPaste = new YAction();
-            actionPasteSelection = new YAction();
-            actionSelectAll = new YAction();
-            inputMenu->setActionListener(this);
-            inputMenu->addItem(_("Cu_t"), -2, _("Ctrl+X"), actionCut)->setEnabled(true);
-            inputMenu->addItem(_("_Copy"), -2, _("Ctrl+C"), actionCopy)->setEnabled(true);
-            inputMenu->addItem(_("_Paste"), -2, _("Ctrl+V"), actionPaste)->setEnabled(true);
-            inputMenu->addItem(_("Paste _Selection"), -2, null, actionPasteSelection)->setEnabled(true);
-            inputMenu->addSeparator();
-            inputMenu->addItem(_("Select _All"), -2, _("Ctrl+A"), actionSelectAll);
-        }
-    }
-
-    curPos = 0;
-    markPos = 0;
-    leftOfs = 0;
-    fHasFocus = false;
-    fSelecting = false;
-    fCursorVisible = true;
     if (inputFont != null)
         setSize(width(), inputFont->height() + 2);
 }
+
 YInputLine::~YInputLine() {
-    if (cursorBlinkTimer) {
-        if (cursorBlinkTimer->getTimerListener() == this) {
-            cursorBlinkTimer->stopTimer();
-            cursorBlinkTimer->setTimerListener(0);
-        }
-    }
 }
 
 void YInputLine::setText(const ustring &text) {
@@ -182,7 +155,7 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
 
         int m = KEY_MODMASK(key.state);
         bool extend = (m & ShiftMask) ? true : false;
-        int textLen = fText.length();
+        unsigned textLen = fText.length();
 
         if (m & ControlMask) {
             switch(k) {
@@ -209,10 +182,10 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
             case XK_KP_Insert:
                 copySelection();
                 return true;
-	    case 'i':
-	    case 'I':
-		complete();
-		return true;
+            case 'i':
+            case 'I':
+                complete();
+                return true;
             }
         }
         if (m & ShiftMask) {
@@ -231,7 +204,7 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
         case XK_Left:
         case XK_KP_Left:
             if (m & ControlMask) {
-                int p = prevWord(curPos, false);
+                unsigned p = prevWord(curPos, false);
                 if (p != curPos) {
                     if (move(p, extend))
                         return true;
@@ -246,7 +219,7 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
         case XK_Right:
         case XK_KP_Right:
             if (m & ControlMask) {
-                int p = nextWord(curPos, false);
+                unsigned p = nextWord(curPos, false);
                 if (p != curPos) {
                     if (move(p, extend))
                         return true;
@@ -306,9 +279,9 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
                 }
             }
             break;
-	case XK_Tab:
-	    complete();
-	    break;
+        case XK_Tab:
+            complete();
+            break;
         default:
             {
                 char s[16];
@@ -355,7 +328,7 @@ void YInputLine::handleMotion(const XMotionEvent &motion) {
             autoScroll(8, &motion); // fix
         else {
             autoScroll(0, &motion);
-            int c = offsetToPos(motion.x + leftOfs);
+            unsigned c = offsetToPos(motion.x + leftOfs);
             if (getClickCount() == 2) {
                 if (c >= markPos) {
                     if (markPos > curPos)
@@ -380,8 +353,8 @@ void YInputLine::handleMotion(const XMotionEvent &motion) {
 void YInputLine::handleClickDown(const XButtonEvent &down, int count) {
     if (down.button == 1) {
         if ((count % 4) == 2) {
-            int l = prevWord(curPos, true);
-            int r = nextWord(curPos, true);
+            unsigned l = prevWord(curPos, true);
+            unsigned r = nextWord(curPos, true);
             if (l != markPos || r != curPos) {
                 markPos = l;
                 curPos = r;
@@ -436,9 +409,9 @@ void YInputLine::handleSelection(const XSelectionEvent &selection) {
     }
 }
 
-int YInputLine::offsetToPos(int offset) {
+unsigned YInputLine::offsetToPos(int offset) {
     ref<YFont> font = inputFont;
-    int ofs = 0, pos = 0;;
+    int ofs = 0, pos = 0;
     int textLen = fText.length();
 
     if (font != null) {
@@ -455,25 +428,17 @@ int YInputLine::offsetToPos(int offset) {
 
 void YInputLine::handleFocus(const XFocusChangeEvent &focus) {
     if (focus.type == FocusIn /* && fHasFocus == false*/
-        && focus.detail != NotifyPointer && focus.detail != NotifyPointerRoot)
+        && focus.detail != NotifyPointer
+        && focus.detail != NotifyPointerRoot)
     {
         fHasFocus = true;
         selectAll();
-        if (cursorBlinkTimer == 0)
-            cursorBlinkTimer = new YTimer(300);
-        if (cursorBlinkTimer) {
-            cursorBlinkTimer->setTimerListener(this);
-            cursorBlinkTimer->startTimer();
-        }
-    } else if (focus.type == FocusOut/* && fHasFocus == true*/) {
+        cursorBlinkTimer->setTimer(fBlinkTime, this, true);
+    }
+    else if (focus.type == FocusOut/* && fHasFocus == true*/) {
         fHasFocus = false;
         repaint();
-        if (cursorBlinkTimer) {
-            if (cursorBlinkTimer->getTimerListener() == this) {
-                cursorBlinkTimer->stopTimer();
-                cursorBlinkTimer->setTimerListener(0);
-            }
-        }
+        cursorBlinkTimer = null;
     }
 }
 
@@ -494,17 +459,17 @@ bool YInputLine::handleAutoScroll(const XMotionEvent & /*mouse*/) {
 
 bool YInputLine::handleTimer(YTimer *t) {
     if (t == cursorBlinkTimer) {
-        fCursorVisible = fCursorVisible ? false : true;
+        fCursorVisible ^= true;
         repaint();
-        return true;
+        return fHasFocus;
     }
     return false;
 }
 
-bool YInputLine::move(int pos, bool extend) {
-    int textLen = fText.length();
+bool YInputLine::move(unsigned pos, bool extend) {
+    unsigned textLen = fText.length();
 
-    if (curPos < 0 || curPos > textLen)
+    if (curPos > textLen)
         return false;
 
     if (curPos != pos || (!extend && curPos != markPos)) {
@@ -520,16 +485,12 @@ bool YInputLine::move(int pos, bool extend) {
 }
 
 void YInputLine::limit() {
-    int textLen = fText.length();
+    unsigned textLen = fText.length();
 
     if (curPos > textLen)
         curPos = textLen;
-    if (curPos < 0)
-        curPos = 0;
     if (markPos > textLen)
         markPos = textLen;
-    if (markPos < 0)
-        markPos = 0;
 
     ref<YFont> font = inputFont;
     if (font != null) {
@@ -548,24 +509,13 @@ void YInputLine::limit() {
 }
 
 void YInputLine::replaceSelection(const ustring &str) {
-    int min, max;
-
-    // FIXME: GCC7 tells us for optimized builds: src/yinput.cc:552:5: warning: assuming signed overflow does not occur when assuming that (X + c) < X is always false [-Wstrict-overflow]
-    // that might imply that all code paths leading to here are already such that the condition always holds true
-    // Unfortunatelly GCC does not help much here.
-    if (curPos > markPos) {
-        min = markPos;
-        max = curPos;
-    } else {
-        min = curPos;
-        max = markPos;
-    }
-
-    ustring newStr = fText.replace(min, max - min, str);
+    unsigned from=min(curPos, markPos);
+    unsigned to=max(curPos, markPos);
+    ustring newStr = fText.replace(from, to - from, str);
 
     if (newStr != null) {
         fText = newStr;
-        curPos = markPos = min + str.length();
+        curPos = markPos = from + str.length();
         limit();
         repaint();
     }
@@ -580,10 +530,10 @@ bool YInputLine::deleteSelection() {
 }
 
 bool YInputLine::deleteNextChar() {
-    int textLen = fText.length();
+    unsigned textLen = fText.length();
 
     if (curPos < textLen) {
-        markPos = curPos + (curPos < INT_MAX);
+        markPos = curPos + (curPos < UINT_MAX);
         deleteSelection();
         return true;
     }
@@ -607,8 +557,8 @@ bool YInputLine::insertChar(char ch) {
 
 #define CHCLASS(c) ((c) == ' ')
 
-int YInputLine::nextWord(int p, bool sep) {
-    int textLen = fText.length();
+unsigned YInputLine::nextWord(unsigned p, bool sep) {
+    unsigned textLen = fText.length();
 
     while (p < textLen &&
            (CHCLASS(fText.charAt(p)) == CHCLASS(fText.charAt(p + 1)) ||
@@ -621,7 +571,7 @@ int YInputLine::nextWord(int p, bool sep) {
     return p;
 }
 
-int YInputLine::prevWord(int p, bool sep) {
+unsigned YInputLine::prevWord(unsigned p, bool sep) {
     if (p > 0 && !sep)
         p--;
     while (p > 0 &&
@@ -634,15 +584,16 @@ int YInputLine::prevWord(int p, bool sep) {
 }
 
 bool YInputLine::deleteNextWord() {
-    int p = nextWord(curPos, false);
+    unsigned p = nextWord(curPos, false);
     if (p != curPos) {
         markPos = p;
         return deleteSelection();
     }
     return false;
 }
+
 bool YInputLine::deletePreviousWord() {
-    int p = prevWord(curPos, false);
+    unsigned p = prevWord(curPos, false);
     if (p != curPos) {
         markPos = p;
         return deleteSelection();
@@ -651,7 +602,7 @@ bool YInputLine::deletePreviousWord() {
 }
 
 bool YInputLine::deleteToEnd() {
-    int textLen = fText.length();
+    unsigned textLen = fText.length();
 
     if (curPos < textLen) {
         markPos = textLen;
@@ -708,7 +659,7 @@ void YInputLine::copySelection() {
     }
 }
 
-void YInputLine::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+void YInputLine::actionPerformed(YAction action, unsigned int /*modifiers*/) {
     if (action == actionSelectAll)
         selectAll();
     else if (action == actionPaste)
@@ -725,6 +676,7 @@ void YInputLine::autoScroll(int delta, const XMotionEvent *motion) {
     fAutoScrollDelta = delta;
     beginAutoScroll(delta ? true : false, motion);
 }
+
 void YInputLine::complete() {
     char *res=NULL;
     int  res_count=0;
@@ -732,14 +684,14 @@ void YInputLine::complete() {
 
     res_count = globit_best(t.c_str(), &res);
     if (res_count == -1) { //error-case
-	    free(res);
-	    return;
+            free(res);
+            return;
     }
     if (res_count == 0) { //no match found
-	    return;
+            return;
     }
     setText(ustring(res, strlen(res)));
     free(res);
 }
 
-#endif
+// vim: set sw=4 ts=4 et:

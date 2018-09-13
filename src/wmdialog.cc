@@ -7,7 +7,7 @@
  */
 #include "config.h"
 
-#include "ykey.h"
+#include "ypaths.h"
 #include "wmdialog.h"
 #include "wmaction.h"
 #include "yactionbutton.h"
@@ -16,38 +16,32 @@
 #include "wmapp.h"
 #include "wmmgr.h"
 #include "yrect.h"
+#include "ypointer.h"
 #include "sysdep.h"
 
 #include "intl.h"
 
-bool canLock() {
-    if (lockCommand == 0 || lockCommand[0] == 0)
+bool couldRunCommand(const char *cmd) {
+    if (isEmpty(cmd))
         return false;
     // else-case. Defined, but check whether it's executable first
-    char *copy = strdup(lockCommand);
-    char *term = strchr(copy, ' ');
-    if (term)
-        *term = 0x0;
-    term = strchr(copy, '\t');
-    if (term)
-        *term = 0x0;
-    upath whereis = findPath(getenv("PATH"), X_OK, copy);
-    if (whereis != null) {
-        free(copy);
-        return true;
-    }
-    free(copy);
-    return false;
+    csmart copy(newstr(cmd));
+    char *save = 0;
+    char *tokn = strtok_r(copy, " \t\n", &save);
+    return tokn && findPath(getenv("PATH"), X_OK, tokn) != null;
 }
 
-bool canShutdown(bool reboot) {
-    if (!reboot)
-        if (shutdownCommand == 0 || shutdownCommand[0] == 0)
+bool canLock()
+{
+    return couldRunCommand(lockCommand);
+}
+
+bool canShutdown(RebootShutdown reboot) {
+    if (reboot == Shutdown && isEmpty(shutdownCommand))
             return false;
-    if (reboot)
-        if (rebootCommand == 0 || rebootCommand[0] == 0)
+    if (reboot == Reboot && isEmpty(rebootCommand))
             return false;
-    if (logoutCommand && logoutCommand[0])
+    if (nonempty(logoutCommand))
         return false;
 #ifdef CONFIG_SESSION
     if (smapp->haveSessionManager())
@@ -56,104 +50,59 @@ bool canShutdown(bool reboot) {
     return true;
 }
 
-#ifndef LITE
-
 #define HORZ 10
 #define MIDH 10
 #define VERT 10
 #define MIDV 6
 
-static YColor *cadBg = 0;
-
-CtrlAltDelete *ctrlAltDelete = 0;
+static YColorName cadBg(&clrDialog);
 
 CtrlAltDelete::CtrlAltDelete(IApp *app, YWindow *parent): YWindow(parent) {
     this->app = app;
-    int w = 0, h = 0;
-    YButton *b;
-
-    if (cadBg == 0)
-        cadBg = new YColor(clrDialog);
+    unsigned w = 0, h = 0;
 
     setStyle(wsOverrideRedirect);
     setPointer(YXApplication::leftPointer);
     setToplevel(true);
- 
-    b = lockButton = new YActionButton(this);
-    b->setText(_("Loc_k Workstation"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
 
-    b = logoutButton = new YActionButton(this);
-    b->setText(_("_Logout..."), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
+    /* Create the following buttons in an ordered sequence,
+     * such that tabbing through them is in reading order
+     * from left to right then top to bottom.
+     */
 
-    b = cancelButton = new YActionButton(this);
-    b->setText(_("_Cancel"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
+    lockButton = addButton(_("Loc_k Workstation"), w, h);
+    // TRANSLATORS: This means "energy saving mode" or "suspended system". Not "interrupt". Not "hibernate".
+    suspendButton = addButton(_("_Sleep mode"), w, h);
+    cancelButton = addButton(_("_Cancel"), w, h);
+    logoutButton = addButton(_("_Logout..."), w, h);
+    rebootButton = addButton(_("Re_boot"), w, h);
+    shutdownButton = addButton(_("Shut_down"), w, h);
+    windowListButton = addButton(_("_Window list"), w, h);
+    restartButton = addButton(_("_Restart icewm"), w, h);
+    aboutButton = addButton(_("_About"), w, h);
 
-    b = restartButton = new YActionButton(this);
-    b->setText(_("_Restart icewm"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
-
-    b = rebootButton = new YActionButton(this);
-    b->setText(_("Re_boot"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
-
-    b = shutdownButton = new YActionButton(this);
-    b->setText(_("Shut_down"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
-
-    b = aboutButton = new YActionButton(this);
-    b->setText(_("_About"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
-
-    b = windowListButton = new YActionButton(this);
-    b->setText(_("_Window list"), -2);
-    if (b->width() > w) w = b->width();
-    if (b->height() > h) h = b->height();
-    b->setActionListener(this);
-    b->show();
-
-
-    if (!canShutdown(true))
+    if (!canShutdown(Reboot))
         rebootButton->setEnabled(false);
-    if (!canShutdown(false))
+    if (!canShutdown(Shutdown))
         shutdownButton->setEnabled(false);
     if (!canLock())
         lockButton->setEnabled(false);
+    if (!couldRunCommand(suspendCommand))
+        suspendButton->setEnabled(false);
 
     setSize(HORZ + w + MIDH + w + MIDH + w + HORZ,
             VERT + h + MIDV + h + MIDV + h + VERT);
 
-    int dx, dy, dw, dh;
+    int dx, dy;
+    unsigned dw, dh;
     manager->getScreenGeometry(&dx, &dy, &dw, &dh);
     setPosition(dx + (dw - width()) / 2,
                 dy + (dh - height()) / 2);
 
     lockButton->setGeometry(YRect(HORZ, VERT, w, h));
-    logoutButton->setGeometry(YRect(HORZ, VERT + h + MIDV, w, h));
+    suspendButton->setGeometry(YRect(HORZ + w + MIDH, VERT, w, h));
     cancelButton->setGeometry(YRect(HORZ + w + MIDH + w + MIDH, VERT, w, h));
+    logoutButton->setGeometry(YRect(HORZ, VERT + h + MIDV, w, h));
     rebootButton->setGeometry(YRect(HORZ + w + MIDH, VERT + h + MIDV, w, h));
     shutdownButton->setGeometry(YRect(HORZ + w + MIDH + w + MIDH, VERT + h + MIDV, w, h));
     windowListButton->setGeometry(YRect(HORZ, VERT + 2 * (h + MIDV), w, h));
@@ -163,45 +112,44 @@ CtrlAltDelete::CtrlAltDelete(IApp *app, YWindow *parent): YWindow(parent) {
 
 CtrlAltDelete::~CtrlAltDelete() {
     delete lockButton; lockButton = 0;
-    delete logoutButton; logoutButton = 0;
-    delete restartButton; restartButton = 0;
+    delete suspendButton; suspendButton = 0;
     delete cancelButton; cancelButton = 0;
+    delete logoutButton; logoutButton = 0;
     delete rebootButton; rebootButton = 0;
     delete shutdownButton; shutdownButton = 0;
-    delete aboutButton; aboutButton = 0;
     delete windowListButton; windowListButton = 0;
+    delete restartButton; restartButton = 0;
+    delete aboutButton; aboutButton = 0;
 }
 
 void CtrlAltDelete::paint(Graphics &g, const YRect &/*r*/) {
-#ifdef CONFIG_GRADIENTS    
     YSurface surface(cadBg, logoutPixmap, logoutPixbuf);
-#else
-    YSurface surface(cadBg, logoutPixmap);
-#endif
     g.setColor(surface.color);
     g.drawSurface(surface, 1, 1, width() - 2, height() - 2);
     g.draw3DRect(0, 0, width() - 1, height() - 1, true);
 }
 
-void CtrlAltDelete::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+void CtrlAltDelete::actionPerformed(YAction action, unsigned int /*modifiers*/) {
     deactivate();
-    if (action == lockButton) {
+    if (action == *lockButton) {
         if (lockCommand && lockCommand[0])
             app->runCommand(lockCommand);
-    } else if (action == logoutButton) {
+    } else if (action == *logoutButton) {
         manager->doWMAction(ICEWM_ACTION_LOGOUT);
-    } else if (action == cancelButton) {
+    } else if (action == *cancelButton) {
         // !!! side-effect, not really nice
         manager->doWMAction(ICEWM_ACTION_CANCEL_LOGOUT);
-    } else if (action == restartButton) {
+    } else if (action == *restartButton) {
         manager->doWMAction(ICEWM_ACTION_RESTARTWM);
-    } else if (action == shutdownButton) {
+    } else if (action == *shutdownButton) {
         manager->doWMAction(ICEWM_ACTION_SHUTDOWN);
-    } else if (action == rebootButton) {
+    } else if (action == *rebootButton) {
         manager->doWMAction(ICEWM_ACTION_REBOOT);
-    } else if (action == aboutButton) {
+    } else if (action == *suspendButton) {
+        manager->doWMAction(ICEWM_ACTION_SUSPEND);
+    } else if (action == *aboutButton) {
         manager->doWMAction(ICEWM_ACTION_ABOUT);
-    } else if (action == windowListButton) {
+    } else if (action == *windowListButton) {
         manager->doWMAction(ICEWM_ACTION_WINDOWLIST);
     }
 }
@@ -209,10 +157,26 @@ void CtrlAltDelete::actionPerformed(YAction *action, unsigned int /*modifiers*/)
 bool CtrlAltDelete::handleKey(const XKeyEvent &key) {
     KeySym k = keyCodeToKeySym(key.keycode);
     int m = KEY_MODMASK(key.state);
-        
+
     if (key.type == KeyPress) {
         if (k == XK_Escape && m == 0) {
             deactivate();
+            return true;
+        }
+        if ((k == XK_Left || k == XK_KP_Left) && m == 0) {
+            prevFocus();
+            return true;
+        }
+        if ((k == XK_Right || k == XK_KP_Right) && m == 0) {
+            nextFocus();
+            return true;
+        }
+        if ((k == XK_Down || k == XK_KP_Down) && m == 0) {
+            nextFocus(); nextFocus(); nextFocus();
+            return true;
+        }
+        if ((k == XK_Up || k == XK_KP_Up) && m == 0) {
+            prevFocus(); prevFocus(); prevFocus();
             return true;
         }
     }
@@ -240,4 +204,16 @@ void CtrlAltDelete::deactivate() {
     XSync(xapp->display(), False);
     //manager->setFocus(manager->getFocus());
 }
-#endif
+
+YActionButton* CtrlAltDelete::addButton(const ustring& str, unsigned& maxW, unsigned& maxH)
+{
+        YActionButton* b = new YActionButton(this);
+    b->setText(str, -2);
+    if (b->width() > maxW) maxW = b->width();
+    if (b->height() > maxH) maxH = b->height();
+    b->setActionListener(this);
+    b->show();
+    return b;
+}
+
+// vim: set sw=4 ts=4 et:

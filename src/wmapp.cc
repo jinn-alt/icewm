@@ -6,10 +6,7 @@
 #include "config.h"
 
 #include "yfull.h"
-#include "atray.h"
 #include "wmapp.h"
-#include "wmaction.h"
-#include "wmmgr.h"
 #include "wmframe.h"
 #include "wmprog.h"
 #include "wmswitch.h"
@@ -20,38 +17,27 @@
 #include "wmwinmenu.h"
 #include "wmwinlist.h"
 #include "wmtaskbar.h"
-#include "wmclient.h"
-#include "ymenuitem.h"
 #include "wmsession.h"
 #include "wpixres.h"
-#include "browse.h"
-#include "objmenu.h"
-#include "objbutton.h"
-#include "aworkspaces.h"
-#include "themes.h"
 #include "sysdep.h"
-#include "prefs.h"
-#include "yimage.h"
 #include "ylocale.h"
-#include "yrect.h"
 #include "yprefs.h"
-#include "yicon.h"
 #include "prefs.h"
-#include "upath.h"
 #include "udir.h"
 #include "appnames.h"
-#include "ypointer.h"
+#include "ypaths.h"
+#ifdef CONFIG_XFREETYPE
+#include <ft2build.h>
+#include <X11/Xft/Xft.h>
+#endif
 #include "intl.h"
 
 char const *ApplicationName("IceWM");
-int rebootOrShutdown = 0;
+RebootShutdown rebootOrShutdown = Logout;
 static bool initializing(true);
-static bool restart(false);
 
 YWMApp *wmapp(NULL);
 YWindowManager *manager(NULL);
-
-static upath keysFile;
 
 Atom XA_IcewmWinOptHint(None);
 Atom XA_ICEWM_FONT_PATH(None);
@@ -75,95 +61,81 @@ YCursor YWMApp::scrollDownPointer;
 YMenu *windowMenu(NULL);
 YMenu *moveMenu(NULL);
 YMenu *layerMenu(NULL);
-
-#ifdef CONFIG_TRAY
 YMenu *trayMenu(NULL);
-#endif
-
-#ifdef CONFIG_WINMENU
 YMenu *windowListMenu(NULL);
-#endif
-
-#ifdef CONFIG_WINLIST
 YMenu *windowListPopup(NULL);
 YMenu *windowListAllPopup(NULL);
-#endif
 
 YMenu *logoutMenu(NULL);
 
-#ifndef NO_CONFIGURE
 static const char* configFile;
 static const char* overrideTheme;
-#endif
 
 #ifndef XTERMCMD
 #define XTERMCMD xterm
 #endif
 
-static const char* configArg;
-
 static ref<YIcon> defaultAppIcon;
 
 static bool replace_wm;
+static bool restart_wm;
 static bool post_preferences;
 
 static Window registerProtocols1(char **argv, int argc) {
     long timestamp = CurrentTime;
-    char buf[32];
-    sprintf(buf, "WM_S%d", DefaultScreen(xapp->display()));
-    Atom wmSx = XInternAtom(xapp->display(), buf, False);
-    Atom wm_manager = XInternAtom(xapp->display(), "MANAGER", False);
+    YAtom wmSx("WM_S", true);
+    YAtom wm_manager("MANAGER");
 
     Window current_wm = XGetSelectionOwner(xapp->display(), wmSx);
 
     if (current_wm != None) {
         if (!replace_wm)
-            die(1, "A window manager is already running, use --replace to replace it"); 
+            die(1, _("A window manager is already running, use --replace to replace it"));
       XSetWindowAttributes attrs;
       attrs.event_mask = StructureNotifyMask;
       XChangeWindowAttributes (
           xapp->display(), current_wm,
           CWEventMask, &attrs);
     }
-   
-    Window xroot = RootWindow(xapp->display(), DefaultScreen(xapp->display()));
-    Window xid = 
+
+    Window xroot = xapp->root();
+    Window xid =
         XCreateSimpleWindow(xapp->display(), xroot,
             0, 0, 1, 1, 0,
-            BlackPixel(xapp->display(), DefaultScreen(xapp->display())),
-            BlackPixel(xapp->display(), DefaultScreen(xapp->display())));
+            xapp->black(),
+            xapp->black());
 
     XSetSelectionOwner(xapp->display(), wmSx, xid, timestamp);
 
-    if (XGetSelectionOwner(xapp->display(), wmSx) != xid) 
-        die(1, "failed to set %s owner", buf);
+    if (XGetSelectionOwner(xapp->display(), wmSx) != xid)
+        die(1, _("Failed to become the owner of the %s selection"), wmSx.str());
 
     if (current_wm != None) {
         XEvent event;
-        msg("Waiting to replace the old window manager");
+        msg(_("Waiting to replace the old window manager"));
         do {
             XWindowEvent(xapp->display(), current_wm,
                          StructureNotifyMask, &event);
         } while (event.type != DestroyNotify);
-        msg("done.");
+        msg(_("done."));
     }
 
     char hostname[64] = { 0, };
     gethostname(hostname, 64);
 
     XTextProperty hname = {
-        .value = (unsigned char *) hostname,
-        .encoding = XA_STRING,
-        .format = 8,
-        .nitems = strnlen(hostname, 64)
+        (unsigned char *) hostname,
+        XA_STRING,
+        8,
+        strnlen(hostname, 64)
     };
 
     static char wm_class[] = "IceWM";
     static char wm_instance[] = "icewm";
 
     XClassHint class_hint = {
-        .res_name = (argv == NULL) ? wm_instance : NULL,
-        .res_class = wm_class
+        (argv == NULL) ? wm_instance : NULL,
+        wm_class
     };
 
     static char wm_name[] = "IceWM " VERSION " (" HOSTOS "/" HOSTCPU ")";
@@ -188,7 +160,6 @@ static Window registerProtocols1(char **argv, int argc) {
 }
 
 static void registerProtocols2(Window xid) {
-#ifdef GNOME1_HINTS
     Atom win_proto[] = {
 //      _XA_WIN_APP_STATE,
         _XA_WIN_AREA,
@@ -202,9 +173,7 @@ static void registerProtocols2(Window xid) {
         _XA_WIN_PROTOCOLS,
         _XA_WIN_STATE,
         _XA_WIN_SUPPORTING_WM_CHECK,
-#ifdef CONFIG_TRAY
         _XA_WIN_TRAY,
-#endif
         _XA_WIN_WORKAREA,
         _XA_WIN_WORKSPACE,
         _XA_WIN_WORKSPACE_COUNT,
@@ -216,7 +185,7 @@ static void registerProtocols2(Window xid) {
                     _XA_WIN_PROTOCOLS, XA_ATOM, 32,
                     PropModeReplace, (unsigned char *)win_proto, i);
 
-    XChangeProperty(xapp->display(), xid, 
+    XChangeProperty(xapp->display(), xid,
                     _XA_WIN_SUPPORTING_WM_CHECK, XA_CARDINAL, 32,
                     PropModeReplace, (unsigned char *)&xid, 1);
 
@@ -233,9 +202,7 @@ static void registerProtocols2(Window xid) {
     XChangeProperty(xapp->display(), manager->handle(),
                     _XA_WIN_AREA, XA_CARDINAL, 32,
                     PropModeReplace, (unsigned char *)&ca, 2);
-#endif
 
-#ifdef WMSPEC_HINTS
     Atom net_proto[] = {
         _XA_NET_ACTIVE_WINDOW,
         _XA_NET_CLIENT_LIST,
@@ -243,14 +210,14 @@ static void registerProtocols2(Window xid) {
         _XA_NET_CLOSE_WINDOW,
         _XA_NET_CURRENT_DESKTOP,
         _XA_NET_DESKTOP_GEOMETRY,
-//      _XA_NET_DESKTOP_LAYOUT,
+        _XA_NET_DESKTOP_LAYOUT,
         _XA_NET_DESKTOP_NAMES,
         _XA_NET_DESKTOP_VIEWPORT,
         _XA_NET_FRAME_EXTENTS,
         _XA_NET_MOVERESIZE_WINDOW,
         _XA_NET_NUMBER_OF_DESKTOPS,
 //      _XA_NET_PROPERTIES,
-//      _XA_NET_REQUEST_FRAME_EXTENTS,
+        _XA_NET_REQUEST_FRAME_EXTENTS,
         _XA_NET_RESTACK_WINDOW,
         _XA_NET_SHOWING_DESKTOP,
         _XA_NET_STARTUP_ID,
@@ -288,7 +255,7 @@ static void registerProtocols2(Window xid) {
         _XA_NET_WM_NAME,
 //      _XA_NET_WM_OPAQUE_REGION,
         _XA_NET_WM_PID,                     // trivial support
-//      _XA_NET_WM_PING,
+        _XA_NET_WM_PING,
         _XA_NET_WM_STATE,
         _XA_NET_WM_STATE_ABOVE,
         _XA_NET_WM_STATE_BELOW,
@@ -304,14 +271,14 @@ static void registerProtocols2(Window xid) {
         _XA_NET_WM_STATE_SKIP_TASKBAR,
         _XA_NET_WM_STATE_STICKY,            // trivial support
         _XA_NET_WM_STRUT,
-        _XA_NET_WM_STRUT_PARTIAL,	    // trivial support
+        _XA_NET_WM_STRUT_PARTIAL,           // trivial support
 //      _XA_NET_WM_SYNC_REQUEST,
 //      _XA_NET_WM_SYNC_REQUEST_COUNTER,
         _XA_NET_WM_USER_TIME,
         _XA_NET_WM_USER_TIME_WINDOW,
         _XA_NET_WM_VISIBLE_ICON_NAME,       // trivial support
         _XA_NET_WM_VISIBLE_NAME,            // trivial support
-//      _XA_NET_WM_WINDOW_OPACITY,
+        _XA_NET_WM_WINDOW_OPACITY,
         _XA_NET_WM_WINDOW_TYPE,
         _XA_NET_WM_WINDOW_TYPE_COMBO,
         _XA_NET_WM_WINDOW_TYPE_DESKTOP,
@@ -354,7 +321,6 @@ static void registerProtocols2(Window xid) {
     XChangeProperty(xapp->display(), manager->handle(),
                     _XA_NET_SUPPORTING_WM_CHECK, XA_WINDOW, 32,
                     PropModeReplace, (unsigned char *)&xid, 1);
-#endif
 }
 
 static void unregisterProtocols() {
@@ -388,7 +354,6 @@ void YWMApp::initAtoms() {
 }
 
 static void initFontPath(IApp *app) {
-#ifndef LITE
     if (themeName) { // =================== find the current theme directory ===
         upath themesFile(themeName);
         upath themesDir = themesFile.parent();
@@ -423,7 +388,7 @@ static void initFontPath(IApp *app) {
             cstring dir(fonts_dirDir.path());
             const char *fontsdir = dir.c_str();
 
-#if CONFIG_XFREETYPE >= 2
+#ifdef CONFIG_XFREETYPE
             MSG(("font dir add %s", fontsdir));
             FcConfigAppFontAddDir(0, (FcChar8 *)fontsdir);
 #endif
@@ -485,10 +450,8 @@ static void initFontPath(IApp *app) {
 #endif
         }
     }
-#endif
 }
 
-#ifndef LITE
 void YWMApp::initIcons() {
     defaultAppIcon = YIcon::getIcon("app");
 }
@@ -498,7 +461,20 @@ void YWMApp::termIcons() {
 ref<YIcon> YWMApp::getDefaultAppIcon() {
     return defaultAppIcon;
 }
-#endif
+
+CtrlAltDelete* YWMApp::getCtrlAltDelete() {
+    if (ctrlAltDelete == 0) {
+        ctrlAltDelete = new CtrlAltDelete(this, manager);
+    }
+    return ctrlAltDelete;
+}
+
+SwitchWindow* YWMApp::getSwitchWindow() {
+    if (switchWindow == 0 && quickSwitch) {
+        switchWindow = new SwitchWindow(manager, NULL, quickSwitchVertical);
+    }
+    return switchWindow;
+}
 
 void YWMApp::initPointers() {
     osmart<YCursorLoader> l(YCursor::newLoader());
@@ -522,11 +498,9 @@ static void initMenus(
     YSMListener *smActionListener,
     YActionListener *wmActionListener)
 {
-#ifdef CONFIG_WINMENU
     windowListMenu = new WindowListMenu(app);
     windowListMenu->setShared(true); // !!!
     windowListMenu->setActionListener(wmapp);
-#endif
 
     if (showLogoutMenu) {
         logoutMenu = new YMenu();
@@ -538,53 +512,23 @@ static void initMenus(
             logoutMenu->addItem(_("_Cancel logout"), -2, null, actionCancelLogout)->setEnabled(false);
             logoutMenu->addSeparator();
 
-#ifndef NO_CONFIGURE_MENUS
-            YStringArray noargs;
-
-#ifdef LITE
-#define canLock() true
-#define canShutdown(x) true
-#endif
             int const oldItemCount = logoutMenu->itemCount();
             if (canLock())
-#ifdef LITE
-                logoutMenu->addItem(_("Lock _Workstation"), -2, null, actionLock);
-#else
                 logoutMenu->addItem(_("Lock _Workstation"), -2, null, actionLock, "lock");
-#endif
-            if (canShutdown(true))
-#ifdef LITE
-                logoutMenu->addItem(_("Re_boot"), -2, null, actionReboot);
-#else
+            if (canShutdown(Reboot))
                 logoutMenu->addItem(_("Re_boot"), -2, null, actionReboot, "reboot");
-#endif
-            if (canShutdown(false))
-#ifdef LITE
-                logoutMenu->addItem(_("Shut_down"), -2, null, actionShutdown);
-#else
+            if (canShutdown(Shutdown))
                 logoutMenu->addItem(_("Shut_down"), -2, null, actionShutdown, "shutdown");
-#endif
+            if (couldRunCommand(suspendCommand))
+                logoutMenu->addItem(_("_Sleep mode"), -2, null, actionSuspend, "suspend");
+
             if (logoutMenu->itemCount() != oldItemCount)
                 logoutMenu->addSeparator();
 
-#ifdef LITE
-            logoutMenu->addItem(_("Restart _Icewm"), -2, null, actionRestart);
-#else
             logoutMenu->addItem(_("Restart _Icewm"), -2, null, actionRestart, "restart");
-#endif
 
-            DProgram *restartXTerm =
-                DProgram::newProgram(app, smActionListener, _("Restart _Xterm"),
-#ifdef LITE
-				null,
-#else
-				(YIcon::getIcon("xterm")),
-#endif
-				true, 0,
-                		QUOTE(XTERMCMD), noargs);
-            if (restartXTerm)
-                logoutMenu->add(new DObjectMenuItem(restartXTerm));
-#endif
+            logoutMenu->addItem(_("Restart _Xterm"), -2, null, actionRestartXterm, "xterm");
+
         }
     }
 
@@ -607,10 +551,23 @@ static void initMenus(
     moveMenu = new YMenu();
     assert(moveMenu != 0);
     moveMenu->setShared(true);
-    for (int w = 0; w < workspaceCount; w++) {
+    for (int w = 1; w <= workspaceCount; w++) {
         char s[128];
-        snprintf(s, sizeof s, "%lu. %s", (unsigned long)(w + 1), workspaceNames[w]);
-        moveMenu->addItem(s, 0, null, workspaceActionMoveTo[w]);
+        snprintf(s, sizeof s, "%2d.  %s ", w, workspaceNames[w - 1]);
+        moveMenu->addItem(s, 1,
+                w ==  1 ? KEY_NAME(gKeySysWorkspace1TakeWin)  :
+                w ==  2 ? KEY_NAME(gKeySysWorkspace2TakeWin)  :
+                w ==  3 ? KEY_NAME(gKeySysWorkspace3TakeWin)  :
+                w ==  4 ? KEY_NAME(gKeySysWorkspace4TakeWin)  :
+                w ==  5 ? KEY_NAME(gKeySysWorkspace5TakeWin)  :
+                w ==  6 ? KEY_NAME(gKeySysWorkspace6TakeWin)  :
+                w ==  7 ? KEY_NAME(gKeySysWorkspace7TakeWin)  :
+                w ==  8 ? KEY_NAME(gKeySysWorkspace8TakeWin)  :
+                w ==  9 ? KEY_NAME(gKeySysWorkspace9TakeWin)  :
+                w == 10 ? KEY_NAME(gKeySysWorkspace10TakeWin) :
+                w == 11 ? KEY_NAME(gKeySysWorkspace11TakeWin) :
+                w == 12 ? KEY_NAME(gKeySysWorkspace12TakeWin) :
+                "", workspaceActionMoveTo[w - 1]);
     }
 
     if (strchr(winMenuItems, 'r'))
@@ -626,10 +583,8 @@ static void initMenus(
     if (strchr(winMenuItems,'f') && allowFullscreen)
         windowMenu->addItem(_("_Fullscreen"), -2, KEY_NAME(gKeyWinFullscreen), actionFullscreen);
 
-#ifndef CONFIG_PDA
     if (strchr(winMenuItems, 'h'))
         windowMenu->addItem(_("_Hide"),     -2, KEY_NAME(gKeyWinHide), actionHide);
-#endif
     if (strchr(winMenuItems, 'u'))
         windowMenu->addItem(_("Roll_up"),   -2, KEY_NAME(gKeyWinRollup), actionRollup);
     if (strchr(winMenuItems, 'a') ||
@@ -656,10 +611,8 @@ static void initMenus(
         windowMenu->addItem(_("Limit _Workarea"), -2, null, actionDoNotCover);
 #endif
 
-#ifdef CONFIG_TRAY
     if (strchr(winMenuItems, 'i') && taskBarShowTray)
         windowMenu->addItem(_("Tray _icon"), -2, null, actionToggleTray);
-#endif
 
     if (strchr(winMenuItems, 'c') || strchr(winMenuItems, 'k'))
         windowMenu->addSeparator();
@@ -667,17 +620,14 @@ static void initMenus(
         windowMenu->addItem(_("_Close"), -2, KEY_NAME(gKeyWinClose), actionClose);
     if (strchr(winMenuItems, 'k'))
         windowMenu->addItem(_("_Kill Client"), -2, KEY_NAME(gKeyWinKill), actionKill);
-#ifdef CONFIG_WINLIST
     if (strchr(winMenuItems, 'w')) {
         windowMenu->addSeparator();
         windowMenu->addItem(_("_Window list"), -2, KEY_NAME(gKeySysWindowList), actionWindowList);
     }
-#endif
 
-#ifndef NO_CONFIGURE_MENUS
     rootMenu = new StartMenu(app, smActionListener, wmActionListener, "menu");
     rootMenu->setActionListener(wmapp);
-#endif
+    rootMenu->setShared(true);
 }
 
 int handler(Display *display, XErrorEvent *xev) {
@@ -690,24 +640,35 @@ int handler(Display *display, XErrorEvent *xev) {
         exit(1);
     }
 
-    DBG {
+    XDBG {
         char message[80], req[80], number[80];
 
-        sprintf(number, "%d", xev->request_code);
-        XGetErrorDatabaseText(display,
-                              "XRequest",
-                              number, "",
-                              req, sizeof(req));
-        if (!req[0])
-            sprintf(req, "[request_code=%d]", xev->request_code);
+        snprintf(number, sizeof number, "%d", xev->request_code);
+        XGetErrorDatabaseText(display, "XRequest", number, "", req, sizeof req);
+        if (req[0] == 0)
+            snprintf(req, sizeof req, "[request_code=%d]", xev->request_code);
 
-        if (XGetErrorText(display,
-                          xev->error_code,
-                          message, sizeof(message)) !=
-                          Success)
+        if (XGetErrorText(display, xev->error_code, message, sizeof message))
             *message = '\0';
 
-        warn("X error %s(0x%lX): %s", req, xev->resourceid, message);
+        tlog("X error %s(0x%lX): %s, #%lu, %+ld, %+ld.",
+             req, xev->resourceid, message,
+             xev->serial, (long) NextRequest(display) - (long) xev->serial,
+             (long) LastKnownRequestProcessed(display) - (long) xev->serial);
+
+#if defined(DEBUG) || defined(PRECON)
+        if (xapp->synchronized()) {
+            switch (xev->resourceid) {
+                case X_GetImage:
+                case X_CreateGC:
+                    show_backtrace();
+                    break;
+                default:
+                    // show_backtrace();
+                    break;
+            }
+        }
+#endif
     }
     return 0;
 }
@@ -721,11 +682,12 @@ void dumpZorder(const char *oper, YFrameWindow *w, YFrameWindow *a) {
             cstring cs(p->client()->windowTitle());
             msg(" %c %c 0x%lX: %s", (p == w) ? '*' : ' ',  (p == a) ? '#' : ' ', p->client()->handle(), cs.c_str());
         } else
-            msg("?? 0x%lX: %s", p->handle());
+            msg("?? 0x%lX", p->handle());
         PRECONDITION(p->next() != p);
         PRECONDITION(p->prev() != p);
-        if (p->next())
+        if (p->next()) {
             PRECONDITION(p->next()->prev() == p);
+        }
         p = p->next();
     }
 }
@@ -733,7 +695,7 @@ void dumpZorder(const char *oper, YFrameWindow *w, YFrameWindow *a) {
 
 void YWMApp::runRestart(const char *path, char *const *args) {
     XSelectInput(xapp->display(), desktop->handle(), 0);
-    XSync(xapp->display(), False);
+    XFlush(xapp->display());
     ///!!! problem with repeated SIGHUP for restart...
     resetSignals();
 
@@ -746,8 +708,15 @@ void YWMApp::runRestart(const char *path, char *const *args) {
             execlp(path, path, (void *)NULL);
         }
     } else {
-        const char *c = configArg ? "-c" : NULL;
-        execlp(ICEWMEXE, ICEWMEXE, "--restart", c, configArg, (void *)NULL);
+        if (mainArgv[0][0] == '/' ||
+            (strchr(mainArgv[0], '/') != 0 &&
+             access(mainArgv[0], X_OK) == 0))
+        {
+            execv(mainArgv[0], mainArgv);
+            fail("execv %s", mainArgv[0]);
+        }
+        execvp(ICEWMEXE, mainArgv);
+        fail("execvp %s", ICEWMEXE);
     }
 
     xapp->alert();
@@ -757,9 +726,7 @@ void YWMApp::runRestart(const char *path, char *const *args) {
 }
 
 void YWMApp::restartClient(const char *path, char *const *args) {
-#ifdef CONFIG_GUIEVENTS
     wmapp->signalGuiEvent(geRestart);
-#endif
     manager->unmanageClients();
     unregisterProtocols();
 
@@ -793,47 +760,70 @@ void YWMApp::runCommandOnce(const char *resource, const char *cmdline) {
 }
 
 void YWMApp::setFocusMode(int mode) {
+    focusMode = mode;
+    initFocusMode();
+
     char s[32];
-
-    sprintf(s, "FocusMode=%d\n", mode);
-
+    snprintf(s, sizeof s, "FocusMode=%d\n", mode);
     if (WMConfig::setDefault("focus_mode", s) == 0) {
-        restartClient(0, 0);
+        if (mode == 0) {
+            restartClient(0, 0);
+        }
     }
 }
 
-
-void YWMApp::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+void YWMApp::actionPerformed(YAction action, unsigned int /*modifiers*/) {
 
 
     if (action == actionLogout) {
-        rebootOrShutdown = 0;
-        doLogout();
+        doLogout(Logout);
     } else if (action == actionCancelLogout) {
         cancelLogout();
     } else if (action == actionLock) {
         this->runCommand(lockCommand);
     } else if (action == actionShutdown) {
         manager->doWMAction(ICEWM_ACTION_SHUTDOWN);
+    } else if (action == actionSuspend) {
+        manager->doWMAction(ICEWM_ACTION_SUSPEND);
     } else if (action == actionReboot) {
         manager->doWMAction(ICEWM_ACTION_REBOOT);
     } else if (action == actionRestart) {
         restartClient(0, 0);
-    } else if (action == actionRun) {
+    }
+    else if (action == actionRestartXterm) {
+        struct t_executor : public YMsgBoxListener {
+            YSMListener *listener;
+            t_executor(YSMListener* x) : listener(x) {}
+            virtual void handleMsgBox(YMsgBox *msgbox, int operation) {
+                if (msgbox)
+                    manager->unmanageClient(msgbox->handle());
+                if (operation == YMsgBox::mbOK)
+                    listener->restartClient(QUOTE(XTERMCMD), 0);
+            }
+        };
+        static t_executor delegate(this);
+        YFrameWindow::wmConfirmKill(_("Kill IceWM, replace with Xterm"), &delegate);
+    }
+    else if (action == actionRun) {
         runCommand(runDlgCommand);
     } else if (action == actionExit) {
         manager->unmanageClients();
         unregisterProtocols();
         exit(0);
     } else if (action == actionFocusClickToFocus) {
-        setFocusMode(1);
+        setFocusMode(FocusClick);
     } else if (action == actionFocusMouseSloppy) {
-        setFocusMode(2);
+        setFocusMode(FocusSloppy);
+    } else if (action == actionFocusExplicit) {
+        setFocusMode(FocusExplicit);
+    } else if (action == actionFocusMouseStrict) {
+        setFocusMode(FocusStrict);
+    } else if (action == actionFocusQuietSloppy) {
+        setFocusMode(FocusQuiet);
     } else if (action == actionFocusCustom) {
-        setFocusMode(0);
+        setFocusMode(FocusCustom);
     } else if (action == actionRefresh) {
-        static YWindow *w = 0;
-        if (w == 0) w = new YWindow();
+        osmart<YWindow> w(new YWindow());
         if (w) {
             w->setGeometry(YRect(0, 0,
                                  desktop->width(), desktop->height()));
@@ -841,11 +831,13 @@ void YWMApp::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
             w->show();
             w->hide();
         }
-#ifndef LITE
     } else if (action == actionAbout) {
+        if (aboutDlg == 0)
+            aboutDlg = new AboutDlg();
+        else
+            aboutDlg->getFrame()->setWorkspace(manager->activeWorkspace());
         if (aboutDlg)
             aboutDlg->showFocused();
-#endif
     } else if (action == actionTileVertical ||
                action == actionTileHorizontal)
     {
@@ -896,16 +888,12 @@ void YWMApp::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
         }
     } else if (action == actionUndoArrange) {
         manager->undoArrange();
-#ifdef CONFIG_WINLIST
     } else if (action == actionWindowList) {
         if (windowList)
             windowList->showFocused(-1, -1);
-#endif
-#ifdef CONFIG_TASKBAR
     } else if (action == actionCollapseTaskbar && taskBar) {
         taskBar->handleCollapseButton();
-        fWindowManager->focusLastWindow();
-#endif
+        manager->focusLastWindow();
     } else {
         for (int w = 0; w < workspaceCount; w++) {
             if (workspaceActionActivate[w] == action) {
@@ -916,49 +904,14 @@ void YWMApp::actionPerformed(YAction *action, unsigned int /*modifiers*/) {
     }
 }
 
-YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
-    YSMApplication(argc, argv, displayName)
-{
-#ifndef NO_CONFIGURE
-    if (configFile == 0 || *configFile == 0)
-        configFile = "preferences";
-    if (overrideTheme && *overrideTheme)
-        themeName = overrideTheme;
-    else
-    {
-        cfoption theme_prefs[] = {
-            OSV("Theme", &themeName, "Theme name"),
-            OK0()
-        };
-        
-        YConfig::findLoadConfigFile(this, theme_prefs, configFile);
-        YConfig::findLoadConfigFile(this, theme_prefs, "theme");
-    }
-#endif
-
-    wmapp = this;
-    managerWindow = None;
-
-#ifndef NO_CONFIGURE
-    WMConfig::loadConfiguration(this, configFile);
-    if (themeName != 0) {
-        MSG(("themeName=%s", themeName));
-
-        WMConfig::loadThemeConfiguration(this, themeName);
-    }
-    {
-        cfoption focus_prefs[] = {
-            OIV("FocusMode", &focusMode, 0, 2, "Focus mode (0 = custom, 1 = click, 2 = mouse, 3 = explicit)"),
-            OK0()
-        };
-
-        YConfig::findLoadConfigFile(this, focus_prefs, "focus_mode");
-    }
-    WMConfig::loadConfiguration(this, "prefoverride");
+void YWMApp::initFocusMode() {
     switch (focusMode) {
-    case 0: /* custom */
+
+    case FocusCustom: /* custom */
+        // Need a restart to load from file.
         break;
-    default: /* click to focus */
+
+    case FocusClick: /* click to focus */
         clickFocus = true;
         focusOnAppRaise = false;
         requestFocusOnAppRaise = true;
@@ -970,7 +923,8 @@ YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
         focusOnMapTransient = false;
         focusOnMapTransientActive = true;
         break;
-    case 2:  /* mouse focus */
+
+    case FocusSloppy:  /* sloppy mouse focus */
         clickFocus = false;
         focusOnAppRaise = false;
         requestFocusOnAppRaise = true;
@@ -982,8 +936,101 @@ YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
         focusOnMapTransient = false;
         focusOnMapTransientActive = true;
         break;
+
+    case FocusExplicit: /* explicit focus */
+        clickFocus = true;
+        focusOnAppRaise = false;
+        requestFocusOnAppRaise = false;
+        raiseOnFocus = false;
+        raiseOnClickClient = false;
+        focusOnMap = false;
+        mapInactiveOnTop = true;
+        focusChangesWorkspace = false;
+        focusOnMapTransient = false;
+        focusOnMapTransientActive = true;
+        break;
+
+    case FocusStrict:  /* strict mouse focus */
+        clickFocus = false;
+        focusOnAppRaise = false;
+        requestFocusOnAppRaise = false;
+        raiseOnFocus = true;
+        raiseOnClickClient = true;
+        focusOnMap = false;
+        mapInactiveOnTop = false;
+        focusChangesWorkspace = false;
+        focusOnMapTransient = false;
+        focusOnMapTransientActive = true;
+        break;
+
+    case FocusQuiet:  /* quiet sloppy focus */
+        clickFocus = false;
+        focusOnAppRaise = false;
+        requestFocusOnAppRaise = false;
+        raiseOnFocus = false;
+        raiseOnClickClient = true;
+        focusOnMap = true;
+        mapInactiveOnTop = true;
+        focusChangesWorkspace = false;
+        focusOnMapTransient = false;
+        focusOnMapTransientActive = true;
+        break;
+
+    default:
+        warn("Erroneous focus mode %d.", focusMode);
     }
-#endif
+}
+
+YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
+    YSMApplication(argc, argv, displayName),
+    mainArgv(*argv)
+{
+    if (restart_wm) {
+        if (overrideTheme && *overrideTheme) {
+            mstring themeContent("Theme=\"" + mstring(overrideTheme) + "\"");
+            WMConfig::setDefault("theme", cstring(themeContent));
+        }
+        YWindowManager::doWMAction(ICEWM_ACTION_RESTARTWM);
+        XSync(xapp->display(), False);
+        ::exit(0);
+    }
+
+    if (configFile == 0 || *configFile == 0)
+        configFile = "preferences";
+    if (overrideTheme && *overrideTheme)
+        themeName = overrideTheme;
+    else
+    {
+        cfoption theme_prefs[] = {
+            OSV("Theme", &themeName, "Theme name"),
+            OK0()
+        };
+
+        YConfig::findLoadConfigFile(this, theme_prefs, configFile);
+        YConfig::findLoadConfigFile(this, theme_prefs, "theme");
+    }
+
+    wmapp = this;
+    managerWindow = None;
+
+    WMConfig::loadConfiguration(this, configFile);
+    if (themeName != 0) {
+        MSG(("themeName=%s", themeName));
+
+        WMConfig::loadThemeConfiguration(this, themeName);
+    }
+    {
+        cfoption focus_prefs[] = {
+            OIV("FocusMode", &focusMode, FocusCustom, FocusModelLast,
+                "Focus mode (0=custom, 1=click, 2=sloppy"
+                ", 3=explicit, 4=strict, 5=quiet)"),
+            OK0()
+        };
+
+        YConfig::findLoadConfigFile(this, focus_prefs, "focus_mode");
+    }
+    WMConfig::loadConfiguration(this, "prefoverride");
+    initFocusMode();
 
     DEPRECATE(warpPointer == true);
     DEPRECATE(focusRootWindow == true);
@@ -1000,39 +1047,24 @@ YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
     if (workspaceCount == 0)
         addWorkspace(0, " 0 ", false);
 
-#ifndef NO_WINDOW_OPTIONS
-    if (winOptFile == null)
-        winOptFile = this->findConfigFile("winoptions");
-#endif
-
-    if (keysFile == null)
-        keysFile = this->findConfigFile("keys");
-
     catchSignal(SIGINT);
     catchSignal(SIGTERM);
     catchSignal(SIGQUIT);
     catchSignal(SIGHUP);
     catchSignal(SIGCHLD);
+    catchSignal(SIGUSR2);
 
-#ifndef NO_WINDOW_OPTIONS
-    defOptions = new WindowOptions();
-    hintOptions = new WindowOptions();
-    if (winOptFile != null)
-        loadWinOptions(winOptFile);
-    winOptFile = null;
-#endif
-
-#ifndef NO_CONFIGURE_MENUS
-    if (keysFile != null)
-        loadMenus(this, this, this, keysFile, 0);
-#endif
+    loadWinOptions(findConfigFile("winoptions"));
+    MenuLoader(this, this, this).loadMenus(findConfigFile("keys"), 0);
 
     XSetErrorHandler(handler);
 
     fLogoutMsgBox = 0;
+    aboutDlg = 0;
+    ctrlAltDelete = 0;
+    switchWindow = 0;
 
     initAtoms();
-    initActions();
     initPointers();
 
     if (post_preferences)
@@ -1041,22 +1073,19 @@ YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
     delete desktop;
 
     managerWindow = registerProtocols1(*argv, *argc);
-    
-    desktop = manager = fWindowManager = new YWindowManager(
-        this, this, this, 0, RootWindow(display(), DefaultScreen(display())));
+
+    desktop = manager = new YWindowManager(
+        this, this, this, 0, root());
     PRECONDITION(desktop != 0);
-    
+
     registerProtocols2(managerWindow);
 
     initFontPath(this);
-#ifndef LITE
     initIcons();
-#endif
     initIconSize();
     WPixRes::initPixmaps();
     initMenus(this, this, this);
 
-#ifndef NO_CONFIGURE
     if (scrollBarWidth == 0) {
         switch(wmLook) {
             case lookWarp4:
@@ -1106,15 +1135,11 @@ YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
                 break;
         }
     }
-#endif
 
-#ifndef LITE
     statusMoveSize = new MoveSizeStatus(manager);
-    statusWorkspace = new WorkspaceStatus(manager);
-#endif
-    if (quickSwitch)
-        switchWindow = new SwitchWindow(manager);
-#ifdef CONFIG_TASKBAR
+    statusWorkspace = WorkspaceStatus::createInstance(manager);
+
+    windowList = new WindowList(manager, this);
     if (showTaskBar) {
         taskBar = new TaskBar(this, manager, this, this);
         if (taskBar)
@@ -1122,17 +1147,7 @@ YWMApp::YWMApp(int *argc, char ***argv, const char *displayName):
     } else {
         taskBar = 0;
     }
-#endif
-#ifdef CONFIG_WINLIST
-    windowList = new WindowList(manager, this);
-#endif
     //windowList->show();
-#ifndef LITE
-    ctrlAltDelete = new CtrlAltDelete(this, manager);
-#endif
-#ifndef LITE
-    aboutDlg = new AboutDlg();
-#endif
 
     manager->initWorkspaces();
 
@@ -1154,36 +1169,42 @@ YWMApp::~YWMApp() {
         manager->unmanageClient(fLogoutMsgBox->handle());
         fLogoutMsgBox = 0;
     }
-#ifndef LITE
+    delete aboutDlg; aboutDlg = 0;
+    delete switchWindow; switchWindow = 0;
     termIcons();
     delete ctrlAltDelete; ctrlAltDelete = 0;
-#endif
-#ifdef CONFIG_TASKBAR
     delete taskBar; taskBar = 0;
-#endif
-    //delete windowList; windowList = 0;
-#ifndef LITE
-    delete switchWindow; switchWindow = 0;
 
     delete statusMoveSize; statusMoveSize = 0;
     delete statusWorkspace; statusWorkspace = 0;
-#endif
 
-#ifndef NO_CONFIGURE_MENUS
     delete rootMenu; rootMenu = 0;
-#endif
-#ifdef CONFIG_WINLIST
     delete windowListPopup; windowListPopup = 0;
-#endif
+    delete windowList; windowList = 0;
+
+    layerMenu->setShared(false);
+    // delete layerMenu; layerMenu = 0;
+    windowMenu->setShared(false);
     delete windowMenu; windowMenu = 0;
 
+    if (logoutMenu) {
+        logoutMenu->setShared(false);
+        delete logoutMenu; logoutMenu = 0;
+    }
+
     // shared menus last
+    moveMenu->setShared(false);
     delete moveMenu; moveMenu = 0;
-#ifdef CONFIG_WINMENU
+    windowListMenu->setShared(false);
     delete windowListMenu; windowListMenu = 0;
-#endif
+    delete manager; desktop = manager = 0;
+
+    keyProgs.clear();
 
     WPixRes::freePixmaps();
+
+    extern void freeTitleColorsFonts();
+    freeTitleColorsFonts();
 
     //!!!XFreeGC(display(), outlineGC); lazy init in movesize.cc
     //!!!XFreeGC(display(), clipPixmapGC); in ypaint.cc
@@ -1206,6 +1227,10 @@ void YWMApp::handleSignal(int sig) {
         restartClient(0, 0);
         break;
 
+    case SIGUSR2:
+        tlog("logEvents %s", boolstr(toggleLogEvents()));
+        break;
+
     default:
         YApplication::handleSignal(sig);
         break;
@@ -1213,17 +1238,36 @@ void YWMApp::handleSignal(int sig) {
 }
 
 bool YWMApp::handleIdle() {
-#ifdef CONFIG_TASKBAR
 /// TODO #warning "make this generic"
     if (taskBar) {
         taskBar->relayoutNow();
     }
-#endif
     return YSMApplication::handleIdle();
 }
 
-#ifdef CONFIG_GUIEVENTS
 void YWMApp::signalGuiEvent(GUIEvent ge) {
+    /*
+     * The first event must be geStartup.
+     * Ignore all other events before that.
+     */
+    static bool started;
+    if (ge == geStartup)
+        started = true;
+    else if (started == false)
+        return;
+
+    /*
+     * Because there is no event buffering,
+     * when multiple events occur in a burst,
+     * only signal the first event of the burst.
+     */
+    timeval now = monotime();
+    static timeval next;
+    if (now < next && ge != geStartup) {
+        return;
+    }
+    next = now + millitime(100L);
+
     static Atom GUIEventAtom = None;
     unsigned char num = (unsigned char)ge;
 
@@ -1233,7 +1277,6 @@ void YWMApp::signalGuiEvent(GUIEvent ge) {
                     GUIEventAtom, GUIEventAtom, 8, PropModeReplace,
                     &num, 1);
 }
-#endif
 
 bool YWMApp::filterEvent(const XEvent &xev) {
     if (xev.type == SelectionClear) {
@@ -1258,12 +1301,10 @@ void YWMApp::afterWindowEvent(XEvent &xev) {
             if (k1 == xapp->Win_L && k2 == xapp->Win_L) {
                 manager->popupStartMenu(desktop);
             }
-#ifdef CONFIG_WINLIST
             else if (k1 == xapp->Win_R && k2 == xapp->Win_R) {
                 if (windowList)
                     windowList->showFocused(-1, -1);
             }
-#endif
         }
     }
 
@@ -1273,8 +1314,6 @@ void YWMApp::afterWindowEvent(XEvent &xev) {
         xev.type == ButtonRelease)
         lastKeyEvent = xev;
 }
-
-#ifndef NO_CONFIGURE
 
 static void print_usage(const char *argv0) {
     const char *usage_client_id =
@@ -1291,32 +1330,37 @@ static void print_usage(const char *argv0) {
 #else
              "";
 #endif
+
+    const char *usage_preferences =
+             _("\n"
+             "  -c, --config=FILE   Load preferences from FILE.\n"
+             "  -t, --theme=FILE    Load theme from FILE.\n"
+             "  --postpreferences   Print preferences after all processing.\n");
+
     printf(_("Usage: %s [OPTIONS]\n"
              "Starts the IceWM window manager.\n"
              "\n"
              "Options:\n"
-             "  --display=NAME      NAME of the X server to use.\n"
+             "  -d, --display=NAME  NAME of the X server to use.\n"
              "%s"
              "  --sync              Synchronize X11 commands.\n"
-             "\n"
-             "  -c, --config=FILE   Load preferences from FILE.\n"
-             "  -t, --theme=FILE    Load theme from FILE.\n"
+             "%s"
              "\n"
              "  -V, --version       Prints version information and exits.\n"
              "  -h, --help          Prints this usage screen and exits.\n"
              "%s"
+             "\n"
              "  --replace           Replace an existing window manager.\n"
-             "  --restart           Don't use this: It's an internal flag.\n"
+             "  -r, --restart       Tell the running icewm to restart itself.\n"
+             "\n"
              "  --configured        Print the compile time configuration.\n"
              "  --directories       Print the configuration directories.\n"
              "  -l, --list-themes   Print a list of all available themes.\n"
-             "  --postpreferences   Print preferences after all processing.\n"
              "\n"
              "Environment variables:\n"
-             "  XDG_CONFIG_HOME=PATH  Directory for configuration files,\n"
-             "                      \"$HOME/.config/icewm/\" by default.\n"
              "  ICEWM_PRIVCFG=PATH  Directory for user configuration files,\n"
-             "                      \"$HOME/.icewm/\" by default.\n"
+             "                      \"$XDG_CONFIG_HOME/icewm\" if exists or\n"
+             "                      \"$HOME/.icewm\" by default.\n"
              "  DISPLAY=NAME        Name of the X server to use.\n"
              "  MAIL=URL            Location of your mailbox.\n"
              "\n"
@@ -1324,10 +1368,11 @@ static void print_usage(const char *argv0) {
              "%s\n\n"),
              argv0,
              usage_client_id,
+             usage_preferences,
              usage_debug,
              PACKAGE_BUGREPORT[0] ? PACKAGE_BUGREPORT :
              PACKAGE_URL[0] ? PACKAGE_URL :
-             "http://www.icewm.org/");
+             "https://ice-wm.org/");
     exit(0);
 }
 
@@ -1354,7 +1399,6 @@ static void print_confdir(const char *name, const char *path) {
 
 static void print_directories(const char *argv0) {
     printf(_("%s configuration directories:\n"), argv0);
-    print_confdir("XdgConfDir", YApplication::getXdgConfDir().string());
     print_confdir("PrivConfDir", YApplication::getPrivConfDir().string());
     print_confdir("CFGDIR", CFGDIR);
     print_confdir("LIBDIR", LIBDIR);
@@ -1366,38 +1410,20 @@ static void print_directories(const char *argv0) {
 static void print_configured(const char *argv0) {
     static const char compile_time_configured_options[] =
     /* Sorted alphabetically: */
-#ifdef CONFIG_ADDRESSBAR
-    " addressbar"
-#endif
 #ifdef ENABLE_ALSA
     " alsa"
 #endif
-#ifdef CONFIG_ANTIALIASING
-    " antialiasing"
-#endif
-#ifdef CONFIG_APPLET_APM
-    " apm"
-#endif
-#ifdef CONFIG_APPLET_CLOCK
-    " clock"
+#ifdef ENABLE_AO
+    " ao"
 #endif
 #ifdef CONFIG_COREFONTS
     " corefonts"
-#endif
-#ifdef CONFIG_APPLET_CPU_STATUS
-    " cpu"
 #endif
 #ifdef DEBUG
     " debug"
 #endif
 #ifdef ENABLE_ESD
     " esd"
-#endif
-#ifdef WMSPEC_HINTS
-    " ewmh"
-#endif
-#ifdef CONFIG_FDO_MENUS
-    " fdomenus"
 #endif
 #ifdef CONFIG_FRIBIDI
     " fribidi"
@@ -1408,50 +1434,29 @@ static void print_configured(const char *argv0) {
 #ifdef CONFIG_GNOME_MENUS
     " gnomemenus"
 #endif
-#ifdef GNOME1_HINTS
-    " gnome1hints"
-#endif
-#ifdef CONFIG_GRADIENTS
-    " gradients"
-#endif
-#ifdef CONFIG_GUIEVENTS
-    " guievents"
-#endif
 #ifdef CONFIG_I18N
     " i18n"
 #endif
-#ifdef LITE
-    " lite"
+#ifdef CONFIG_LIBJPEG
+    " libjpeg"
 #endif
-#ifdef CONFIG_APPLET_MAILBOX
-    " mailbox"
+#ifdef CONFIG_LIBPNG
+    " libpng"
 #endif
-#ifdef CONFIG_APPLET_MEM_STATUS
-    " mem"
+#ifdef CONFIG_LIBRSVG
+    " librsvg"
 #endif
-#ifdef CONFIG_APPLET_NET_STATUS
-    " net"
+#ifdef CONFIG_XPM
+    " libxpm"
+#endif
+#ifdef LOGEVENTS
+    " logevents"
 #endif
 #ifdef ENABLE_NLS
     " nls"
 #endif
-#ifdef NO_CONFIGURE_MENUS
-    " no-confmenu"
-#endif
-#ifdef NO_KEYBIND
-    " no-keybind"
-#endif
-#ifdef X_DISPLAY_MISSING
-    " no-xdisplay"
-#endif
-#ifdef NO_WINDOW_OPTIONS
-    " no-winopt"
-#endif
 #ifdef ENABLE_OSS
     " oss"
-#endif
-#ifdef CONFIG_PDA
-    " pda"
 #endif
 #ifdef CONFIG_SESSION
     " session"
@@ -1459,26 +1464,8 @@ static void print_configured(const char *argv0) {
 #ifdef CONFIG_SHAPE
     " shape"
 #endif
-#ifdef CONFIG_SHAPED_DECORATION
-    " shapedecorations"
-#endif
-#ifdef CONFIG_TASKBAR
-    " taskbar"
-#endif
-#ifdef CONFIG_TOOLTIP
-    " tooltip"
-#endif
-#ifdef CONFIG_TRAY
-    " tray"
-#endif
 #ifdef CONFIG_UNICODE_SET
     " unicodeset"
-#endif
-#ifdef CONFIG_WINLIST
-    " winlist"
-#endif
-#ifdef CONFIG_WINMENU
-    " winmenu"
 #endif
 #ifdef CONFIG_WORDEXP
     " wordexp"
@@ -1492,8 +1479,8 @@ static void print_configured(const char *argv0) {
 #ifdef CONFIG_XRANDR
     " xrandr"
 #endif
-#ifdef ENABLE_YIFF
-    " yiff"
+#ifdef CONFIG_RENDER
+    " xrender"
 #endif
     "\n";
     printf(_("%s configured options:%s\n"), argv0,
@@ -1501,36 +1488,29 @@ static void print_configured(const char *argv0) {
     exit(0);
 }
 
-#endif
-
 int main(int argc, char **argv) {
     YLocale locale;
     bool notify_parent(false);
 
     for (char ** arg = argv + 1; arg < argv + argc; ++arg) {
         if (**arg == '-') {
+            char *value(0);
+            if (GetArgument(value, "c", "config", arg, argv+argc))
+                configFile = value;
+            else if (GetArgument(value, "t", "theme", arg, argv+argc))
+                overrideTheme = value;
+            else if (is_long_switch(*arg, "postpreferences"))
+                post_preferences = true;
+            else
 #ifdef DEBUG
             if (is_long_switch(*arg, "debug"))
                 debug = true;
             else if (is_long_switch(*arg, "debug-z"))
                 debug_z = true;
+            else
 #endif
-#ifndef NO_CONFIGURE
-            char *value;
-            if (GetLongArgument(value, "config", arg, argv+argc) ||
-               GetShortArgument(value, "c", arg, argv+argc))
-            {
-                configArg = configFile = value;
-                continue;
-            }
-            else if (GetLongArgument(value, "theme", arg, argv+argc)
-                 || GetShortArgument(value, "t", arg, argv+argc))
-            {
-                overrideTheme = value;
-                continue;
-            }
-            else if (is_long_switch(*arg, "restart"))
-                restart = true;
+            if (is_switch(*arg, "r", "restart"))
+                restart_wm = true;
             else if (is_long_switch(*arg, "replace"))
                 replace_wm = true;
             else if (is_long_switch(*arg, "notify"))
@@ -1541,51 +1521,44 @@ int main(int argc, char **argv) {
                 print_directories(argv[0]);
             else if (is_switch(*arg, "l", "list-themes"))
                 print_themes_list();
-            else if (is_long_switch(*arg, "postpreferences"))
-                post_preferences = true;
             else if (is_help_switch(*arg))
                 print_usage(my_basename(argv[0]));
             else if (is_version_switch(*arg))
                 print_version_exit(VERSION);
-#else
-            check_help_version(*arg, "", VERSION);
-#endif
+            else if (is_long_switch(*arg, "sync"))
+            { /* handled by Xt */ }
+            else if (GetArgument(value, "d", "display", arg, argv+argc))
+            { /* handled by Xt */ }
+            else
+                warn(_("Unrecognized option '%s'."), *arg);
         }
     }
+
     YWMApp app(&argc, &argv);
 
-#ifdef CONFIG_GUIEVENTS
     app.signalGuiEvent(geStartup);
-#endif
     manager->manageClients();
 
-    if(notify_parent)
+    if (notify_parent)
        kill(getppid(), SIGUSR1);
 
     int rc = app.mainLoop();
-#ifdef CONFIG_GUIEVENTS
     app.signalGuiEvent(geShutdown);
-#endif
     manager->unmanageClients();
+    app.clientsAreUnmanaged();
     unregisterProtocols();
-#ifndef LITE
     YIcon::freeIcons();
-#endif
-#ifndef NO_CONFIGURE
     WMConfig::freeConfiguration();
-#endif
-#ifndef NO_WINDOW_OPTIONS
-    delete defOptions; defOptions = 0;
-    delete hintOptions; hintOptions = 0;
-#endif
+    defOptions = null;
+    hintOptions = null;
     return rc;
 }
 
-void YWMApp::doLogout() {
+void YWMApp::doLogout(RebootShutdown reboot) {
+    rebootOrShutdown = reboot;
     if (!confirmLogout)
         logout();
     else {
-#ifndef LITE
         if (fLogoutMsgBox == 0) {
             YMsgBox *msgbox = new YMsgBox(YMsgBox::mbOK|YMsgBox::mbCancel);
             fLogoutMsgBox = msgbox;
@@ -1595,9 +1568,6 @@ void YWMApp::doLogout() {
             msgbox->setMsgBoxListener(this);
             msgbox->showFocused();
         }
-#else
-        logout();
-#endif
     }
 }
 
@@ -1621,7 +1591,7 @@ void YWMApp::logout() {
 }
 
 void YWMApp::cancelLogout() {
-    rebootOrShutdown = 0;
+    rebootOrShutdown = Logout;
     if (logoutCancelCommand && logoutCancelCommand[0]) {
         runCommand(logoutCancelCommand);
 #ifdef CONFIG_SESSION
@@ -1651,22 +1621,19 @@ void YWMApp::handleMsgBox(YMsgBox *msgbox, int operation) {
     }
 }
 
-void YWMApp::handleSMAction(int message) {
+void YWMApp::handleSMAction(WMAction message) {
     switch (message) {
     case ICEWM_ACTION_LOGOUT:
-        rebootOrShutdown = 0;
-        wmapp->doLogout();
+        wmapp->doLogout(Logout);
         break;
     case ICEWM_ACTION_CANCEL_LOGOUT:
         wmapp->actionPerformed(actionCancelLogout, 0);
         break;
     case ICEWM_ACTION_SHUTDOWN:
-        rebootOrShutdown = 2;
-        wmapp->doLogout();
+        wmapp->doLogout(Shutdown);
         break;
     case ICEWM_ACTION_REBOOT:
-        rebootOrShutdown = 1;
-        wmapp->doLogout();
+        wmapp->doLogout(Reboot);
         break;
     case ICEWM_ACTION_RESTARTWM:
         wmapp->restartClient(0, 0);
@@ -1675,10 +1642,13 @@ void YWMApp::handleSMAction(int message) {
         wmapp->actionPerformed(actionWindowList, 0);
         break;
     case ICEWM_ACTION_ABOUT:
-#ifndef LITE
         wmapp->actionPerformed(actionAbout, 0);
-#endif
+        break;
+    case ICEWM_ACTION_SUSPEND:
+        YWindowManager::execAfterFork(suspendCommand);
         break;
     }
 }
 
+
+// vim: set sw=4 ts=4 et:

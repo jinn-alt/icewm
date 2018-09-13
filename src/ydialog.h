@@ -11,17 +11,15 @@ public:
     void paint(Graphics &g, const YRect &r);
     virtual bool handleKey(const XKeyEvent &key);
 
-#ifdef CONFIG_GRADIENTS
     virtual ref<YImage> getGradient() const { return fGradient; }
-#endif
     YWindow *getOwner() const { return fOwner; }
 
 private:
     YWindow *fOwner;
 
-#ifdef CONFIG_GRADIENTS
     ref<YImage> fGradient;
-#endif
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

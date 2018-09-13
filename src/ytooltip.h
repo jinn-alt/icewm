@@ -1,30 +1,49 @@
 #ifndef __YTOOLTIP_H
 #define __YTOOLTIP_H
 
-#ifdef CONFIG_TOOLTIP
 #include "ywindow.h"
 #include "ytimer.h"
+#include "ypointer.h"
 
-class YToolTip: public YWindow, public YTimerListener {
+class YToolTipWindow: public YWindow {
 public:
-    YToolTip(YWindow *aParent = 0);
-    virtual ~YToolTip();
+    YToolTipWindow(ustring text);
+
     virtual void paint(Graphics &g, const YRect &r);
 
     void setText(const ustring &tip);
+    void locate(YWindow *w);
+
+private:
+    ustring fText;
+
+    YColorName toolTipBg;
+    YColorName toolTipFg;
+    ref<YFont> toolTipFont;
+};
+
+class YToolTip: public YTimerListener {
+public:
+    YToolTip();
+
     virtual bool handleTimer(YTimer *t);
+
+    void setText(const ustring &tip);
     void locate(YWindow *w, const XCrossingEvent &crossing);
+
+    void hide();
+    void repaint();
+    bool visible();
 
 private:
     void display();
+    YToolTipWindow* window();
 
     ustring fText;
-
-    static YColor *toolTipBg;
-    static YColor *toolTipFg;
-    static ref<YFont> toolTipFont;
-    static YTimer *fToolTipVisibleTimer;
+    YWindow* fLocate;
+    osmart<YToolTipWindow> fWindow;
+    lazy<YTimer> fTimer;
 };
 #endif
 
-#endif
+// vim: set sw=4 ts=4 et:

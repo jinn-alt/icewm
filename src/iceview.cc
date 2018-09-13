@@ -28,13 +28,17 @@ class TextView: public YWindow,
     public YScrollBarListener, public YScrollable, public YActionListener
 {
 public:
-    TextView(YScrollView *v, YWindow *parent): YWindow(parent) {
+    TextView(YScrollView *v, YWindow *parent):
+        YWindow(parent),
+        bg("rgb:C0/C0/C0"),
+        fg(YColor::black)
+    {
         expandTabs = true;
         hexView = false;
         wrapLines = true;
 
         view = v;
-        fVerticalScroll = view->getVerticalScrollBar();;
+        fVerticalScroll = view->getVerticalScrollBar();
         fVerticalScroll->setScrollBarListener(this);
         fHorizontalScroll = view->getHorizontalScrollBar();
         fHorizontalScroll->setScrollBarListener(this);
@@ -55,16 +59,10 @@ public:
         fWidth = 0;
         fHeight = 0;
 
-        bg = new YColor("rgb:C0/C0/C0");
-        fg = YColor::black; //new YColor("rgb:00/00/00");
         font = YFont::getFont("-adobe-courier-medium-r-*-*-*-100-*-*-*-*-*-*", "monospace:size=10");
         fontWidth = font->textWidth("M");
         fontHeight = font->height();
 
-        actionClose = new YAction();
-        actionToggleExpandTabs = new YAction();
-        actionToggleWrapLines = new YAction();
-        actionToggleHexView = new YAction();
         menu = new YMenu();
         menu->setActionListener(this);
         //menu->addItem(_("Find..."), 0, _("Ctrl+F"), actionFind);
@@ -428,7 +426,7 @@ public:
             setPos(tx, pos);
     }
 
-    int contentWidth() {
+    unsigned contentWidth() {
         if (hexView)
             return 78 * fontWidth + 2;
         else if (wrapLines)
@@ -436,7 +434,7 @@ public:
         else
             return maxWidth + 2;
     }
-    int contentHeight() {
+    unsigned contentHeight() {
         int n;
         if (hexView)
             n = chunkCount;
@@ -461,7 +459,7 @@ public:
         }
     }
 
-    virtual void actionPerformed(YAction *action, unsigned int /*modifiers*/) {
+    virtual void actionPerformed(YAction action, unsigned int /*modifiers*/) {
         if (action == actionToggleHexView) {
             hexView = hexView ? false : true;
             repaint();
@@ -478,9 +476,9 @@ public:
 
     virtual void configure(const YRect &r) {
         YWindow::configure(r);
-        if (fWidth != r.width() || fHeight != r.height()) {
-            fWidth = r.width();
-            fHeight = r.height();
+        if (fWidth != int(r.width()) || fHeight != int(r.height())) {
+            fWidth = int(r.width());
+            fHeight = int(r.height());
             if (wrapLines) {
                 int nw = lineWCount;
                 findWLines(r.width() / fontWidth);
@@ -509,7 +507,7 @@ private:
     int fontWidth, fontHeight;
     int wrapWidth;
 
-    YColor *bg, *fg;
+    YColorName bg, fg;
     ref<YFont> font;
     YScrollView *view;
     YScrollBar *fVerticalScroll;
@@ -520,8 +518,8 @@ private:
     bool wrapLines;
 
     YMenu *menu;
-    YAction *actionClose;
-    YAction *actionToggleExpandTabs, *actionToggleWrapLines, *actionToggleHexView;
+    YAction actionClose;
+    YAction actionToggleExpandTabs, actionToggleWrapLines, actionToggleHexView;
 };
 
 class FileView: public YWindow {
@@ -559,10 +557,10 @@ public:
 
         printf("x:y = %d:%d\n", view->contentWidth(), view->contentHeight());
 
-        if (view->contentWidth() < x)
-            x = view->contentWidth();
-        if (view->contentHeight() < y)
-            y = view->contentHeight();
+        if (int(view->contentWidth()) < x)
+            x = int(view->contentWidth());
+        if (int(view->contentHeight()) < y)
+            y = int(view->contentHeight());
 
         if (x < 200)
             x = 200;
@@ -623,10 +621,8 @@ private:
 int main(int argc, char **argv) {
     YLocale locale;
 
-#ifdef ENABLE_NLS
     bindtextdomain(PACKAGE, LOCDIR);
     textdomain(PACKAGE);
-#endif
 
     YXApplication app(&argc, &argv);
 
@@ -637,3 +633,5 @@ int main(int argc, char **argv) {
         return app.mainLoop();
     }
 }
+
+// vim: set sw=4 ts=4 et:

@@ -17,9 +17,11 @@ private:
 
     void autoSize();
 
-    static YColor *labelFg;
-    static YColor *labelBg;
+    static YColorName labelFg;
+    static YColorName labelBg;
     static ref<YFont> labelFont;
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

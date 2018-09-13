@@ -13,7 +13,7 @@ public:
     virtual void scroll(YScrollBar *scroll, int delta) = 0;
     virtual void move(YScrollBar *scroll, int pos) = 0;
 protected:
-    virtual ~YScrollBarListener() {};
+    virtual ~YScrollBarListener() {}
 };
 
 class YScrollBar: public YWindow, public YTimerListener {
@@ -81,7 +81,9 @@ private:
     int fGrabDelta;
     YScrollBarListener *fListener;
     bool fDNDScroll;
-    static YTimer *fScrollTimer;
+    static lazy<YTimer> fScrollTimer;
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

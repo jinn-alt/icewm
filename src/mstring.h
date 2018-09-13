@@ -1,6 +1,10 @@
 #ifndef __MSTRING_H
 #define __MSTRING_H
 
+#ifdef __YARRAY_H
+#error include yarray.h after mstring.h
+#endif
+
 #include "ref.h"
 #include <string.h>
 
@@ -22,10 +26,11 @@ struct MStringData {
 class mstring {
 private:
     friend class cstring;
+    friend class MStringArray;
 
     MStringData *fStr;
-    int fOffset;
-    int fCount;
+    size_t fOffset;
+    size_t fCount;
 
     void acquire() {
         ++fStr->fRefCount;
@@ -36,23 +41,18 @@ private:
         fStr = 0;
     }
     void destroy();
-    mstring(MStringData *fStr, int fOffset, int fCount);
-    void init(const char *str, int len);
+    mstring(MStringData *fStr, size_t fOffset, size_t fCount);
+    void init(const char *str, size_t len);
     const char *data() const { return fStr->fStr + fOffset; }
 public:
     mstring(const char *str);
-    mstring(const char *str, int len);
+    mstring(const char *str1, const char *str2);
+    mstring(const char *str1, const char *str2, const char *str3);
+    mstring(const char *str, size_t len);
+    explicit mstring(long);
 
-    mstring(const class null_ref &):
-        fStr(0),
-        fOffset(0),
-        fCount(0)
-    {}
-    mstring():
-        fStr(0),
-        fOffset(0),
-        fCount(0)
-    {}
+    mstring(null_ref &): fStr(0), fOffset(0), fCount(0) { }
+    mstring():           fStr(0), fOffset(0), fCount(0) { }
 
     mstring(const mstring &r):
         fStr(r.fStr),
@@ -63,7 +63,8 @@ public:
     }
     ~mstring();
 
-    int length() const { return fCount; }
+    size_t length() const { return fCount; }
+    size_t offset() const { return fOffset; }
     bool isEmpty() const { return 0 == fCount; }
     bool nonempty() const { return 0 < fCount; }
 
@@ -71,14 +72,19 @@ public:
     mstring& operator+=(const mstring& rv);
     mstring operator+(const mstring& rv) const;
 
+    bool operator==(const char *rv) const { return equals(rv); }
+    bool operator!=(const char *rv) const { return !equals(rv); }
     bool operator==(const mstring &rv) const { return equals(rv); }
     bool operator!=(const mstring &rv) const { return !equals(rv); }
-    bool operator==(const class null_ref &) const { return fStr == 0; }
-    bool operator!=(const class null_ref &) const { return fStr != 0; }
+    bool operator==(null_ref &) const { return fStr == 0; }
+    bool operator!=(null_ref &) const { return fStr != 0; }
+//    bool operator==(const char *rv, size_t len) const { return equals(rv, len); }
+//    bool operator!=(const char *rv, size_t len) const { return !equals(rv, len); }
 
-    mstring& operator=(const class null_ref &);
-    mstring substring(int pos) const;
-    mstring substring(int pos, int len) const;
+    mstring& operator=(null_ref &);
+    mstring substring(size_t pos) const;
+    mstring substring(size_t pos, size_t len) const;
+    mstring match(const char* regex, const char* flags = 0);
 
     int operator[](int pos) const { return charAt(pos); }
     int charAt(int pos) const;
@@ -86,8 +92,10 @@ public:
     int lastIndexOf(char ch) const;
     int count(char ch) const;
 
+    bool equals(const char *s) const;
+    bool equals(const char *s, unsigned len) const;
     bool equals(const mstring &s) const;
-    int collate(const mstring &s) const;
+    int collate(const mstring &s, bool ignoreCase = false) const;
     int compareTo(const mstring &s) const;
     bool copyTo(char *dst, size_t len) const;
 
@@ -131,14 +139,18 @@ public:
     cstring(const mstring &str);
     cstring(const char *cstr) : str(cstr) {}
     cstring(const null_ref &): str() {}
+    explicit cstring(long n): str(n) {}
 
     cstring& operator=(const cstring& cs);
+    cstring operator+(const mstring& rv) const { return cstring(m_str() + rv); }
     operator const char *() const { return c_str(); }
     const char *c_str() const {
         return str.length() > 0 ? str.data() : "";
     }
     const mstring& m_str() const { return str; }
     operator const mstring&() const { return str; }
+    bool operator==(const char* cstr) const { return str == cstr; }
+    bool operator!=(const char* cstr) const { return str != cstr; }
     bool operator==(const null_ref &) const { return str == null; }
     bool operator!=(const null_ref &) const { return str != null; }
     bool operator==(const cstring& c) const { return str == c.str; }
@@ -147,4 +159,13 @@ public:
     int length()    const { return str.length(); }
 };
 
+inline bool operator==(const char* s, cstring c) { return c == s; }
+inline bool operator!=(const char* s, cstring c) { return c != s; }
+
+inline mstring operator+(const char* s, const mstring& m) {
+    return mstring(s) + m;
+}
+
 #endif
+
+// vim: set sw=4 ts=4 et:

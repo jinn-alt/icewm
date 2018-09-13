@@ -4,10 +4,8 @@
  * Copyright (C) 1997-2002 Marko Macek
  */
 #include "config.h"
-#include "ykey.h"
-#include "ymenu.h"
-#include "yrect.h"
-
+#include "ypopup.h"
+#include "base.h"
 #include "yxapp.h"
 #include "yprefs.h"
 
@@ -36,7 +34,7 @@ void YXApplication::popdown(YPopupWindow *popdown) {
     PRECONDITION(fPopup != 0);
     PRECONDITION(fPopup == popdown);
     if (popdown != fPopup) {
-        MSG(("popdown: 0x%lX  fPopup: 0x%lX", popdown, fPopup));
+        MSG(("popdown: 0x%p  fPopup: 0x%p", popdown, fPopup));
         return ;
     }
     fPopup = fPopup->prevPopup();
@@ -48,7 +46,9 @@ void YXApplication::popdown(YPopupWindow *popdown) {
 
 YPopupWindow::YPopupWindow(YWindow *aParent): YWindow(aParent) {
     fForWindow = 0;
+    fPopDownListener = 0;
     fPrevPopup = 0;
+    fOwner = 0;
     fFlags = 0;
     fUp = false;
     fXiScreen = -1;
@@ -118,8 +118,10 @@ bool YPopupWindow::popup(YWindow *owner,
 /// TODO #warning "FIXME: this logic needs rethink"
     MSG(("x: %d y: %d x_delta: %d y_delta: %d", x, y, x_delta, y_delta));
 
-    int dx, dy, dw, dh;
-    desktop->getScreenGeometry(&dx, &dy, &dw, &dh, xiScreen);
+    int dx, dy;
+    unsigned uw, uh;
+    desktop->getScreenGeometry(&dx, &dy, &uw, &uh, xiScreen);
+    int dw = int(uw), dh = int(uh);
 
     { // check available space on left and right
         int spaceRight = dx + dw - x;
@@ -137,48 +139,48 @@ bool YPopupWindow::popup(YWindow *owner,
     int bspace = y - y_delta;
 
     /* !!! FIX this to maximize visible area */
-    if ((x + width() > dx + dw) || (fFlags & pfFlipHorizontal)) {
+    if ((x + int(width()) > dx + dw) || (fFlags & pfFlipHorizontal)) {
         if (//(lspace >= rspace) &&
             (fFlags & (pfCanFlipHorizontal | pfFlipHorizontal)))
         {
-            x -= width() + x_delta;
+            x -= int(width()) + x_delta;
             fFlags |= pfFlipHorizontal;
         } else
-            x = dx + dw - width();
+            x = dx + dw - int(width());
     }
-    if ((y + height() > dy + dh) || (fFlags & pfFlipVertical)) {
+    if ((y + int(height()) > dy + dh) || (fFlags & pfFlipVertical)) {
         if (//(tspace >= bspace) &&
             (fFlags & (pfCanFlipVertical | pfFlipVertical)))
         {
-            y -= height() + y_delta;
+            y -= int(height()) + y_delta;
             fFlags |= pfFlipVertical;
         } else
-            y = dy + dh - height();
+            y = dy + dh - int(height());
     }
-    if (x < dx && (x + width() < dx + dw / 2)) {
+    if (x < dx && (x + int(width()) < dx + dw / 2)) {
         if ((rspace >= lspace) &&
             (fFlags & pfCanFlipHorizontal))
-            x += width() + x_delta;
+            x += int(width()) + x_delta;
         else
             x = dx;
     }
-    if (y < dy && (y + height() < dy + dh / 2)) {
+    if (y < dy && (y + int(height()) < dy + dh / 2)) {
         if ((bspace >= tspace) &&
             (fFlags & pfCanFlipVertical))
-            y += height() + y_delta;
+            y += int(height()) + y_delta;
         else
             y = dy;
     }
 
     if (forWindow == 0) {
-        if ((x + width() > dx + dw))
-            x = dw - width();
+        if ((x + int(width()) > dx + dw))
+            x = dw - int(width());
 
         if (x < dx)
             x = dx;
 
-        if ((y + height() > dy + dh))
-            y = dh - height();
+        if ((y + int(height()) > dy + dh))
+            y = dh - int(height());
 
         if (y < dy)
             y = dy;
@@ -237,8 +239,8 @@ bool YPopupWindow::handleKey(const XKeyEvent &/*key*/) {
 void YPopupWindow::handleButton(const XButtonEvent &button) {
     if ((button.x_root >= x() &&
          button.y_root >= y() &&
-         button.x_root < int (x() + width()) &&
-         button.y_root < int (y() + height()) &&
+         button.x_root  < x() + int(width()) &&
+         button.y_root  < y() + int(height()) &&
          button.window == handle()) /*|
          button.button == Button4 ||
          button.button == Button5*/)
@@ -266,8 +268,8 @@ void YPopupWindow::handleButton(const XButtonEvent &button) {
 void YPopupWindow::handleMotion(const XMotionEvent &motion) {
     if (motion.x_root >= x() &&
         motion.y_root >= y() &&
-        motion.x_root < int (x() + width()) &&
-        motion.y_root < int (y() + height()) &&
+        motion.x_root  < x() + int(width()) &&
+        motion.y_root  < y() + int(height()) &&
         motion.window == handle())
     {
         YWindow::handleMotion(motion);
@@ -293,3 +295,5 @@ void YPopupWindow::dispatchMotionOutside(bool /*top*/, const XMotionEvent &motio
         fPrevPopup->dispatchMotionOutside(false, motion);
     }
 }
+
+// vim: set sw=4 ts=4 et:

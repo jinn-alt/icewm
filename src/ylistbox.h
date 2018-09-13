@@ -6,17 +6,18 @@
 #include "yscrollview.h"
 
 class YScrollView;
+class YIcon;
 
 class YListItem {
 public:
     YListItem();
     virtual ~YListItem();
-    
+
     YListItem *getNext();
     YListItem *getPrev();
     void setNext(YListItem *next);
     void setPrev(YListItem *prev);
-    
+
     bool getSelected() { return fSelected; }
     void setSelected(bool aSelected);
 
@@ -68,14 +69,14 @@ public:
     bool isSelected(int item);
     bool isSelected(YListItem *item);
 
-    virtual int contentWidth();
-    virtual int contentHeight();
+    virtual unsigned contentWidth();
+    virtual unsigned contentHeight();
     virtual YWindow *getWindow();
-    
+
     void focusSelectItem(int no) { setFocusedItem(no, true, false, false); }
 
     void repaintItem(YListItem *item);
-    
+
 private:
     YScrollBar *fVerticalScroll;
     YScrollBar *fHorizontalScroll;
@@ -110,10 +111,10 @@ private:
     void autoScroll(int delta, const XMotionEvent *motion);
     void focusVisible();
     void ensureVisibility(int item);
-    
-#ifdef CONFIG_GRADIENTS
+
     ref<YImage> fGradient;
-#endif
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

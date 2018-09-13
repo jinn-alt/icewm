@@ -21,24 +21,16 @@
 
 #define XFA(a) a, a##Xft
 
-#ifndef NO_CONFIGURE
 #ifdef CFGDEF
 #define XIV(t,a,b) t a(b);
 #else
 #define XIV(t,a,b) extern t a;
 #endif
-#else
-#ifdef CFGDEF
-#define XIV(t,a,b)
-#else
-#define XIV(t,a,b) static const t a(b);  // I hope this can be optimized away
-#endif
-#endif
 
 #ifndef __YCONFIG_H__
 #define __YCONFIG_H__
 
-#if CONFIG_XFREETYPE >= 2
+#ifdef CONFIG_XFREETYPE
 #define FONT(pt) "-*-sans-medium-r-*-*-*-" #pt "-*-*-*-*-*-*"
 #define BOLDFONT(pt) "-*-sans-bold-r-*-*-*-" #pt "-*-*-*-*-*-*"
 #define TTFONT(pt) "-*-monospace-medium-r-*-*-*-" #pt "-*-*-*-*-*-*"
@@ -65,10 +57,6 @@
 #define kfHyper  32
 #define kfAltGr  64
 
-#ifdef GENPREF
-///typedef unsigned int KeySym;
-#endif
-
 struct WMKey {
     KeySym key;
     unsigned int mod;
@@ -77,43 +65,73 @@ struct WMKey {
 };
 
 #ifdef CFGDESC
-#define OBV(n,v,d) { cfoption::CF_BOOL, n, { v, { 0, 0, 0 }, { 0, false }, { 0 } }, 0, d }
-#define OIV(n,v,m,M,d) { cfoption::CF_INT, n, { 0, { v, m, M }, { 0, false }, { 0 } }, 0, d }
-#define OSV(n,v,d) { cfoption::CF_STR, n, { 0, { 0, 0, 0 }, { v, true }, { 0 } }, 0, d }
-#define OFV(n,v,d) \
-    { cfoption::CF_STR, n, { 0, { 0, 0, 0 }, { v, true }, { 0 } }, 0, d }, \
-    { cfoption::CF_STR, n "Xft", { 0, { 0, 0, 0 }, { v##Xft, true }, { 0 } }, 0, d }
-
-#define OKV(n,v,d) { cfoption::CF_KEY, n, { 0, { 0, 0, 0 }, { 0, false }, { &v } }, 0, d }
-#define OKF(n,f,d) { cfoption::CF_STR, n, { NULL, { 0, 0, 0 }, { 0, false }, { 0 } }, &f, d }
-#define OK0() { cfoption::CF_NONE, 0, { NULL, { 0, 0, 0 }, { 0, false }, { 0 } }, 0, 0 }
-
+#define DESC(d) d
 #else
-#define OBV(n,v,d) { cfoption::CF_BOOL, n, { v, { 0, 0, 0 }, { 0, false }, { 0 } }, 0 }
-#define OIV(n,v,m,M,d) { cfoption::CF_INT, n, { 0, { v, m, M }, { 0, false }, { 0 } }, 0 }
-#define OSV(n,v,d) { cfoption::CF_STR, n, { 0, { 0, 0, 0 }, { v, true }, { 0 } }, 0 }
-#define OFV(n,v,d) \
-    { cfoption::CF_STR, n, { 0, { 0, 0, 0 }, { v, true }, { 0 } }, 0 }, \
-    { cfoption::CF_STR, n "Xft", { 0, { 0, 0, 0 }, { v##Xft, true }, { 0 } }, 0 }
-
-#define OKV(n,v,d) { cfoption::CF_KEY, n, { 0, { 0, 0, 0 }, { 0, false }, { &v } }, 0 }
-#define OKF(n,f,d) { cfoption::CF_STR, n, { NULL, { 0, 0, 0 }, { 0, false }, { 0 } }, &f }
-#define OK0() { cfoption::CF_NONE, 0, { NULL, { 0, 0, 0 }, { 0, false }, { 0 } }, 0 }
+#define DESC(d) ((const char *) 0)
 #endif
+
+#define OBV(n,v,d)     cfoption(n, v, DESC(d))
+#define OIV(n,v,m,M,d) cfoption(n, v, m, M, DESC(d))
+#define OUV(n,v,m,M,d) cfoption(n, v, m, M, DESC(d))
+#define OSV(n,v,d)     cfoption(n, v, DESC(d))
+#define OFV(n,v,d)     cfoption(n, v, DESC(d)), \
+                       cfoption(n "Xft", v##Xft, DESC(d))
+#define OKV(n,v,d)     cfoption(n, &v, DESC(d))
+#define OKF(n,f,d)     cfoption(n, f, DESC(d))
+#define OK0()          cfoption()
 
 struct cfoption {
-    enum { CF_BOOL, CF_INT, CF_STR, CF_KEY, CF_NONE } type;
+    typedef void (*notifyfun)(const char* name, const char* value, bool append);
+    enum {
+        CF_NONE, CF_BOOL, CF_INT, CF_UINT, CF_STR, CF_KEY, CF_FUNC,
+    } type;
     const char *name;
-    struct {
-        bool *bool_value;
-        struct { int *int_value; int min, max; } i;
-        struct { const char **string_value; bool initial; } s;
-        struct { struct WMKey *key_value; } k;
-    } v;
-    void (*notify)(const char *name, const char *value, bool append);
-#ifdef CFGDESC
     const char *description;
-#endif
+    union {
+        struct { int *int_value; int min, max; } i;
+        struct { unsigned *uint_value; unsigned min, max; } u;
+        struct { const char **string_value; bool initial; } s;
+        struct { WMKey *key_value; } k;
+        struct { bool *bool_value; } b;
+        struct { notifyfun notify; } f;
+    } v;
+
+    cfoption(const char* n, bool* b, const char* d)
+        : type(CF_BOOL), name(n), description(d) {
+        v.b.bool_value = b;
+    }
+    cfoption(const char* n, int* i, int m, int M, const char* d)
+        : type(CF_INT), name(n), description(d) {
+        v.i.int_value = i;
+        v.i.min = m;
+        v.i.max = M;
+    }
+    cfoption(const char* n, unsigned* u, unsigned m, unsigned M, const char* d)
+        : type(CF_UINT), name(n), description(d) {
+        v.u.uint_value = u;
+        v.u.min = m;
+        v.u.max = M;
+    }
+    cfoption(const char* n, const char** s, const char* d)
+        : type(CF_STR), name(n), description(d) {
+        v.s.string_value = s;
+        v.s.initial = true;
+    }
+    cfoption(const char* n, WMKey* k, const char* d)
+        : type(CF_KEY), name(n), description(d) {
+        v.k.key_value = k;
+    }
+    cfoption(const char* n, notifyfun f, const char* d)
+        : type(CF_FUNC), name(n), description(d) {
+        v.f.notify = f;
+    }
+    cfoption() : type(CF_NONE), name(0), description(0) { }
+    bool boolval() { return *v.b.bool_value; }
+    int intval() { return *v.i.int_value; }
+    unsigned uintval() { return *v.u.uint_value; }
+    const char* str() { return *v.s.string_value; }
+    WMKey* key() { return v.k.key_value; }
+    notifyfun fun() { return v.f.notify; }
 };
 
 class Argument;
@@ -129,6 +147,9 @@ public:
     static bool findLoadThemeFile(IApp *app, cfoption *options, upath name);
     static void parseConfiguration(cfoption *options, char *data);
     static bool parseKey(const char *arg, KeySym *key, unsigned int *mod);
+    static size_t cfoptionSize();
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

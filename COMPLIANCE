@@ -23,11 +23,11 @@ Section 4: Client to Window Manager Communication
 		 WM_TAKE_FOCUS:		compliant
 	4.1.2.8  WM_COLORMAP_WINDOWS:	NOT supported
 		 WM_COLORMAP_NOTIFY:	NOT supported
-	4.1.2.9  WM_CLIENT_MACHINE:	unused
+	4.1.2.9  WM_CLIENT_MACHINE:	supported
 
 4.1.3  Window Manager Properties:
 	4.1.3.1  WM_STATE:		compliant
-	4.1.3.2  WM_ICON_SIZE:		NOT supported
+	4.1.3.2  WM_ICON_SIZE:		supported
 
 4.1.4  Changing Window State:		compliant
 4.1.5  Configuring the Window:		compliant
@@ -57,7 +57,9 @@ Section 4: Client to Window Manager Communication
 Section 5: Session Management
 
 5.1  Client Support:
+	SM_CLIENT_ID			compliant
 	WM_CLIENT_LEADER		compliant
+	WM_WINDOW_ROLE			compliant
 
 5.2  Window Manager Support:		compliant
 	WM_COMMAND			NOT supported
@@ -65,12 +67,19 @@ Section 5: Session Management
 
 Section 6: Manipulation of Shared Resources
 
-6.1  The Input Focus
-6.2  The Pointer
-6.3  Grabs
-6.4  Colormaps
-6.5  The Keyboard Mapping
-6.6  The Modifier Mapping
+6.1  The Input Focus			???
+6.2  The Pointer			???
+6.3  Grabs				???
+6.4  Colormaps				???
+6.5  The Keyboard Mapping		???
+6.6  The Modifier Mapping		???
+
+Others:
+	WM_LOCALE_NAME			???
+
+Deprecated:
+	WM_SIZE_HINTS			???
+	WM_ZOOM_HINTS			???
 
 ------------------------------------------------------------------------
 
@@ -91,7 +100,7 @@ _NET_ACTIVE_WINDOW:			supported
 _NET_WORKAREA:				supported
 _NET_SUPPORTING_WM_CHECK:		supported
 _NET_VIRTUAL_ROOTS:			NOT supported (n/a)
-_NET_DESKTOP_LAYOUT:			NOT supported
+_NET_DESKTOP_LAYOUT:			supported
 _NET_SHOWING_DESKTOP:			supported
 
 
@@ -101,7 +110,7 @@ _NET_CLOSE_WINDOW:			supported
 _NET_MOVERESIZE_WINDOW:			supported
 _NET_WM_MOVERESIZE:			supported
 _NET_RESTACK_WINDOW:			supported
-_NET_REQUEST_FRAME_EXTENTS:		NOT supported
+_NET_REQUEST_FRAME_EXTENTS:		supported
 
 
 Section 5: Application Window Properties
@@ -167,7 +176,7 @@ _NET_WM_BYPASS_COMPOSITOR:		NOT supported (n/a)
 
 Section 6: Window Manager Protocols
 
-_NET_WM_PING:				NOT supported
+_NET_WM_PING:				supported
 _NET_WM_SYNC_REQUEST:			NOT supported
 _NET_WM_SYNC_REQUEST_COUNTER:		NOT supported
 _NET_WM_FULLSCREEN_MONITORS:		supported
@@ -183,16 +192,66 @@ _NET_STARTUP_ID:			supported
 _NET_STARTUP_INFO:			NOT supported
 _NET_STARTUP_INFO_BEGIN:		NOT supported
 
+XEmbed Protocol Specification Version 0.5:
+
+Embedding life cycle
+	_XEMBED_INFO
+		XEMBED_MAPPED
+    Message Specifications
+	XEMBED_EMBEDDED_NOTIFY		NOT supported
+	XEMBED_WINDOW_ACTIVATE		NOT supported
+	XEMBED_WINDOW_DEACTIVATE	NOT supported
+	XEMBED_REQUEST_FOCUS		NOT supported
+	XEMBED_FOCUS_IN			NOT supported
+		XEMBED_FOCUS_CURRENT		???
+		XEMBED_FOCUS_FIRST		???
+		XEMBED_FOCUS_LAST		???
+	XEMBED_FOCUS_OUT		NOT supported
+	XEMBED_FOCUS_NEXT		NOT supported
+	XEMBED_FOCUS_PREV		NOT supported
+	XEMBED_GRAB_KEY			(deprecated)
+	XEMBED_UNGRAB_KEY		(deprecated)
+	XEMBED_MODALITY_ON		NOT supported
+	XEMBED_MODALITY_OFF		NOT supported
+	XEMBED_REGISTER_ACCELERATOR	NOT supported
+		XEMBED_MODIFIER_SHIFT		???
+		XEMBED_MODIFIER_CONTROL		???
+		XEMBED_MODIFIER_ALT		???
+		XEMBED_MODIFIER_SUPER		???
+		XEMBED_MODIFIER_MYPER		???
+	XEMBED_UNREGISTER_ACCELERATOR	NOT supported
+	XEMBED_ACTIVATE_ACCELERATOR	NOT supported
+		XEMBED_ACCELERATOR_OVERLOADED	???
+   Techniques
+	Handling errors
+	Forwarding X Events
+	Sending XEmbed messages
+    Issues
+	Implementation of modality
+	Clarify function of timestamps
+	Complexity of accelerator handling
+	Infinite loops in focusing
+	Robustness
+	Sensitivity
+	Directional focusing
+	Modal dialogs
+	Propagation of key presses
+	Handling of toplevel modes
+
 System Tray Specification:
 
+_NET_SYSTEM_TRAY_S(n)			?
 _NET_SYSTEM_TRAY_MESSAGE_DATA:		supported
 _NET_SYSTEM_TRAY_OPCODE:		supported
+	SYSTEM_TRAY_REQUEST_DOCK	?
+	SYSTEM_TRAY_BEGIN_MESSAGE	?
+	SYSTEM_TRAY_CANCEL_MESSAGE	?
 _NET_SYSTEM_TRAY_ORIENTATION:		NOT supported
 _NET_SYSTEM_TRAY_VISUAL:		NOT supported
 
 Composite Manager Specification:
 
-_NET_WM_WINDOW_OPACITY:			NOT supported (n/a)
+_NET_WM_WINDOW_OPACITY:			supported
 
 
 ------------------------------------------------------------------------

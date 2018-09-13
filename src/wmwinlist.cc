@@ -23,8 +23,6 @@
 
 #include "intl.h"
 
-#ifdef CONFIG_WINLIST
-
 WindowList *windowList = 0;
 
 WindowListItem::WindowListItem(ClientData *frame, int workspace): YListItem() {
@@ -66,8 +64,7 @@ ustring WindowListItem::getText() {
 ref<YIcon> WindowListItem::getIcon() {
     if (fFrame)
         return getFrame()->getIcon();
-    else
-        return null;
+    return null;
 }
 
 
@@ -108,7 +105,7 @@ void WindowListBox::getSelectedWindows(YArray<YFrameWindow *> &frames) {
     }
 }
 
-void WindowListBox::actionPerformed(YAction *action, unsigned int modifiers) {
+void WindowListBox::actionPerformed(YAction action, unsigned int modifiers) {
     YArray<YFrameWindow *> frameList;
     getSelectedWindows(frameList);
 
@@ -133,11 +130,9 @@ void WindowListBox::actionPerformed(YAction *action, unsigned int modifiers) {
         }
     } else {
         for (int i = 0; i < frameList.getCount(); i++) {
-#ifndef CONFIG_PDA
             if (action == actionHide)
                 if (frameList[i]->isHidden())
                     continue;
-#endif
             if (action == actionMinimize)
                 if (frameList[i]->isMinimized())
                     continue;
@@ -225,7 +220,7 @@ void WindowListBox::enableCommands(YMenu *popup) {
     // enable minimize,hide if appropriate
     // enable workspace selections if appropriate
 
-    popup->enableCommand(0);
+    popup->enableCommand(actionNull);
     for (YListItem *i = getFirst(); i; i = i->getNext()) {
         if (isSelected(i)) {
             WindowListItem *item = (WindowListItem *)i;
@@ -246,18 +241,16 @@ void WindowListBox::enableCommands(YMenu *popup) {
             } else if (workspace != ws) {
                 sameWorkspace = false;
             }
-            if (item->getFrame()->isSticky())
+            if (item->getFrame()->isAllWorkspaces())
                 sameWorkspace = false;
         }
     }
-#ifndef CONFIG_PDA
     if (!notHidden)
         popup->disableCommand(actionHide);
-#endif
     if (!notMinimized)
         popup->disableCommand(actionMinimize);
 
-    moveMenu->enableCommand(0);
+    moveMenu->enableCommand(actionNull);
     if (sameWorkspace && workspace != -1) {
         for (int i = 0; i < moveMenu->itemCount(); i++) {
             YMenuItem *item = moveMenu->getItem(i);
@@ -267,8 +260,8 @@ void WindowListBox::enableCommands(YMenu *popup) {
         }
     }
     if (noItems) {
-        moveMenu->disableCommand(0);
-        popup->disableCommand(0);
+        moveMenu->disableCommand(actionNull);
+        popup->disableCommand(actionNull);
     }
 }
 
@@ -305,9 +298,7 @@ YFrameClient(aParent, 0) {
     windowListPopup = new YMenu();
     windowListPopup->setActionListener(list);
     windowListPopup->addItem(_("_Show"), -2, null, actionShow);
-#ifndef CONFIG_PDA
     windowListPopup->addItem(_("_Hide"), -2, null, actionHide);
-#endif
     windowListPopup->addItem(_("_Minimize"), -2, null, actionMinimize);
     windowListPopup->addSubmenu(_("Move _To"), -2, moveMenu);
     windowListPopup->addSeparator();
@@ -332,31 +323,36 @@ YFrameClient(aParent, 0) {
     windowListAllPopup->addItem(_("_Hide All"), -2, KEY_NAME(gKeySysHideAll), actionHideAll);
     windowListAllPopup->addItem(_("_Undo"), -2, KEY_NAME(gKeySysUndoArrange), actionUndoArrange);
 
-    int dx, dy, dw, dh;
+    int dx, dy;
+    unsigned dw, dh;
     manager->getScreenGeometry(&dx, &dy, &dw, &dh, 0);
 
-    int w = dw;
-    int h = dh;
+    unsigned w = dw;
+    unsigned h = dh;
 
     setGeometry(YRect(w / 4, h / 4, w / 2, h / 2));
 
     windowList = this;
+    setTitle("WindowList");
     setWindowTitle(_("Window list"));
     setIconTitle(_("Window list"));
-    setWinStateHint(WinStateAllWorkspaces, WinStateAllWorkspaces);
-#if defined(GNOME1_HINTS) || defined(WMSPEC_HINTS)
-    setWinWorkspaceHint(0);
-#endif
-#ifdef GNOME1_HINTS
+    setClassHint("windowList", "IceWM");
+
+    setWinHintsHint(WinHintsSkipTaskBar);
+    setWinWorkspaceHint(-1);
     setWinLayerHint(WinLayerAboveDock);
-#endif
 }
 
 WindowList::~WindowList() {
     delete list; list = 0;
     delete scroll; scroll = 0;
     windowList = 0;
+    delete windowListAllPopup; windowListAllPopup = 0;
 
+    for (int ws = 0; ws <= fWorkspaceCount; ws++) {
+        delete workspaceItem[ws];
+    }
+    delete[] workspaceItem;
 }
 
 void WindowList::updateWorkspaces() {
@@ -417,7 +413,7 @@ void WindowList::insertApp(WindowListItem *item) {
         list->addAfter(frame->owner()->winListItem(), item);
     } else {
         int nw = frame->getWorkspace();
-        if (!frame->isSticky())
+        if (!frame->isAllWorkspaces())
             list->addAfter(workspaceItem[nw], item);
         else
             list->addItem(item);
@@ -464,15 +460,17 @@ void WindowList::showFocused(int x, int y) {
             int px, py;
 
             int xiscreen = manager->getScreenForRect(x, y, 1, 1);
-            int dx, dy, dw, dh;
-            manager->getScreenGeometry(&dx, &dy, &dw, &dh, xiscreen);
+            int dx, dy;
+            unsigned uw, uh;
+            manager->getScreenGeometry(&dx, &dy, &uw, &uh, xiscreen);
+            int dw = int(uw), dh = int(uh);
 
-            px = x - getFrame()->width() / 2;
-            py = y - getFrame()->height() / 2;
-            if (px + getFrame()->width() > dx + dw)
-                px = dx + dw - getFrame()->width();
-            if (py + getFrame()->height() > dy + dh)
-                py = dx + dh - getFrame()->height();
+            px = x - int(getFrame()->width() / 2);
+            py = y - int(getFrame()->height() / 2);
+            if (px + int(getFrame()->width()) > dx + dw)
+                px = dx + dw - int(getFrame()->width());
+            if (py + int(getFrame()->height()) > dy + dh)
+                py = dx + dh - int(getFrame()->height());
             if (px < dx)
                 px = dx;
             if (py < dy)
@@ -480,8 +478,9 @@ void WindowList::showFocused(int x, int y) {
             getFrame()->setNormalPositionOuter(px, py);
         }
         getFrame()->setRequestedLayer(WinLayerAboveDock);
-        getFrame()->setState(WinStateAllWorkspaces, WinStateAllWorkspaces);
+        getFrame()->setAllWorkspaces();
         getFrame()->activateWindow(true);
     }
 }
-#endif
+
+// vim: set sw=4 ts=4 et:

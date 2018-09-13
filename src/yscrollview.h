@@ -7,12 +7,12 @@ class YScrollBar;
 
 class YScrollable {
 public:
-    virtual int contentWidth() = 0;
-    virtual int contentHeight() = 0;
+    virtual unsigned contentWidth() = 0;
+    virtual unsigned contentHeight() = 0;
 
     virtual YWindow *getWindow() = 0; // !!! hack ?
 protected:
-    virtual ~YScrollable() {};
+    virtual ~YScrollable() {}
 };
 
 class YScrollView: public YWindow {
@@ -25,7 +25,7 @@ public:
     YScrollBar *getVerticalScrollBar() { return scrollVert; }
     YScrollBar *getHorizontalScrollBar() { return scrollHoriz; }
     YScrollable *getScrollable() { return scrollable; }
-    
+
     void layout();
     virtual void configure(const YRect &r);
     virtual void paint(Graphics &g, const YRect &r);
@@ -40,3 +40,5 @@ private:
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:

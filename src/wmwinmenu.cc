@@ -5,8 +5,6 @@
  */
 #include "config.h"
 
-#ifdef CONFIG_WINMENU
-
 #include "wmaction.h"
 #include "ylib.h"
 #include "ymenu.h"
@@ -22,19 +20,17 @@
 
 #include "intl.h"
 
-class ActivateWindowMenuItem: public YMenuItem, public YAction {
+class ActivateWindowMenuItem: public YMenuItem {
 public:
-    ActivateWindowMenuItem(YFrameWindow *frame): 
-        YMenuItem(frame->getTitle(), -1, null, this, 0),
+    ActivateWindowMenuItem(YFrameWindow *frame):
+        YMenuItem(frame->getTitle(), -1, null, YAction(), 0),
         fFrame(frame)
     {
-#ifndef LITE
         if (fFrame->clientIcon() != null)
             setIcon(fFrame->clientIcon());
-#endif
     }
 
-    virtual void actionPerformed(YActionListener * /*listener*/, YAction * /*action*/, unsigned int modifiers) {
+    virtual void actionPerformed(YActionListener * /*listener*/, YAction /*action*/, unsigned int modifiers) {
         YFrameWindow *f = manager->topLayer();
 
         while (f) {
@@ -72,10 +68,8 @@ YMenu *YWindowManager::createWindowMenu(YMenu *menu, long workspace) {
                     continue;
                 if (!frame->visibleOn(workspace))
                     continue;
-#ifndef NO_WINDOW_OPTIONS
                 if (frame->frameOptions() & YFrameWindow::foIgnoreWinList)
                     continue;
-#endif
                 if (workspace != activeWorkspace() &&
                     frame->visibleOn(activeWorkspace()))
                     continue;
@@ -91,7 +85,7 @@ YMenu *YWindowManager::createWindowMenu(YMenu *menu, long workspace) {
                 if (level != windowLevel)
                     continue;
 
-                if ((levelCount == 0 && level > 0) || 
+                if ((levelCount == 0 && level > 0) ||
                     ((layerCount == 0 && layer > 0) && needSeparator))
                     menu->addSeparator();
 
@@ -133,10 +127,8 @@ void WindowListMenu::updatePopup() {
             sub = manager->createWindowMenu(0, d);
         addItem(s, (d < 10) ? 0 : -1, workspaceActionActivate[d], sub);
     }
-#ifdef CONFIG_WINLIST
     addSeparator();
     addItem(_("_Window list"), -2, KEY_NAME(gKeySysWindowList), actionWindowList);
-#endif
 }
 
-#endif
+// vim: set sw=4 ts=4 et:

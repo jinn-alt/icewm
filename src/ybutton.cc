@@ -5,7 +5,6 @@
  */
 #include "config.h"
 #include "ykey.h"
-#include "ypixbuf.h"
 #include "ybutton.h"
 #include "yaction.h"
 #include "ymenu.h"
@@ -22,16 +21,16 @@
 
 #include "intl.h"
 
-YColor *YButton::normalButtonBg = 0;
-YColor *YButton::normalButtonFg = 0;
+YColorName YButton::normalButtonBg(&clrNormalButton);
+YColorName YButton::normalButtonFg(&clrNormalButtonText);
 
-YColor *YButton::activeButtonBg = 0;
-YColor *YButton::activeButtonFg = 0;
+YColorName YButton::activeButtonBg(&clrActiveButton);
+YColorName YButton::activeButtonFg(&clrActiveButtonText);
 
 ref<YFont> YButton::normalButtonFont;
 ref<YFont> YButton::activeButtonFont;
 
-YButton::YButton(YWindow *parent, YAction *action, YMenu *popup) :
+YButton::YButton(YWindow *parent, YAction action, YMenu *popup) :
     YWindow(parent),
     fOver(false),
     fAction(action), fPopup(popup),
@@ -51,14 +50,6 @@ YButton::YButton(YWindow *parent, YAction *action, YMenu *popup) :
         normalButtonFont = YFont::getFont(XFA(normalButtonFontName));
     if (activeButtonFont == null)
         activeButtonFont = YFont::getFont(XFA(activeButtonFontName));
-    if (normalButtonBg == 0)
-        normalButtonBg = new YColor(clrNormalButton);
-    if (normalButtonFg == 0)
-        normalButtonFg = new YColor(clrNormalButtonText);
-    if (activeButtonBg == 0)
-        activeButtonBg = new YColor(clrActiveButton);
-    if (activeButtonFg == 0)
-        activeButtonFg = new YColor(clrActiveButtonText);
 }
 
 YButton::~YButton() {
@@ -68,6 +59,9 @@ YButton::~YButton() {
             removeAccelerator(hotKey, xapp->AltMask, this);
     }
     popdown();
+    if (fPopup && fPopup->isShared() == false) {
+        delete fPopup;
+    }
 }
 
 void YButton::paint(Graphics &g, int const d, const YRect &r) {
@@ -75,14 +69,12 @@ void YButton::paint(Graphics &g, int const d, const YRect &r) {
     YSurface surface(getSurface());
     g.drawSurface(surface, x, y, w, h);
 
-#ifndef LITE
     if (fIcon != null)
         fIcon->draw(g,
                     x + (w - fIconSize) / 2,
                     y + (h - fIconSize) / 2,
                     fIconSize);
     else
-#endif
     if (fImage != null)
         g.drawImage(fImage,
                     x + (w - fImage->width()) / 2,
@@ -100,7 +92,7 @@ void YButton::paint(Graphics &g, int const d, const YRect &r) {
         if (!fEnabled) {
             g.setColor(YColor::white);
             g.drawChars(fText, d + p + 1, yp + 1);
-            g.setColor(YColor::white->darker()->darker());
+            g.setColor(YColor::white->darker().darker());
             g.drawChars(fText, d + p, yp);
         } else {
             g.drawChars(fText, d + p, yp);
@@ -124,8 +116,8 @@ void YButton::paint(Graphics &g, const YRect &/*r*/) {
         } else if (wmLook == lookGtk) {
             g.drawBorderG(x, y, w - 1, h - 1, !d);
             x += 1 + d; y += 1 + d; w -= 3; h -= 3;
-	} else if (wmLook == lookFlat){
-	    d = 0;
+        } else if (wmLook == lookFlat){
+            d = 0;
         } else {
             g.drawBorderW(x, y, w - 1, h - 1, !d);
             x += 1 + d; y += 1 + d; w -= 3; h -= 3;
@@ -235,10 +227,11 @@ bool YButton::handleKey(const XKeyEvent &key) {
                     bool wasArmed = fArmed;
 
                     // !!! is this guaranteed to work? (skip autorepeated keys)
-                    XEvent xev;
+                    XEvent xev = {};
 
-                    XCheckTypedWindowEvent(xapp->display(), handle(), KeyPress, &xev);
-                    if (xev.type == KeyPress &&
+                    if (XCheckTypedWindowEvent(xapp->display(), handle(),
+                                               KeyPress, &xev) &&
+                        xev.type == KeyPress &&
                         xev.xkey.time == key.time &&
                         xev.xkey.keycode == key.keycode &&
                         xev.xkey.state == key.state)
@@ -438,12 +431,12 @@ bool YButton::isFocusTraversable() {
     return true;
 }
 
-void YButton::setAction(YAction *action) {
+void YButton::setAction(YAction action) {
     fAction = action;
 }
 
-void YButton::actionPerformed(YAction *action, unsigned modifiers) {
-    if (fListener && action && fEnabled)
+void YButton::actionPerformed(YAction action, unsigned modifiers) {
+    if (fListener && action != actionNull && fEnabled)
         fListener->actionPerformed(action, modifiers);
 }
 
@@ -451,18 +444,13 @@ ref<YFont> YButton::getFont() {
     return (fPressed ? activeButtonFont : normalButtonFont);
 }
 
-YColor * YButton::getColor() {
+YColor YButton::getColor() {
     return (fPressed ? activeButtonFg : normalButtonFg);
 }
 
 YSurface YButton::getSurface() {
-#ifdef CONFIG_GRADIENTS
     return (fPressed ? YSurface(activeButtonBg, buttonAPixmap, buttonAPixbuf)
                      : YSurface(normalButtonBg, buttonIPixmap, buttonIPixbuf));
-#else
-    return (fPressed ? YSurface(activeButtonBg, buttonAPixmap)
-                     : YSurface(normalButtonBg, buttonIPixmap));
-#endif
 }
 
 void YButton::setEnabled(bool enabled) {
@@ -476,3 +464,5 @@ void YButton::setEnabled(bool enabled) {
         repaint();
     }
 }
+
+// vim: set sw=4 ts=4 et:

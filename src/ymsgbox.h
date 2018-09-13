@@ -11,7 +11,7 @@ class YMsgBoxListener {
 public:
     virtual void handleMsgBox(YMsgBox *msgbox, int operation) = 0;
 protected:
-    virtual ~YMsgBoxListener() {};
+    virtual ~YMsgBoxListener() {}
 };
 
 class YMsgBox: public YDialog, public YActionListener {
@@ -26,7 +26,7 @@ public:
     void setMsgBoxListener(YMsgBoxListener *listener) { fListener = listener; }
     YMsgBoxListener *getMsgBoxListener() const { return fListener; }
 
-    void actionPerformed(YAction *action, unsigned int modifiers);
+    virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual void handleClose();
     virtual void handleFocus(const XFocusChangeEvent &focus);
 
@@ -50,3 +50,5 @@ private:
 };
 
 #endif
+
+// vim: set sw=4 ts=4 et:
