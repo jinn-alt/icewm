@@ -2,7 +2,7 @@
 %define realname icewm
 %define gitrev .git47ff050
 
-Name: %realname-githubmod
+Name: %realname
 Version: 1.4.2
 Release: alt2%gitrev
 
@@ -12,9 +12,10 @@ License: LGPLv2
 Url: http://ice-wm.org
 Packager: Dmitriy Khanzhin <jinn@altlinux.org>
 
-Provides: %realname = %version-%release
+Provides: %realname-githubmod = %version-%release
 Provides: %realname-light = %version-%release
 Requires: design-%realname >= 1.0-alt6
+Obsoletes: %realname-githubmod < %version-%release
 Obsoletes: %realname-light < %version-%release
 
 Source0: %name.tar
@@ -119,6 +120,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %changelog
 * Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
 - git snapshot 47ff050
+- changed package name back to icewm
 - changed Url
 - build without esound
 
