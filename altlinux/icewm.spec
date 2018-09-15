@@ -115,9 +115,10 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %_liconsdir/*
 %_pixmapsdir/*
 %_man1dir/*
+%_man5dir/*
 %_datadir/xsessions/*.desktop
 
-%doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
+%doc AUTHORS NEWS README.ALT README.md BUILD/*.html icewm-old-changelog.bz2
 
 %changelog
 * Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
@@ -126,6 +127,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 - changed Url
 - build without esound
 - buildreq
+- fixed documentation
 
 * Sun Jul 30 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt1
 - 1.4.2 release
