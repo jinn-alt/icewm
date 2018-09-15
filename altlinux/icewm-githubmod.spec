@@ -1,10 +1,10 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
-%define gitrev .git54dcb3a
+%define gitrev .git47ff050
 
 Name: %realname-githubmod
 Version: 1.4.2
-Release: alt1
+Release: alt2%gitrev
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
@@ -117,6 +117,9 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/doc/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
+- git snapshot 47ff050
+
 * Sun Jul 30 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt1
 - 1.4.2 release
 - builreq
