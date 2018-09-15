@@ -9,8 +9,8 @@ Release: alt2%gitrev
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
 License: LGPLv2
-Url: http://www.icewm.org
-Packager: Dmitriy Khanzhin <jinn@altlinux.ru>
+Url: http://ice-wm.org
+Packager: Dmitriy Khanzhin <jinn@altlinux.org>
 
 Provides: %realname = %version-%release
 Provides: %realname-light = %version-%release
@@ -119,6 +119,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %changelog
 * Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
 - git snapshot 47ff050
+- changed Url
 
 * Sun Jul 30 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt1
 - 1.4.2 release
