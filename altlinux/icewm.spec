@@ -124,6 +124,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 * Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
 - git snapshot 47ff050
 - changed package name back to icewm
+- altconf: src/bindkey.h: key bindings back to default settings
 - changed Url
 - build without esound
 - buildreq
