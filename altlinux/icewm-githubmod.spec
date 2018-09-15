@@ -35,7 +35,7 @@ BuildRequires(pre): rpm-macros-cmake
 # Automatically added by buildreq on Sun Jul 30 2017
 BuildRequires: asciidoc cmake gcc-c++ glibc-kernheaders-generic libSM-devel
 BuildRequires: libXext-devel libXft-devel libXinerama-devel libXrandr-devel
-BuildRequires: libalsa-devel libesd-devel libgdk-pixbuf-devel libsndfile-devel time
+BuildRequires: libalsa-devel libgdk-pixbuf-devel libsndfile-devel time
 
 %description
  Window Manager for X Window System. Can emulate the look of Windows'95, OS/2
@@ -54,7 +54,7 @@ Recommends: iftop, mutt
 %build
 %cmake	-DCFGDIR=%_sysconfdir/X11/%realname -DPREFIX=%_prefix \
 	-DLIBDIR=%_x11x11dir/%realname -DDOCDIR=%_datadir/doc/%name-%version \
-	-DCONFIG_GUIEVENTS=on  -DICESOUND="ALSA,OSS,ESound"
+	-DCONFIG_GUIEVENTS=on  -DICESOUND="ALSA,OSS"
 pushd BUILD
 %make_build
 popd
@@ -120,6 +120,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 * Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
 - git snapshot 47ff050
 - changed Url
+- build without esound
 
 * Sun Jul 30 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt1
 - 1.4.2 release
