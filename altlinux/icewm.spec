@@ -5,11 +5,12 @@
 Name: %realname
 Version: 1.4.2
 Release: alt2%gitrev
+Epoch:3
 
 Summary: X11 Window Manager
 Group: Graphical desktop/Icewm
 License: LGPLv2
-Url: http://ice-wm.org
+Url: https://ice-wm.org
 Packager: Dmitriy Khanzhin <jinn@altlinux.org>
 
 Provides: %realname-githubmod = %version-%release
@@ -121,9 +122,10 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/*.html icewm-old-changelog.bz2
 
 %changelog
-* Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt2.git47ff050
+* Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.4.2-alt2.git47ff050
 - git snapshot 47ff050
 - changed package name back to icewm
+- added Epoch
 - altconf: src/bindkey.h: key bindings back to default settings
 - changed Url
 - build without esound
