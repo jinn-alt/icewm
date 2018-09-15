@@ -33,10 +33,12 @@ Source12: icewm-old-changelog.bz2
 Patch0: %name-%version-%release.patch
 
 BuildRequires(pre): rpm-macros-cmake
-# Automatically added by buildreq on Sun Jul 30 2017
-BuildRequires: asciidoc cmake gcc-c++ glibc-kernheaders-generic libSM-devel
-BuildRequires: libXext-devel libXft-devel libXinerama-devel libXrandr-devel
-BuildRequires: libalsa-devel libgdk-pixbuf-devel libsndfile-devel time
+# Automatically added by buildreq on Sat Sep 15 2018
+BuildRequires: asciidoc cmake gcc-c++ libSM-devel libXext-devel libXft-devel
+BuildRequires: libXinerama-devel libXpm-devel libXrandr-devel libalsa-devel
+BuildRequires: libgio-devel libjpeg-devel libpng-devel libsndfile-devel
+BuildRequires: perl-Pod-Usage python-modules-compiler python-modules-encodings
+BuildRequires: time
 
 %description
  Window Manager for X Window System. Can emulate the look of Windows'95, OS/2
@@ -123,6 +125,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 - changed package name back to icewm
 - changed Url
 - build without esound
+- buildreq
 
 * Sun Jul 30 2017 Dmitriy Khanzhin <jinn@altlinux.org> 1.4.2-alt1
 - 1.4.2 release
