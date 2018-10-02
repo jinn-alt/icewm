@@ -1,10 +1,10 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
-%define gitrev .git47ff050
+%define gitrev .git0ac7580
 
 Name: %realname
 Version: 1.4.2
-Release: alt2%gitrev
+Release: alt3%gitrev
 Epoch:3
 
 Summary: X11 Window Manager
@@ -122,6 +122,9 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/*.html icewm-old-changelog.bz2
 
 %changelog
+* Tue Oct 02 2018 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.4.2-alt3.git0ac7580
+- git snapshot 0ac7580
+
 * Sat Sep 15 2018 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.4.2-alt2.git47ff050
 - git snapshot 47ff050
 - changed package name back to icewm
