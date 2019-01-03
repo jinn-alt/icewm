@@ -16,6 +16,18 @@ class YIcon;
 
 typedef int FrameState;
 
+class ClassHint : public XClassHint {
+public:
+    ClassHint() { res_name = res_class = 0; }
+    ~ClassHint() { reset(); }
+    void reset() {
+        if (res_name) { XFree(res_name); res_name = 0; }
+        if (res_class) { XFree(res_class); res_class = 0; }
+    }
+    bool match(const char* resource) const;
+    char* resource() const;
+};
+
 class ClientData {
 public:
     virtual void setWinListItem(WindowListItem *i) = 0;
@@ -23,13 +35,26 @@ public:
     virtual ref<YIcon> getIcon() const = 0;
     virtual ustring getTitle() const = 0;
     virtual ustring getIconTitle() const = 0;
-    virtual void activateWindow(bool raise) = 0;
+    virtual void activateWindow(bool raise, bool curWork) = 0;
     virtual bool isHidden() const = 0;
+    virtual bool isMaximized() const = 0;
+    virtual bool isMaximizedVert() const = 0;
+    virtual bool isMaximizedHoriz() const = 0;
+    virtual bool isMaximizedFully() const = 0;
     virtual bool isMinimized() const = 0;
+    virtual bool isFullscreen() const = 0;
+    virtual bool isRollup() const = 0;
     virtual void actionPerformed(YAction action, unsigned int modifiers) = 0;
     virtual bool focused() const = 0;
     virtual bool visibleNow() const = 0;
+    virtual bool canClose() const = 0;
+    virtual bool canHide() const = 0;
+    virtual bool canLower() const = 0;
+    virtual bool canMinimize() const = 0;
+    virtual bool canMaximize() const = 0;
     virtual bool canRaise() = 0;
+    virtual bool canRestore() const = 0;
+    virtual bool canRollup() const = 0;
     virtual void wmRaise() = 0;
     virtual void wmLower() = 0;
     virtual void wmMinimize() = 0;
@@ -115,7 +140,7 @@ public:
     Window ownerWindow() const { return fTransientFor; }
 
     void getClassHint();
-    XClassHint *classHint() const { return fClassHint; }
+    ClassHint* classHint() { return &fClassHint; }
 
     void getNameHint();
     void getNetWmName();
@@ -151,6 +176,7 @@ public:
     bool getNetWMIcon(int *count, long **elem);
     bool getNetWMStateHint(long *mask, long *state);
     bool getNetWMDesktopHint(long *workspace);
+    bool getNetWMPid(long *pid);
     bool getNetWMStrut(int *left, int *right, int *top, int *bottom);
     bool getNetWMStrutPartial(int *left, int *right, int *top, int *bottom,
             int *left_start_y=0, int *left_end_y=0, int *right_start_y=0, int *right_end_y=0,
@@ -206,7 +232,7 @@ private:
     FrameState fSavedFrameState;
     long fSavedWinState[2];
     XSizeHints *fSizeHints;
-    XClassHint *fClassHint;
+    ClassHint fClassHint;
     XWMHints *fHints;
     Colormap fColormap;
     bool fShaped;
@@ -214,6 +240,7 @@ private:
     long fPingTime;
     lazy<YTimer> fPingTimer;
     long fWinHints;
+    long fPid;
 
     ustring fWindowTitle;
     ustring fIconTitle;
@@ -254,6 +281,7 @@ private:
         bool net_wm_user_time : 1;
         bool net_wm_user_time_window : 1;
         bool net_wm_window_opacity : 1;
+        bool net_wm_pid : 1;
         bool mwm_hints : 1;
         bool win_hints : 1;
         bool win_workspace : 1; // no property notify

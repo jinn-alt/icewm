@@ -3,6 +3,7 @@
 #include "upath.h"
 #include "base.h"
 #include "udir.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <libgen.h>
 #include <unistd.h>
@@ -46,10 +47,21 @@ public:
     }
 };
 
-static void test_failed(const char *u, const char *s, int l)
+static void test_failed(cstring u, const char *s, int l)
 {
     printf("%s: Test failed in %s:%d: u = \"%s\", s = \"%s\"\n",
-            prog, source, l, u, s);
+            prog, source, l,
+            u == null ? "NULL" : u.c_str(),
+            s == 0 ? "NULL" : s);
+    ++failed;
+}
+
+static void test_failed(cstring u, cstring s, int l)
+{
+    printf("%s: Test failed in %s:%d: u = \"%s\", s = \"%s\"\n",
+            prog, source, l,
+            u == null ? "NULL" : u.c_str(),
+            s == null ? "NULL" : s.c_str());
     ++failed;
 }
 
@@ -178,7 +190,7 @@ static void test_mstring()
 
     mstring u = NULL;
     expect(u, "");
-    u = mstring(NULL) + "aha";
+    u = mstring((char *) NULL) + "aha";
     expect(u, "aha");
     u = mstring("aha") + NULL;
     expect(u, "aha");
@@ -308,6 +320,15 @@ static void test_upath()
     expect(a.getExtension(), ".q");
     a = "/stu/.vw";
     expect(a.getExtension(), null);
+
+    upath hm("~");
+    expect(hm.expand(), getenv("HOME"));
+    hm = "~/";
+    assert(strlen(hm.expand()), 1 + strlen(getenv("HOME")));
+    hm = "$HOME";
+    expect(hm.expand(), getenv("HOME"));
+    hm = "$HOME/";
+    assert(strlen(hm.expand()), 1 + strlen(getenv("HOME")));
 }
 
 static void test_strlc()

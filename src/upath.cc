@@ -11,6 +11,9 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include "base.h"
+#include "yapp.h"
+#include "ypointer.h"
 
 const pstring upath::slash("/");
 const upath upath::rootPath(slash);
@@ -21,14 +24,12 @@ bool upath::isSeparator(int ch) const {
 
 upath upath::parent() const {
     int len = length();
-    while (len > 1 && isSeparator(fPath[len - 1])) {
-        --len;
+    int sep = fPath.lastIndexOf('/');
+    while (0 < sep && 1 + sep == len) {
+        len = sep;
+        sep = fPath.substring(0, len).lastIndexOf('/');
     }
-    for (; len > 0; --len) {
-        if (isSeparator(fPath[len - 1])) {
-            break;
-        }
-    }
+    len = max(0, sep);
     while (len > 1 && isSeparator(fPath[len - 1])) {
         --len;
     }
@@ -36,12 +37,7 @@ upath upath::parent() const {
 }
 
 pstring upath::name() const {
-    int start = length();
-    for (; start > 0; --start) {
-        if (isSeparator(fPath[start - 1])) {
-            break;
-        }
-    }
+    int start = 1 + fPath.lastIndexOf('/');
     return fPath.substring(start, length() - start);
 }
 
@@ -51,13 +47,13 @@ upath upath::relative(const upath &npath) const {
     else if (isEmpty()) {
         return npath;
     }
-    else if (path().endsWith(slash)) {
-        if (npath.isAbsolute())
+    else if (isSeparator(path()[length() - 1])) {
+        if (isSeparator(npath.path()[0]))
             return upath(path() + npath.path().substring(1));
         else
             return upath(path() + npath.path());
     }
-    else if (npath.isAbsolute())
+    else if (isSeparator(npath.path()[0]))
         return upath(path() + npath.path());
     else
         return upath(path() + slash + npath.path());
@@ -79,8 +75,44 @@ pstring upath::getExtension() const {
     return null;
 }
 
+upath upath::removeExtension() const {
+    return fPath.substring(0, length() - getExtension().length());
+}
+
+upath upath::replaceExtension(const char* ext) const {
+    return removeExtension().addExtension(ext);
+}
+
+cstring upath::expand() const {
+    int c = fPath[0];
+    if (c == '~') {
+        int k = fPath[1];
+        if (k == -1 || isSeparator(k))
+            return (YApplication::getHomeDir() +
+                    fPath.substring(min(2, length()))).fPath;
+    }
+    else if (c == '$') {
+        mstring m(fPath.match("^\\$[_A-Za-z][_A-Za-z0-9]*"));
+        if (m.nonempty()) {
+            const char* e = getenv(cstring(m.substring(1)));
+            if (e && *e && *e != '~' && *e != '$') {
+                return e + fPath.substring(m.length());
+            }
+        }
+    }
+    return fPath;
+}
+
 bool upath::isAbsolute() const {
-    return isSeparator(path()[0]);
+    int c = path()[0];
+    if (isSeparator(c))
+        return true;
+    if (c == '~' || c == '$') {
+        c = expand().m_str()[0];
+        if (isSeparator(c))
+            return true;
+    }
+    return false;
 }
 
 bool upath::isRelative() const {
@@ -140,6 +172,29 @@ int upath::remove() const {
 
 int upath::renameAs(const pstring& dest) const {
     return ::rename(string(), cstring(dest));
+}
+
+char* upath::loadText() const {
+    return ::load_text_file(expand());
+}
+
+bool upath::copyFrom(const upath& from, int mode) const {
+    csmart text(from.loadText());
+    if (text == 0)
+        return false;
+    int fd = open(O_WRONLY | O_CREAT | O_TRUNC, mode);
+    if (fd == -1)
+        return false;
+    size_t len = strlen(text);
+    ssize_t wr = write(fd, text, len);
+    close(fd);
+    return 0 <= wr && size_t(wr) == len;
+}
+
+bool upath::testWritable(int mode) const {
+    int fd = open(O_WRONLY | O_CREAT | O_APPEND, mode);
+    if (0 <= fd) close(fd);
+    return 0 <= fd;
 }
 
 bool upath::hasProtocol() const {

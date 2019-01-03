@@ -12,6 +12,7 @@
 #include <errno.h>
 #include "yimage.h"
 #include "yxapp.h"
+#include "ypointer.h"
 #include "intl.h"
 
 #include <X11/xpm.h>
@@ -61,17 +62,20 @@ public:
     static ref<YImage> loadxpm(upath filename);
 #ifdef CONFIG_LIBPNG
     static ref<YImage> loadpng(upath filename);
+    bool savepng(upath filename, const char** error);
 #endif
 #ifdef CONFIG_LIBJPEG
     static ref<YImage> loadjpg(upath filename);
 #endif
     static ref<YImage> combine(XImage *xdraw, XImage *xmask);
+    static pstring detectImageType(upath filename);
 
     bool isBitmap() const { return fBitmap; }
     bool hasAlpha() const { return fImage ? fImage->depth == 32 : false; }
     ref<YImage> upscale(unsigned width, unsigned height);
     ref<YImage> downscale(unsigned width, unsigned height);
-    ref<YImage> subimage(int x, int y, unsigned width, unsigned height);
+    virtual ref<YImage> subimage(int x, int y, unsigned width, unsigned height);
+    virtual void save(upath filename);
 
     unsigned long getPixel(unsigned x, unsigned y) const {
         return XGetPixel(fImage, int(x), int(y));
@@ -122,6 +126,9 @@ ref<YImage> YImage::load(upath filename)
     pstring ext(filename.getExtension().lower());
     bool unsup = false;
 
+    if (ext.isEmpty())
+        ext = YXImage::detectImageType(filename);
+
     if (ext == ".xbm")
         image = YXImage::loadxbm(filename);
     else if (ext == ".xpm")
@@ -151,6 +158,28 @@ ref<YImage> YImage::load(upath filename)
     if (image == null && !unsup)
         fail(_("Could not load image \"%s\""), filename.string().c_str());
     return image;
+}
+
+pstring YXImage::detectImageType(upath filename) {
+     const int xpm = 9, png = 8, jpg = 4, len = max(xpm, png);
+     char buf[len+1] = {};
+     if (read_file(filename.string(), buf, sizeof buf) >= len) {
+         if (0 == memcmp(buf, "/* XPM */", xpm)) {
+             return ".xpm";
+         }
+         else if (0 == memcmp(buf, "\x89PNG\x0d\x0a\x1a\x0a", png)) {
+             return ".png";
+         }
+         else if (0 == memcmp(buf, "\377\330\377\356", jpg)) {
+             return ".jpg";
+         }
+         else {
+             msg("Unknown image type: \"%s\".", filename.string().c_str());
+             return null;
+         }
+     }
+     fail(_("Could not load image \"%s\""), filename.string().c_str());
+     return null;
 }
 
 ref <YImage> YXImage::loadxbm(upath filename)
@@ -358,6 +387,84 @@ ref<YImage> YXImage::loadpng(upath filename)
 }
 #endif
 
+void YXImage::save(upath filename) {
+#ifdef CONFIG_LIBPNG
+    filename = filename.replaceExtension(".png");
+    const char* error = "";
+    if (savepng(filename, &error) == false) {
+        fail("Cannot write YXImage %s: %s",
+            filename.string().c_str(), error);
+    }
+#endif
+}
+
+#ifdef CONFIG_LIBPNG
+bool YXImage::savepng(upath filename, const char** error) {
+    const unsigned width(this->width());
+    const unsigned height(this->height());
+    bool saved = false;
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    asmart<png_byte> row(new png_byte[4 * width * sizeof(png_byte)]);
+
+    fileptr fp(filename.fopen("w"));
+    if (fp == NULL) {
+        *error = strerror(errno);
+        goto end;
+    }
+
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (png_ptr == NULL) {
+        *error = "Cannot create PNG write struct";
+        goto end;
+    }
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL) {
+        *error = "Cannot create PNG info struct";
+        goto end;
+    }
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        *error = "Error during PNG file output";
+        goto end;
+    }
+
+    png_init_io(png_ptr, fp);
+
+    png_set_IHDR(png_ptr, info_ptr,
+                 width, height, 8,
+                 PNG_COLOR_TYPE_RGBA,
+                 PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_BASE,
+                 PNG_FILTER_TYPE_BASE);
+
+    png_write_info(png_ptr, info_ptr);
+
+    for (unsigned y = 0; y < height; y++) {
+        for (unsigned x = 0; x < width; x++) {
+            unsigned long pixel = this->getPixel(x, y);
+            row[x * 4 + 0] = pixel >> 16 & 0xFF;
+            row[x * 4 + 1] = pixel >>  8 & 0xFF;
+            row[x * 4 + 2] = pixel >>  0 & 0xFF;
+            row[x * 4 + 3] = max(pixel >> 24 & 0xFF, 0x80UL);
+        }
+        png_write_row(png_ptr, row);
+    }
+
+    png_write_end(png_ptr, NULL);
+    saved = true;
+
+end:
+    if (info_ptr)
+        png_free_data(png_ptr, info_ptr, PNG_FREE_ALL, -1);
+    if (png_ptr)
+        png_destroy_write_struct(&png_ptr, (png_infopp) NULL);
+
+    return saved;
+}
+#endif
+
 #ifdef CONFIG_LIBJPEG
 struct jpeg_error_jmp : public jpeg_error_mgr {
     jmp_buf setjmp_buffer;
@@ -395,7 +502,9 @@ ref<YImage> YXImage::loadjpg(upath filename)
     (void) jpeg_read_header(&cinfo, TRUE);
     switch (cinfo.out_color_space) {
         case JCS_RGB:
+#ifdef JCS_EXTENSIONS
         case JCS_EXT_RGBA:
+#endif
         case JCS_GRAYSCALE:
             break;
         default:
@@ -432,6 +541,7 @@ ref<YImage> YXImage::loadjpg(upath filename)
                         dst[3] = buf[2];
                     }
                 }
+#ifdef JCS_EXTENSIONS
                 else if (colorspace == JCS_EXT_RGBA) {
                     for (int i = 0; i < width; ++i, buf += bpp, dst += 4) {
                         dst[0] = buf[3];
@@ -440,6 +550,7 @@ ref<YImage> YXImage::loadjpg(upath filename)
                         dst[3] = buf[2];
                     }
                 }
+#endif
                 else if (colorspace == JCS_GRAYSCALE) {
                     for (int i = 0; i < width; ++i, buf += bpp, dst += 4) {
                         dst[0] = 0xFF;
@@ -457,6 +568,7 @@ ref<YImage> YXImage::loadjpg(upath filename)
                         dst[0] = buf[2];
                     }
                 }
+#ifdef JCS_EXTENSIONS
                 else if (colorspace == JCS_EXT_RGBA) {
                     for (int i = 0; i < width; ++i, buf += bpp, dst += 4) {
                         dst[3] = buf[3];
@@ -465,6 +577,7 @@ ref<YImage> YXImage::loadjpg(upath filename)
                         dst[0] = buf[2];
                     }
                 }
+#endif
                 else if (colorspace == JCS_GRAYSCALE) {
                     for (int i = 0; i < width; ++i, buf += bpp, dst += 4) {
                         dst[3] = 0xFF;

@@ -7,17 +7,11 @@
  */
 #include "config.h"
 
-#include "yimage.h"
-#include "ykey.h"
 #include "wmswitch.h"
 #include "wpixmaps.h"
-#include "wmmgr.h"
 #include "wmframe.h"
 #include "yxapp.h"
 #include "prefs.h"
-#include "yrect.h"
-#include "yicon.h"
-#include "wmwinlist.h"
 #include "yprefs.h"
 
 // for vertical quickswitch, reuse some colors from the menu because those
@@ -32,6 +26,13 @@ class WindowItemsCtrlr : public ISwitchItems
     YWindowManager *fRoot;
     YFrameWindow *fActiveWindow;
     YFrameWindow *fLastWindow;
+    char *fWMClass;
+
+    void append(YFrameWindow* w) {
+        if (find(zList, w) < 0) {
+            zList.append(w);
+        }
+    }
 
     void getZList() {
 
@@ -69,7 +70,11 @@ class WindowItemsCtrlr : public ISwitchItems
                 // pass 3: minimized windows
                 // pass 4: hidden windows
                 // pass 5: unfocusable windows
-                if ((w->client() && !w->client()->adopted()) && !w->visible()) {
+
+                if (hasbit(w->client()->winHints(), WinHintsSkipFocus))
+                    continue;
+
+                if (!w->client()->adopted() && !w->visible()) {
                     continue;
                 }
 
@@ -84,27 +89,32 @@ class WindowItemsCtrlr : public ISwitchItems
                     }
                 }
 
+                if (nonempty(fWMClass)) {
+                    if (w->client()->classHint()->match(fWMClass) == false)
+                        continue;
+                }
+
                 if (w == fRoot->getFocus()) {
-                    if (pass == 0) zList.append(w);
+                    if (pass == 0) append(w);
                 } else if (w->isUrgent()) {
                     if (quickSwitchToUrgent) {
-                        if (pass == 1) zList.append(w);
+                        if (pass == 1) append(w);
                     } else {
-                        if (pass == 2) zList.append(w);
+                        if (pass == 2) append(w);
                     }
                 } else if (w->frameOptions() & YFrameWindow::foIgnoreQSwitch) {
                 } else if (w->avoidFocus()) {
-                    if (pass == 5) zList.append(w);
+                    if (pass == 5) append(w);
                 } else if (w->isHidden()) {
                     if (pass == 4)
                         if (quickSwitchToHidden)
-                            zList.append(w);
+                            append(w);
                 } else if (w->isMinimized()) {
                     if (pass == 3)
                         if (quickSwitchToMinimized)
-                            zList.append(w);
+                            append(w);
                 } else {
-                    if (pass == 2) zList.append(w);
+                    if (pass == 2) append(w);
                 }
             }
         }
@@ -146,12 +156,15 @@ public:
 
 
     WindowItemsCtrlr() :
-        zTarget(0), fRoot(manager), fActiveWindow(0), fLastWindow(0)
+        zTarget(0), fRoot(manager), fActiveWindow(0), fLastWindow(0),
+        fWMClass(0)
     {
     }
 
     ~WindowItemsCtrlr()
     {
+        if (fWMClass)
+            free(fWMClass);
     }
 
     int getActiveItem()
@@ -164,6 +177,12 @@ public:
         if (inrange(idx, 0, getCount() - 1))
             return zList[idx]->client()->windowTitle();
         return null;
+    }
+
+    virtual void setWMClass(char* wmclass) {
+        if (fWMClass)
+            free(fWMClass);
+        fWMClass = wmclass;
     }
 
     void updateList() {
@@ -192,7 +211,7 @@ public:
         if (fLastWindow) {
             displayFocusChange(fLastWindow);
         } else if (fActiveWindow) {
-            fRoot->activate(fActiveWindow, false, true);
+            fActiveWindow->activateWindow(true, false);
         }
         freeList();
         fLastWindow = fActiveWindow = 0;
@@ -202,9 +221,8 @@ public:
         if (fActiveWindow == 0)
             cancel();
         else {
-            fRoot->activate(fActiveWindow, true, true);
+            fActiveWindow->activateWindow(true, false);
             parent->close();
-            fActiveWindow->wmRaise();
         }
         freeList();
         fLastWindow = fActiveWindow = 0;
@@ -227,7 +245,8 @@ public:
     }
 
     virtual bool isKey(KeySym k, unsigned int vm) OVERRIDE {
-        return (IS_WMKEY(k, vm, gKeySysSwitchNext));
+        return gKeySysSwitchNext.eq(k, vm) ||
+              (gKeySysSwitchClass.eq(k, vm) && fWMClass != 0);
     }
 };
 
@@ -244,8 +263,9 @@ SwitchWindow::SwitchWindow(YWindow *parent, ISwitchItems *items,
     switchFont(YFont::getFont(XFA(switchFontName)))
 {
     zItems = items ? items : new WindowItemsCtrlr;
-    m_hintedItem = -1;
-
+    m_hlItemFromMotion = -1;
+    m_hintAreaStart = 0;
+    m_hintAreaStep = 1;
     // I prefer clrNormalMenu but some themes use inverted settings where
     // clrNormalMenu is the same as clrQuickSwitch
     if (clrQuickSwitchActive)
@@ -267,7 +287,7 @@ bool SwitchWindow::close() {
         cancelPopup();
         isUp = false;
         menuMouseTracking = m_oldMenuMouseTracking;
-        m_hintedItem = -1;
+        m_hlItemFromMotion = -1;
         return true;
     }
     return false;
@@ -494,7 +514,7 @@ void SwitchWindow::paintHorizontal(Graphics &g) {
                 if (i >= off && i < end) {
                     ref<YIcon> icon = zItems->getIcon(i);
                     if (icon != null) {
-                        if (i == m_hintedItem && i != zItems->getActiveItem()) {
+                        if (i == m_hlItemFromMotion && i != zItems->getActiveItem()) {
                             g.setColor(frameColor.darker());
                             g.drawRect(x - quickSwitchIBorder,
                                     y - quickSwitchIBorder - ds / 2,
@@ -528,18 +548,22 @@ void SwitchWindow::paintHorizontal(Graphics &g) {
     }
 }
 
-void SwitchWindow::handleMotion(const XMotionEvent& motion) {
-    int hintId = -1;
+int SwitchWindow::calcHintedItem(int x, int y)
+{
     if(quickSwitchVertical)
-        hintId = (motion.y - m_hintAreaStart) / m_hintAreaStep;
+        return (y - m_hintAreaStart) / m_hintAreaStep;
     else if(quickSwitchAllIcons && !quickSwitchHugeIcon)
-        hintId = (motion.x - m_hintAreaStart) / m_hintAreaStep;
+        return (x - m_hintAreaStart) / m_hintAreaStep;
     else
-        return;
+        return -2;
+}
+
+void SwitchWindow::handleMotion(const XMotionEvent& motion) {
+    int hintId = calcHintedItem(motion.x, motion.y);
     //printf("hint id: %d\n", hintId);
-    if(hintId == m_hintedItem)
+    if(hintId == m_hlItemFromMotion || hintId == -2)
         return;
-    m_hintedItem = hintId;
+    m_hlItemFromMotion = hintId;
     repaint();
 }
 
@@ -590,7 +614,7 @@ void SwitchWindow::paintVertical(Graphics &g) {
                 icon->draw(g, iconX, contentY, iconSize);
             }
 
-            if(i == m_hintedItem && i != zItems->getActiveItem())
+            if(i == m_hlItemFromMotion && i != zItems->getActiveItem())
             {
                 g.setColor(switchMbg);
                 g.drawRect(frameX, contentY-quickSwitchIBorder, frameWid, frameHght);
@@ -606,10 +630,11 @@ void SwitchWindow::paintVertical(Graphics &g) {
     }
 }
 
-void SwitchWindow::begin(bool zdown, int mods) {
+void SwitchWindow::begin(bool zdown, int mods, char* wmclass) {
     modsDown = mods & (xapp->AltMask | xapp->MetaMask |
                        xapp->HyperMask | xapp->SuperMask |
                        xapp->ModeSwitchMask | ControlMask);
+    zItems->setWMClass(wmclass);
 
     if (close())
         return;
@@ -674,12 +699,12 @@ bool SwitchWindow::handleKey(const XKeyEvent &key) {
 
     if (key.type == KeyPress) {
         if (zItems->isKey(k, vm)) {
-            m_hintedItem = -1;
+            m_hlItemFromMotion = -1;
             int focused = zItems->moveTarget(true);
             displayFocus(focused);
             return true;
         } else if ((IS_WMKEY(k, vm, gKeySysSwitchLast))) {
-            m_hintedItem = -1;
+            m_hlItemFromMotion = -1;
             int focused = zItems->moveTarget(false);
             displayFocus(focused);
             return true;
@@ -727,10 +752,11 @@ bool SwitchWindow::modDown(int mod) {
 
 void SwitchWindow::handleButton(const XButtonEvent &button) {
     //printf("got click, hot item: %d\n", m_hintedItem);
+    int hintId = calcHintedItem(button.x, button.y);
     if (button.button == Button1 && button.type == ButtonPress) {
-        if (m_hintedItem >= 0 && m_hintedItem < zItems->getCount()) {
+        if (hintId >= 0 && hintId < zItems->getCount()) {
             zItems->reset();
-            zItems->setTarget(m_hintedItem);
+            zItems->setTarget(hintId);
             accept();
         }
     }

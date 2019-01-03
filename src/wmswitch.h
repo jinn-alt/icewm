@@ -48,6 +48,9 @@ public:
     virtual void destroyedItem(void* framePtr) =0;
 
     virtual bool isKey(KeySym k, unsigned int mod) =0;
+
+    // Filter items by WM_CLASS
+    virtual void setWMClass(char* wmclass) =0;
 };
 
 class SwitchWindow: public YPopupWindow, IClosablePopup {
@@ -58,7 +61,7 @@ public:
 
     virtual void paint(Graphics &g, const YRect &r);
 
-    void begin(bool zdown, int mods);
+    void begin(bool zdown, int mods, char* wmclass = 0);
 
     virtual void activatePopup(int flags);
     virtual void deactivatePopup();
@@ -73,7 +76,8 @@ private:
     bool m_verticalStyle;
     // backup of user's config, needs to be enforced temporarily
     bool m_oldMenuMouseTracking;
-    int m_hintedItem;
+    // remember what was highlighted by mouse tracking
+    int m_hlItemFromMotion;
     // hints for fast identification of the entry under the cursor
     int m_hintAreaStart, m_hintAreaStep;
 
@@ -103,6 +107,8 @@ private:
 
     void paintHorizontal(Graphics &g);
     void paintVertical(Graphics &g);
+    // -1: no hint, -2: hinting not supported
+    int calcHintedItem(int x, int y);
 
 private: // not-used
     SwitchWindow(const SwitchWindow &);
