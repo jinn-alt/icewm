@@ -48,7 +48,7 @@ TaskBarApp::~TaskBarApp() {
 }
 
 void TaskBarApp::activate() const {
-    getFrame()->activateWindow(true);
+    getFrame()->activateWindow(true, fFlashing);
 }
 
 bool TaskBarApp::isFocusTraversable() {
@@ -62,6 +62,7 @@ int TaskBarApp::getOrder() const {
 void TaskBarApp::setShown(bool ashow) {
     if (ashow != fShown) {
         fShown = ashow;
+        fTaskPane->relayout();
     }
 }
 
@@ -76,15 +77,23 @@ void TaskBarApp::setFlash(bool flashing) {
         } else {
             //fFlashTimer->stopTimer();
         }
+
+        if (fShown == false)
+            fTaskPane->relayout();
     }
 }
 
 void TaskBarApp::paint(Graphics &g, const YRect &/*r*/) {
     YColor bg, fg;
     ref<YPixmap> bgPix;
+    ref<YPixmap> bgLeft;
+    ref<YPixmap> bgRight;
     ref<YImage> bgGrad;
+    ref<YImage> bgLeftG;
+    ref<YImage> bgRightG;
 
     int p(0);
+    int left = 0;
     int style = 0;
 
     if (selected == 3)
@@ -99,13 +108,21 @@ void TaskBarApp::paint(Graphics &g, const YRect &/*r*/) {
             bg = activeTaskBarAppBg;
             fg = activeTaskBarAppFg;
             bgPix = taskbuttonactivePixmap;
+            bgLeft = taskbuttonactiveLeftPixmap;
+            bgRight = taskbuttonactiveRightPixmap;
             bgGrad = taskbuttonactivePixbuf;
+            bgLeftG = taskbuttonactiveLeftPixbuf;
+            bgRightG = taskbuttonactiveRightPixbuf;
             style = 1;
         } else {
             bg = normalTaskBarAppBg;
             fg = normalTaskBarAppFg;
             bgPix = taskbuttonPixmap;
+            bgLeft = taskbuttonLeftPixmap;
+            bgRight = taskbuttonRightPixmap;
             bgGrad = taskbuttonPixbuf;
+            bgLeftG = taskbuttonLeftPixbuf;
+            bgRightG = taskbuttonRightPixbuf;
             style = 1;
         }
     } else if (!getFrame()->visibleNow()) {
@@ -117,17 +134,29 @@ void TaskBarApp::paint(Graphics &g, const YRect &/*r*/) {
         bg = minimizedTaskBarAppBg;
         fg = minimizedTaskBarAppFg;
         bgPix = taskbuttonminimizedPixmap;
+        bgLeft = taskbuttonminimizedLeftPixmap;
+        bgRight = taskbuttonminimizedRightPixmap;
         bgGrad = taskbuttonminimizedPixbuf;
+        bgLeftG = taskbuttonminimizedLeftPixbuf;
+        bgRightG = taskbuttonminimizedRightPixbuf;
     } else if (getFrame()->focused()) {
         bg = activeTaskBarAppBg;
         fg = activeTaskBarAppFg;
         bgPix = taskbuttonactivePixmap;
+        bgLeft = taskbuttonactiveLeftPixmap;
+        bgRight = taskbuttonactiveRightPixmap;
         bgGrad = taskbuttonactivePixbuf;
+        bgLeftG = taskbuttonactiveLeftPixbuf;
+        bgRightG = taskbuttonactiveRightPixbuf;
     } else {
         bg = normalTaskBarAppBg;
         fg = normalTaskBarAppFg;
         bgPix = taskbuttonPixmap;
+        bgLeft = taskbuttonLeftPixmap;
+        bgRight = taskbuttonRightPixmap;
         bgGrad = taskbuttonPixbuf;
+        bgLeftG = taskbuttonLeftPixbuf;
+        bgRightG = taskbuttonRightPixbuf;
     }
 
     if (style == 3) {
@@ -164,13 +193,47 @@ void TaskBarApp::paint(Graphics &g, const YRect &/*r*/) {
         int const ds(wmLook == lookFlat ? 0: wmLook == lookMetal ? 4 : 3);
 
         if ((int) width() > ds && (int) height() > ds) {
-            if (bgGrad != null)
-                g.drawGradient(bgGrad, dp, dp, width() - ds, height() - ds);
-            else
-            if (bgPix != null)
-                g.fillPixmap(bgPix, dp, dp, width() - ds, height() - ds);
-            else
+            if (bgGrad != null) {
+                int x = dp;
+                int y = dp;
+                unsigned w = width() - ds;
+                unsigned h = height() - ds;
+                if (taskbuttonIconOffset &&
+                    bgLeftG != null &&
+                    bgRightG != null &&
+                    3 * taskbuttonIconOffset <= w)
+                {
+                    g.drawGradient(bgLeftG, x, y,
+                                   bgLeftG->width(), h);
+                    x += left = bgLeftG->width();
+                    g.drawGradient(bgRightG, w - bgRightG->width(), y,
+                                   bgRightG->width(), h);
+                    w -= bgLeftG->width() + bgRightG->width();
+                }
+                g.drawGradient(bgGrad, x, y, w, h);
+            }
+            else if (bgPix != null) {
+                int x = dp;
+                int y = dp;
+                unsigned w = width() - ds;
+                unsigned h = height() - ds;
+                if (taskbuttonIconOffset &&
+                    bgLeft != null &&
+                    bgRight != null &&
+                    3 * taskbuttonIconOffset <= w)
+                {
+                    g.fillPixmap(bgLeft, x, y,
+                                 bgLeft->width(), h);
+                    x += left = bgLeft->width();
+                    g.fillPixmap(bgRight, w - bgRight->width(), y,
+                                 bgRight->width(), h);
+                    w -= bgLeft->width() + bgRight->width();
+                }
+                g.fillPixmap(bgPix, x, y, w, h);
+            }
+            else {
                 g.fillRect(dp, dp, width() - ds, height() - ds);
+            }
         }
     }
 
@@ -182,7 +245,7 @@ void TaskBarApp::paint(Graphics &g, const YRect &/*r*/) {
 
         int const y((height() - 3 - iconSize -
                      ((wmLook == lookMetal) ? 1 : 0)) / 2);
-        iconDrawn = icon->draw(g, p + 1, p + 1 + y, iconSize);
+        iconDrawn = icon->draw(g, p + max(1, left), p + 1 + y, iconSize);
     }
 
     ustring str = getFrame()->getIconTitle();
@@ -196,10 +259,10 @@ void TaskBarApp::paint(Graphics &g, const YRect &/*r*/) {
             g.setFont(font);
 
             int iconSize = 0;
-            int pad = 1;
+            int pad = max(1, left);
             if (taskBarShowWindowIcons && iconDrawn) {
                 iconSize = YIcon::smallSize();
-                pad = 3;
+                pad += 2;
             }
             int const tx = pad + iconSize;
             int const ty = max(2U,

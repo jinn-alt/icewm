@@ -541,7 +541,7 @@ void NetOpenDevice::getCurrent(netbytes *in, netbytes *out, const void* sharedDa
 #endif
 #ifdef __NetBSD__
         struct ifdatareq ifdr;
-        struct if_data& ifi = &ifdr.ifdr_data;
+        struct if_data& ifi = ifdr.ifdr_data;
         strlcpy(ifdr.ifdr_name, fDevName, IFNAMSIZ);
 #endif
         if (ioctl(s, SIOCGIFDATA, &ifdr) != -1) {
@@ -622,7 +622,8 @@ NetStatusControl::NetStatusControl(IApp* app, YSMListener* smActionListener,
     app(app),
     smActionListener(smActionListener),
     taskBar(taskBar),
-    aParent(aParent)
+    aParent(aParent),
+    fPid(0)
 {
     mstring devName, devList(netDevice);
     while (devList.splitall(' ', &devName, &devList)) {
@@ -697,7 +698,7 @@ bool NetStatusControl::handleTimer(YTimer *t)
 
 void NetStatusControl::runCommandOnce(const char *resource, const char *cmdline)
 {
-    smActionListener->runCommandOnce(resource, cmdline);
+    smActionListener->runCommandOnce(resource, cmdline, &fPid);
 }
 
 void NetStatusControl::relayout()

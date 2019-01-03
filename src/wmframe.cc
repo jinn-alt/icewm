@@ -22,6 +22,7 @@
 #include "yrect.h"
 #include "wpixmaps.h"
 #include "aworkspaces.h"
+#include "yxcontext.h"
 
 #include "intl.h"
 
@@ -30,10 +31,6 @@ static YColorName inactiveBorderBg(&clrInactiveBorder);
 
 lazy<YTimer> YFrameWindow::fAutoRaiseTimer;
 lazy<YTimer> YFrameWindow::fDelayFocusTimer;
-
-extern XContext windowContext;
-extern XContext frameContext;
-extern XContext clientContext;
 
 YFrameWindow::YFrameWindow(
     YActionListener *wmActionListener,
@@ -184,34 +181,14 @@ YFrameWindow::~YFrameWindow() {
     if (fClient != 0) {
         if (!fClient->destroyed() && fClient->adopted())
             XRemoveFromSaveSet(xapp->display(), client()->handle());
-        XDeleteContext(xapp->display(), client()->handle(), frameContext);
+        frameContext.remove(client()->handle());
     }
     if (fUserTimeWindow != None) {
-        XDeleteContext(xapp->display(), fUserTimeWindow, windowContext);
+        windowContext.remove(fUserTimeWindow);
     }
-
-    if (affectsWorkArea())
-        manager->updateWorkArea();
-    // FIX !!! should actually check if < than current values
-    if (fStrutLeft != 0 || fStrutRight != 0 ||
-        fStrutTop != 0 || fStrutBottom != 0)
-        manager->updateWorkArea();
 
     delete fClient; fClient = 0;
     delete fClientContainer; fClientContainer = 0;
-
-    /* if (indicatorsCreated) {
-        // do we really need to explicitly destroy these?
-        XDestroyWindow(xapp->display(), topSide);
-        XDestroyWindow(xapp->display(), leftSide);
-        XDestroyWindow(xapp->display(), rightSide);
-        XDestroyWindow(xapp->display(), bottomSide);
-        XDestroyWindow(xapp->display(), topLeft);
-        XDestroyWindow(xapp->display(), topRight);
-        XDestroyWindow(xapp->display(), bottomLeft);
-        XDestroyWindow(xapp->display(), bottomRight);
-    } */
-
     delete fTitleBar; fTitleBar = 0;
 
     manager->updateClientList();
@@ -405,7 +382,7 @@ void YFrameWindow::doManage(YFrameClient *clientw, bool &doActivate, bool &reque
     if (owner())
         setWorkspace(mainOwner()->getWorkspace());
 
-    if (isHidden() || isMinimized() || isIconic()) {
+    if (isHidden() || isMinimized() || isIconic() || client() == taskBar) {
         doActivate = false;
         requestFocus = false;
     }
@@ -604,6 +581,8 @@ void YFrameWindow::unmanage(bool reparent) {
     client()->setFrame(0);
 
     fClient = 0;
+
+    hide();
 }
 
 void YFrameWindow::getNewPos(const XConfigureRequestEvent &cr,
@@ -695,17 +674,13 @@ void YFrameWindow::configureClient(const XConfigureRequestEvent &configureReques
     configureClient(cx, cy, cw, ch);
 
     if (configureRequest.value_mask & CWStackMode) {
-        union {
+        struct {
             YFrameWindow *ptr;
-            XPointer xptr;
         } sibling = { 0 };
         XWindowChanges xwc;
 
         if ((configureRequest.value_mask & CWSibling) &&
-            XFindContext(xapp->display(),
-                         configureRequest.above,
-                         clientContext,
-                         &(sibling.xptr)) == 0)
+            frameContext.find(configureRequest.above, &sibling.ptr))
             xwc.sibling = sibling.ptr->handle();
         else
             xwc.sibling = configureRequest.above;
@@ -749,6 +724,7 @@ void YFrameWindow::configureClient(const XConfigureRequestEvent &configureReques
                         (clickFocus || !strongPointerFocus))
                     {
                         if (focusChangesWorkspace ||
+                            focusCurrentWorkspace ||
                             visibleOn(manager->activeWorkspace()))
                         {
                             activate();
@@ -1086,6 +1062,9 @@ void YFrameWindow::actionPerformed(YAction action, unsigned int modifiers) {
     } else if (action == actionMaximizeVert) {
         if (canMaximize())
             wmMaximizeVert();
+    } else if (action == actionMaximizeHoriz) {
+        if (canMaximize())
+            wmMaximizeHorz();
     } else if (action == actionLower) {
         if (canLower())
             wmLower();
@@ -1202,6 +1181,12 @@ void YFrameWindow::wmSize() {
     startMoveSize(false, false,
                   0, 0,
                   0, 0);
+}
+
+bool YFrameWindow::canRestore() const {
+    return hasbit(fWinState,
+            WinStateMaximizedVert | WinStateMaximizedHoriz |
+            WinStateMinimized | WinStateHidden | WinStateRollup);
 }
 
 void YFrameWindow::wmRestore() {
@@ -1515,7 +1500,7 @@ void YFrameWindow::updateFocusOnMap(bool& doActivate) {
     if (frameOptions() & foNoFocusOnMap)
         doActivate = false;
 
-    if (!onCurrentWorkspace && !focusChangesWorkspace)
+    if (!onCurrentWorkspace && !focusChangesWorkspace && !focusCurrentWorkspace)
         doActivate = false;
 
     if (owner() != 0) {
@@ -1598,21 +1583,25 @@ void YFrameWindow::focus(bool canWarp) {
 #endif
 }
 
-void YFrameWindow::activate(bool canWarp) {
+void YFrameWindow::activate(bool canWarp, bool curWork) {
     manager->lockFocus();
     if (fWinState & (WinStateHidden | WinStateMinimized))
         setState(WinStateHidden | WinStateMinimized, 0);
-    if (!visibleOn(manager->activeWorkspace()))
-        manager->activateWorkspace(getWorkspace());
+    if (!visibleOn(manager->activeWorkspace())) {
+        if (focusCurrentWorkspace && curWork)
+            setWorkspace(manager->activeWorkspace());
+        else
+            manager->activateWorkspace(getWorkspace());
+    }
 
     manager->unlockFocus();
     focus(canWarp);
 }
 
-void YFrameWindow::activateWindow(bool raise) {
+void YFrameWindow::activateWindow(bool raise, bool curWork) {
     if (raise)
         wmRaise();
-    activate(true);
+    activate(true, curWork);
 }
 
 MiniIcon *YFrameWindow::getMiniIcon() {
@@ -1800,7 +1789,7 @@ void YFrameWindow::updateTitle() {
         titlebar()->repaint();
     layoutShape();
     updateIconTitle();
-    if (fWinListItem && windowList->visible())
+    if (fWinListItem && windowList && windowList->visible())
         windowList->repaintItem(fWinListItem);
     if (fTaskBarApp)
         fTaskBarApp->setToolTip(client()->windowTitle());
@@ -2286,7 +2275,7 @@ void YFrameWindow::updateIcon() {
     if (fTrayApp) fTrayApp->repaint();
     if (fTaskBarApp) fTaskBarApp->repaint();
     if (windowList && fWinListItem)
-        windowList->getList()->repaintItem(fWinListItem);
+        windowList->repaintItem(fWinListItem);
 }
 
 YFrameWindow *YFrameWindow::nextLayer() {
@@ -2456,12 +2445,15 @@ void YFrameWindow::setWorkspace(int workspace) {
     if (workspace >= workspaceCount || workspace < -1)
         return ;
     if (workspace != fWinWorkspace) {
+        bool refocus = (this == manager->getFocus());
         fWinWorkspace = workspace;
         client()->setWinWorkspaceHint(fWinWorkspace);
         updateState();
-        manager->focusLastWindow();
+        if (refocus)
+            manager->focusLastWindow();
         updateTaskBar();
-        windowList->updateWindowListApp(fWinListItem);
+        if (windowList && fWinListItem)
+            windowList->updateWindowListApp(fWinListItem);
         YFrameWindow *t = transient();
 
         while (t != 0) {
@@ -2558,7 +2550,7 @@ void YFrameWindow::updateLayer(bool restack) {
         fWinActiveLayer = newLayer;
         insertFrame(true);
 
-        if (client())
+        if (client() && !client()->destroyed())
             client()->setWinLayerHint(fWinActiveLayer);
 
         if (limitByDockLayer &&
@@ -2587,7 +2579,7 @@ void YFrameWindow::setTrayOption(long option) {
 }
 
 void YFrameWindow::updateState() {
-    if (!isManaged())
+    if (!isManaged() || client()->destroyed())
         return ;
 
     client()->setWinStateHint(WIN_STATE_ALL, fWinState);
@@ -2707,7 +2699,8 @@ void YFrameWindow::setNormalGeometryInner(int x, int y, int w, int h) {
     normalW = sh ? (w - sh->base_width) / sh->width_inc : w;
     normalH = sh ? (h - sh->base_height) / sh->height_inc : h ;
 
-    updateDerivedSize((isMaximizedVert() ? WinStateMaximizedVert : 0) | (isMaximizedHoriz() ? WinStateMaximizedHoriz : 0));
+    updateDerivedSize((isMaximizedVert() ? WinStateMaximizedVert : 0) |
+                      (isMaximizedHoriz() ? WinStateMaximizedHoriz : 0));
     updateLayout();
 }
 
@@ -3104,7 +3097,8 @@ void YFrameWindow::setState(long mask, long state) {
 void YFrameWindow::setAllWorkspaces() {
     setWorkspace(-1);
 
-    windowList->updateWindowListApp(fWinListItem);
+    if (windowList && fWinListItem)
+        windowList->updateWindowListApp(fWinListItem);
     if (affectsWorkArea())
         manager->updateWorkArea();
 }
@@ -3205,17 +3199,7 @@ void YFrameWindow::updateTaskBar() {
             if (fTaskBarApp->getShown()) ///!!! optimize
                 fTaskBarApp->repaint();
         }
-#if false
-        /// !!! optimize
-        if (fTaskBarApp) {
-            bool shown = fTaskBarApp->getShown();
-            if (shown != fTaskBarApp->getShown())
-                if (taskBar && taskBar->taskPane())
-                    taskBar->taskPane()->relayout();
-        }
-#endif
-       if (taskBar)
-           taskBar->relayoutTasks();
+        taskBar->relayoutTasks();
     }
 }
 
@@ -3293,13 +3277,11 @@ void YFrameWindow::updateNetWMUserTimeWindow() {
     Window window = fUserTimeWindow;
     if (client()->getNetWMUserTimeWindow(window) && window != fUserTimeWindow) {
         if (fUserTimeWindow != None) {
-            XDeleteContext(xapp->display(), fUserTimeWindow,
-                    windowContext);
+            windowContext.remove(fUserTimeWindow);
         }
         fUserTimeWindow = window;
         if (window != None) {
-            XSaveContext(xapp->display(), window,
-                    windowContext, (XPointer)client());
+            windowContext.save(window, client());
             XWindowAttributes wa;
             if (XGetWindowAttributes(xapp->display(), window, &wa))
                 XSelectInput(xapp->display(), window,

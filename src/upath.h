@@ -29,6 +29,9 @@ public:
     upath child(const char *path) const;
     upath addExtension(const char *ext) const;
     pstring getExtension() const;
+    upath removeExtension() const;
+    upath replaceExtension(const char *ext) const;
+    cstring expand() const;
 
     bool fileExists() const;
     bool dirExists() const;
@@ -47,6 +50,9 @@ public:
     int remove() const;
     int renameAs(const pstring& dest) const;
     off_t fileSize() const;
+    char* loadText() const;
+    bool copyFrom(const upath& from, int mode = 0666) const;
+    bool testWritable(int mode = 0666) const;
 
     upath& operator=(const upath& p) {
         fPath = p.fPath;

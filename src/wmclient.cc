@@ -13,9 +13,7 @@
 #include "wmmgr.h"
 #include "wmapp.h"
 #include "sysdep.h"
-
-extern XContext frameContext;
-extern XContext clientContext;
+#include "yxcontext.h"
 
 YFrameClient::YFrameClient(YWindow *parent, YFrameWindow *frame, Window win):
     YWindow(parent, win),
@@ -37,10 +35,10 @@ YFrameClient::YFrameClient(YWindow *parent, YFrameWindow *frame, Window win):
     fSavedWinState[0] = 0;
     fSavedWinState[1] = 0;
     fSizeHints = XAllocSizeHints();
-    fClassHint = XAllocClassHint();
     fTransientFor = 0;
     fClientLeader = None;
     fMwmHints = 0;
+    fPid = 0;
 
     getPropertiesList();
 
@@ -64,26 +62,23 @@ YFrameClient::YFrameClient(YWindow *parent, YFrameWindow *frame, Window win):
         queryShape();
     }
 #endif
-    XSaveContext(xapp->display(), handle(),
-                 getFrame() ? frameContext : clientContext,
-                 getFrame() ? (XPointer)getFrame() : (XPointer)this);
+    if (getFrame()) {
+        frameContext.save(handle(), getFrame());
+    }
+    else {
+        clientContext.save(handle(), this);
+    }
 }
 
 YFrameClient::~YFrameClient() {
-    XDeleteContext(xapp->display(), handle(), getFrame() ? frameContext : clientContext);
-    if (fSizeHints) { XFree(fSizeHints); fSizeHints = 0; }
-    if (fClassHint) {
-        if (fClassHint->res_name) {
-            XFree(fClassHint->res_name);
-            fClassHint->res_name = 0;
-        }
-        if (fClassHint->res_class) {
-            XFree(fClassHint->res_class);
-            fClassHint->res_class = 0;
-        }
-        XFree(fClassHint);
-        fClassHint = 0;
+    if (getFrame()) {
+        frameContext.remove(handle());
     }
+    else {
+        clientContext.remove(handle());
+    }
+
+    if (fSizeHints) { XFree(fSizeHints); fSizeHints = 0; }
     if (fHints) { XFree(fHints); fHints = 0; }
     if (fMwmHints) { XFree(fMwmHints); fMwmHints = 0; }
 }
@@ -163,17 +158,8 @@ void YFrameClient::getClassHint() {
     if (!prop.wm_class)
         return;
 
-    if (fClassHint) {
-        if (fClassHint->res_name) {
-            XFree(fClassHint->res_name);
-            fClassHint->res_name = 0;
-        }
-        if (fClassHint->res_class) {
-            XFree(fClassHint->res_class);
-            fClassHint->res_class = 0;
-        }
-        XGetClassHint(xapp->display(), handle(), fClassHint);
-    }
+    fClassHint.reset();
+    XGetClassHint(xapp->display(), handle(), &fClassHint);
 }
 
 void YFrameClient::getTransient() {
@@ -380,7 +366,20 @@ bool YFrameClient::handleTimer(YTimer* timer) {
 }
 
 bool YFrameClient::killPid() {
-    bool killed = false;
+    long pid = 0;
+    return getNetWMPid(&pid) && 0 < pid && 0 == kill(pid, SIGTERM);
+}
+
+bool YFrameClient::getNetWMPid(long *pid) {
+    *pid = 0;
+
+    if (!prop.net_wm_pid)
+        return false;
+
+    if (fPid > 0) {
+        *pid = fPid;
+        return true;
+    }
 
     Atom type = 0;
     int format = 0;
@@ -393,7 +392,6 @@ bool YFrameClient::killPid() {
                            &prop) == Success && prop)
     {
         if (type == XA_CARDINAL && format == 32 && nitems == 1) {
-            long pid = *(long *)prop;
             XTextProperty text = {};
             if (XGetWMClientMachine(xapp->display(), handle(), &text)) {
                 char myhost[HOST_NAME_MAX + 1] = {};
@@ -403,8 +401,7 @@ bool YFrameClient::killPid() {
                 if (strncmp(myhost, theirs, len) == 0 &&
                     (theirs[len] == 0 || theirs[len] == '.'))
                 {
-                    kill(pid, SIGTERM);
-                    killed = true;
+                    *pid = fPid = *(long *)prop;
                 }
                 XFree(text.value);
             }
@@ -412,7 +409,7 @@ bool YFrameClient::killPid() {
         XFree(prop);
     }
 
-    return killed;
+    return fPid > 0 && fPid == *pid;
 }
 
 void YFrameClient::recvPing(const XClientMessageEvent &message) {
@@ -433,12 +430,20 @@ void YFrameClient::recvPing(const XClientMessageEvent &message) {
 
 void YFrameClient::setFrame(YFrameWindow *newFrame) {
     if (newFrame != getFrame()) {
-        XDeleteContext(xapp->display(), handle(),
-                       getFrame() ? frameContext : clientContext);
+        if (getFrame()) {
+            frameContext.remove(handle());
+        }
+        else {
+            clientContext.remove(handle());
+        }
+
         fFrame = newFrame;
-        XSaveContext(xapp->display(), handle(),
-                     getFrame() ? frameContext : clientContext,
-                     getFrame() ? (XPointer)getFrame() : (XPointer)this);
+        if (getFrame()) {
+            frameContext.save(handle(), getFrame());
+        }
+        else {
+            clientContext.save(handle(), this);
+        }
     }
 }
 
@@ -657,6 +662,8 @@ void YFrameClient::handleProperty(const XPropertyEvent &property) {
         } else if (property.atom == _XA_NET_WM_WINDOW_TYPE) {
             // !!! do we do dynamic update? (discuss on wm-spec)
             prop.net_wm_window_type = new_prop;
+        } else if (property.atom == _XA_NET_WM_PID) {
+            prop.net_wm_pid = new_prop;
         } else {
             MSG(("Unknown property changed: %s, window=0x%lX",
                  XGetAtomName(xapp->display(), property.atom), handle()));
@@ -1485,6 +1492,9 @@ void YFrameClient::setWinStateHint(long mask, long state) {
     MSG(("set state=%8lX mask=%3lX, saved %8lX, %3lX, %p",
           state, mask, fSavedWinState[0], fSavedWinState[1], this));
 
+    if (destroyed())
+        return;
+
     if (hasbit(mask, state ^ fSavedWinState[0]) || mask != fSavedWinState[1]) {
         long prop[2] = { state & mask, mask };
 
@@ -2161,6 +2171,7 @@ void YFrameClient::getPropertiesList() {
             else if (a == _XA_NET_WM_STRUT) HAS(prop.net_wm_strut);
             else if (a == _XA_NET_WM_STRUT_PARTIAL) HAS(prop.net_wm_strut_partial);
             else if (a == _XA_NET_WM_DESKTOP) HAS(prop.net_wm_desktop);
+            else if (a == _XA_NET_WM_PID) HAS(prop.net_wm_pid);
             else if (a == _XA_NET_WM_STATE) HAS(prop.net_wm_state);
             else if (a == _XA_NET_WM_WINDOW_TYPE) HAS(prop.net_wm_window_type);
             else if (a == _XA_NET_STARTUP_ID) HAS(prop.net_startup_id);
@@ -2197,6 +2208,29 @@ void YFrameClient::handleGravityNotify(const XGravityEvent &gravity) {
                     ox, oy, gravity.x, gravity.y, nx, ny));
         XMoveWindow(xapp->display(), handle(), nx, ny);
     }
+}
+
+bool ClassHint::match(const char* resource) const {
+    if (isEmpty(resource))
+        return false;
+    if (*resource != '.') {
+        if (isEmpty(res_name))
+            return false;
+        size_t len(strlen(res_name));
+        if (strncmp(res_name, resource, len))
+            return false;
+        if (resource[len] == 0)
+            return true;
+        if (resource[len] != '.')
+            return false;
+        resource += len;
+    }
+    return 0 == strcmp(1 + resource, res_class ? res_class : "");
+}
+
+char* ClassHint::resource() const {
+    mstring str(res_name, ".", res_class);
+    return str == "." ? 0 : strdup(cstring(str));
 }
 
 // vim: set sw=4 ts=4 et:

@@ -53,10 +53,11 @@ YInputLine::YInputLine(YWindow *parent):
 YInputLine::~YInputLine() {
 }
 
-void YInputLine::setText(const ustring &text) {
+void YInputLine::setText(const ustring &text, bool asMarked) {
     fText = text;
-    markPos = curPos = leftOfs = 0;
+    leftOfs = 0;
     curPos = fText.length();
+    markPos = asMarked ? 0 : curPos;
     limit();
     repaint();
 }
@@ -679,8 +680,12 @@ void YInputLine::autoScroll(int delta, const XMotionEvent *motion) {
 
 void YInputLine::complete() {
     char* res = 0;
-    if (1 == globit_best(cstring(fText), &res))
-        setText(res);
+    int res_count = globit_best(cstring(fText), &res, 0, 0);
+    // directory is not a final match
+    if(res_count == 1 && upath(res).dirExists())
+        res_count++;
+    if (1 <= res_count)
+        setText(res, res_count == 1);
     free(res);
 }
 

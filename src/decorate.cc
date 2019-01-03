@@ -20,50 +20,40 @@ void YFrameWindow::updateMenu() {
     windowMenu->setActionListener(this);
     windowMenu->enableCommand(actionNull);
 
-    if (isMaximized())
+    if (!canMaximize())
         windowMenu->disableCommand(actionMaximize);
-    if (isMinimized())
+    if (!canMinimize())
         windowMenu->disableCommand(actionMinimize);
-    if (!(isMaximized() || isMinimized() || isHidden()))
+    if (!canRestore())
         windowMenu->disableCommand(actionRestore);
-    if (isMinimized() || isHidden() || isRollup() || !visibleNow())
+    if (isMinimized() || isHidden() || !canSize() || !visibleNow())
         windowMenu->disableCommand(actionSize);
-    if (isMinimized() || isHidden() || !visibleNow())
+    if (isMinimized() || isHidden() || !canMove() || !visibleNow())
         windowMenu->disableCommand(actionMove);
     if (!canLower())
         windowMenu->disableCommand(actionLower);
     if (!canRaise())
         windowMenu->disableCommand(actionRaise);
-
-    unsigned long func = frameFunctions();
-
-    if (!(func & ffMove))
-        windowMenu->disableCommand(actionMove);
-    if (!(func & ffResize))
-        windowMenu->disableCommand(actionSize);
-    if (!(func & ffMinimize))
-        windowMenu->disableCommand(actionMinimize);
-    if (!(func & ffHide))
+    if (!canHide())
         windowMenu->disableCommand(actionHide);
-    if (!(func & ffRollup) || !titlebar() || !titlebar()->visible())
+    if (!canRollup())
         windowMenu->disableCommand(actionRollup);
-    if (!(func & ffMaximize))
-        windowMenu->disableCommand(actionMaximize);
-    if (!(func & ffClose))
+    if (!canClose())
         windowMenu->disableCommand(actionClose);
 
-    YMenuItem *item;
-
-    if ((item = windowMenu->findAction(actionRollup)))
-        item->setChecked(isRollup());
-    if ((item = windowMenu->findAction(actionOccupyAllOrCurrent)))
-        item->setChecked(isAllWorkspaces());
+    windowMenu->checkCommand(actionMinimize, isMinimized());
+    windowMenu->checkCommand(actionMaximize, isMaximizedFully());
+    windowMenu->checkCommand(actionMaximizeVert, isMaximizedVert());
+    windowMenu->checkCommand(actionMaximizeHoriz, isMaximizedHoriz());
+    windowMenu->checkCommand(actionFullscreen, isFullscreen());
+    windowMenu->checkCommand(actionHide, isHidden());
+    windowMenu->checkCommand(actionRollup, isRollup());
+    windowMenu->checkCommand(actionOccupyAllOrCurrent, isAllWorkspaces());
 #if DO_NOT_COVER_OLD
-    if ((item = windowMenu->findAction(actionDoNotCover)))
-        item->setChecked(doNotCover());
+    windowMenu->checkCommand(actionDoNotCover, doNotCover());
 #endif
-    if ((item = windowMenu->findAction(actionFullscreen)))
-        item->setChecked(isFullscreen());
+
+    YMenuItem *item;
     if ((item = windowMenu->findSubmenu(moveMenu)))
         item->setEnabled(!isAllWorkspaces());
 
@@ -293,6 +283,10 @@ void YFrameWindow::configure(const YRect &r) {
     YWindow::configure(r);
 
     performLayout();
+    if (affectsWorkArea()) {
+        manager->updateWorkArea();
+    }
+
     sendConfigure();
 }
 
@@ -302,8 +296,6 @@ void YFrameWindow::performLayout()
     layoutResizeIndicators();
     layoutClient();
     layoutShape();
-    if (affectsWorkArea())
-        manager->updateWorkArea();
 }
 
 void YFrameWindow::layoutTitleBar() {
@@ -380,13 +372,13 @@ void YFrameWindow::layoutResizeIndicators() {
     int yy(max(1, min(cy, hh / 2)));
 
     XMoveResizeWindow(xapp->display(), topSide,
-                      xx, 0, ww - 2 * xx, by);
+                      xx, 0, max(1, ww - 2 * xx), by);
     XMoveResizeWindow(xapp->display(), leftSide,
-                      0, yy, bx, hh - 2 * yy);
+                      0, yy, bx, max(1, hh - 2 * yy));
     XMoveResizeWindow(xapp->display(), rightSide,
-                      ww - bx, yy, bx, hh - 2 * yy);
+                      ww - bx, yy, bx, max(1, hh - 2 * yy));
     XMoveResizeWindow(xapp->display(), bottomSide,
-                      xx, hh - by, ww - 2 * xx, by);
+                      xx, hh - by, max(1, ww - 2 * xx), by);
 
     XMoveResizeWindow(xapp->display(), topLeft,
                       0, 0, xx, yy);
@@ -416,42 +408,42 @@ void YFrameWindow::layoutClient() {
     }
 }
 
-bool YFrameWindow::canClose() {
+bool YFrameWindow::canClose() const {
     if (frameFunctions() & ffClose)
         return true;
     else
         return false;
 }
 
-bool YFrameWindow::canMaximize() {
+bool YFrameWindow::canMaximize() const {
     if (frameFunctions() & ffMaximize)
         return true;
     else
         return false;
 }
 
-bool YFrameWindow::canMinimize() {
+bool YFrameWindow::canMinimize() const {
     if (frameFunctions() & ffMinimize)
         return true;
     else
         return false;
 }
 
-bool YFrameWindow::canRollup() {
+bool YFrameWindow::canRollup() const {
     if ((frameFunctions() & ffRollup) && titleY() > 0)
         return true;
     else
         return false;
 }
 
-bool YFrameWindow::canHide() {
+bool YFrameWindow::canHide() const {
     if (frameFunctions() & ffHide)
         return true;
     else
         return false;
 }
 
-bool YFrameWindow::canLower() {
+bool YFrameWindow::canLower() const {
     if (this != manager->bottom(getActiveLayer()))
         return true;
     else
@@ -484,9 +476,9 @@ unsigned YFrameWindow::overlap(YFrameWindow* f) {
     return 0;
 }
 
-bool YFrameWindow::overlaps(bool below) {
-    YFrameWindow* f = below ? prev() : next();
-    for (; f; f = below ? f->prev() : f->next())
+bool YFrameWindow::overlaps(bool isAbove) {
+    YFrameWindow* f = isAbove ? prev() : next();
+    for (; f; f = isAbove ? f->prev() : f->next())
         if (overlap(f))
             return true;
     return false;
@@ -500,7 +492,7 @@ int YFrameWindow::borderX() const {
 
 int YFrameWindow::borderXN() const {
     return
-        ((frameDecors() & fdBorder) && !(hideBordersMaximized && isMaximized()))
+        ((frameDecors() & fdBorder) && !(hideBordersMaximized && isMaximizedFully()))
         ? ((frameDecors() & fdResize) ? wsBorderX : wsDlgBorderX)
         : 0;
 }
@@ -512,7 +504,7 @@ int YFrameWindow::borderY() const {
 
 int YFrameWindow::borderYN() const {
     return
-        ((frameDecors() & fdBorder) && !(hideBordersMaximized && isMaximized()))
+        ((frameDecors() & fdBorder) && !(hideBordersMaximized && isMaximizedFully()))
         ? ((frameDecors() & fdResize) ? wsBorderY : wsDlgBorderY)
         : 0;
 }
@@ -522,7 +514,7 @@ int YFrameWindow::titleY() const {
 }
 
 int YFrameWindow::titleYN() const {
-    if (hideTitleBarWhenMaximized && isMaximized())
+    if (hideTitleBarWhenMaximized && isMaximizedVert())
         return 0;
     return (frameDecors() & fdTitleBar) ? wsTitleBar : 0;
 }

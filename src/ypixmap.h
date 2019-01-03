@@ -12,7 +12,7 @@ public:
     static ref<YPixmap> create(unsigned w, unsigned h, unsigned depth, bool mask = false);
     static ref<YPixmap> load(upath filename);
 //    static ref<YPixmap> scale(ref<YPixmap> source, int width, int height);
-    static ref<YPixmap> createFromImage(ref<YImage> image, unsigned width);
+    static ref<YPixmap> createFromImage(ref<YImage> image, unsigned depth);
     static ref<YPixmap> createFromPixmapAndMask(Pixmap pixmap,
                                                 Pixmap mask,
                                                 unsigned w, unsigned h);
@@ -30,6 +30,7 @@ public:
     ref<YImage> image();
     Pixmap pixmap32();
     ref<YPixmap> scale(unsigned w, unsigned h);
+    ref<YPixmap> subimage(unsigned x, unsigned y, unsigned w, unsigned h);
 
 private:
     YPixmap(Pixmap pixmap, Pixmap mask,

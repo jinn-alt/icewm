@@ -115,9 +115,9 @@ public:
     void manageClients();
     void unmanageClients();
 
-    Window findWindow(char const * resource);
-    Window findWindow(Window root, char const * wmInstance,
-                      char const * wmClass);
+    Window findWindow(char const* resource);
+    Window findWindow(Window root, char const* resource, int maxdepth);
+    bool matchWindow(Window win, char const* resource);
 
     YFrameWindow *findFrame(Window win);
     YFrameClient *findClient(Window win);
@@ -129,9 +129,7 @@ public:
 
     void setFocus(YFrameWindow *f, bool canWarp = false);
     YFrameWindow *getFocus() { return fFocusWin; }
-
     void loseFocus(YFrameWindow *window);
-    void activate(YFrameWindow *frame, bool raise, bool canWarp = false);
 
     void installColormap(Colormap cmap);
     void setColormapWindow(YFrameWindow *frame);
@@ -174,6 +172,7 @@ public:
 
     void restackWindows(YFrameWindow *win);
     void focusTopWindow();
+    YFrameWindow *getFrameUnderMouse(long workspace = -1);
     YFrameWindow *getLastFocus(bool skipAllWorkspaces = false, long workspace = -1);
     void focusLastWindow();
     bool focusTop(YFrameWindow *f);

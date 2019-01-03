@@ -96,6 +96,15 @@ void YBaseArray::insert(const SizeType index, const void *item) {
     assert(index < fCount);
 }
 
+void YBaseArray::extend(const SizeType extendedCount) {
+    if (fCapacity < extendedCount)
+        setCapacity(extendedCount);
+    if (fCount < extendedCount) {
+        memset(getElement(fCount), 0, (extendedCount - fCount) * fElementSize);
+        fCount = extendedCount;
+    }
+}
+
 void YBaseArray::remove(const SizeType index) {
     MSG(("remove %d %d", index, fCount));
     PRECONDITION(index < getCount());
@@ -142,10 +151,26 @@ void YBaseArray::operator=(const YBaseArray& other) {
 }
 
 YStringArray::YStringArray(const YStringArray &other) :
-    YArray<const char*>(other.getCount())
+    BaseType(other.getCount())
 {
     for (SizeType i = 0; i < other.getCount(); ++i)
         append(other.getString(i));
+}
+
+YStringArray::YStringArray(const char* cstr[], SizeType num, SizeType cap) :
+    BaseType(max(num, cap))
+{
+    if (cstr) {
+        if (num == npos) {
+            for (SizeType i = 0; cstr[i]; ++i)
+                append(cstr[i]);
+            append(0);
+        }
+        else {
+            for (SizeType i = 0; i < num; ++i)
+                append(cstr[i]);
+        }
+    }
 }
 
 static bool strequal(const char *a, const char *b) {
@@ -160,14 +185,25 @@ YStringArray::SizeType YStringArray::find(const char *str) {
 }
 
 void YStringArray::remove(const SizeType index) {
-    if (index < getCount()) {
+    if (inrange(index, 0, getCount() - 1)) {
         delete[] getString(index);
         YBaseArray::remove(index);
     }
 }
 
+void YStringArray::replace(const SizeType index, const char *str) {
+    if (inrange(index, 0, getCount() - 1)) {
+        const char *copy = newstr(str);
+        ::swap(copy, *getItemPtr(index));
+        delete[] copy;
+    }
+    else if (index == getCount())
+        append(str);
+}
+
 void YStringArray::clear() {
-    for (int i = 0; i < getCount(); ++i) delete[] getString(i);
+    for (int i = 0; i < getCount(); ++i)
+        delete[] getString(i);
     YBaseArray::clear();
 }
 

@@ -17,6 +17,7 @@
 
 #include "ytimer.h"
 #include "ypopup.h"
+#include "yxcontext.h"
 #include <typeinfo>
 
 /******************************************************************************/
@@ -92,7 +93,6 @@ void YAutoScroll::autoScroll(YWindow *w, bool autoScroll, const XMotionEvent *mo
 /******************************************************************************/
 /******************************************************************************/
 
-extern XContext windowContext;
 YAutoScroll *YWindow::fAutoScroll = 0;
 YWindow *YWindow::fClickWindow = 0;
 Time YWindow::fClickTime = 0;
@@ -146,7 +146,11 @@ YWindow::~YWindow() {
     if (fAutoScroll &&
         fAutoScroll->isScrolling() &&
         fAutoScroll->getWindow() == this)
+    {
         fAutoScroll->autoScroll(0, false, 0);
+        delete fAutoScroll;
+        fAutoScroll = 0;
+    }
     fFocusedWindow = 0;
     removeWindow();
     while (nextWindow() != 0)
@@ -181,6 +185,10 @@ void YWindow::setWindowFocus() {
 
 void YWindow::setTitle(char const * title) {
     XStoreName(xapp->display(), handle(), title);
+}
+
+bool YWindow::fetchTitle(char** title) {
+    return XFetchName(xapp->display(), handle(), title);
 }
 
 void YWindow::setClassHint(char const * rName, char const * rClass) {
@@ -398,7 +406,7 @@ Window YWindow::create() {
 
         XSelectInput(xapp->display(), fHandle, fEventMask);
     }
-    XSaveContext(xapp->display(), fHandle, windowContext, (XPointer)this);
+    windowContext.save(fHandle, this);
     flags |= wfCreated;
     return fHandle;
 }
@@ -415,7 +423,7 @@ void YWindow::destroy() {
             }
             flags |= wfDestroyed;
         }
-        XDeleteContext(xapp->display(), fHandle, windowContext);
+        windowContext.remove(fHandle);
         fHandle = None;
         flags &= ~wfCreated;
     }
@@ -1478,8 +1486,7 @@ void YWindow::handleXdnd(const XClientMessageEvent &message) {
         if (XdndDropTarget) {
             YWindow *win;
 
-            if (XFindContext(xapp->display(), XdndDropTarget, windowContext,
-                             (XPointer *)(void *)&win) == 0)
+            if (windowContext.find(XdndDropTarget, &win))
                 win->handleDNDLeave();
             XdndDropTarget = None;
         }
@@ -1520,41 +1527,24 @@ void YWindow::handleXdnd(const XClientMessageEvent &message) {
 
         if (target != XdndDropTarget) {
             if (XdndDropTarget) {
-                union {
-                    YWindow *ptr;
-                    XPointer xptr;
-                } win;
+                YWindow *ptr = 0;
 
-                if (XFindContext(xapp->display(), XdndDropTarget, windowContext,
-                                 &win.xptr) == 0)
-                    win.ptr->handleDNDLeave();
+                if (windowContext.find(XdndDropTarget, &ptr))
+                    ptr->handleDNDLeave();
             }
             XdndDropTarget = target;
             if (XdndDropTarget) {
-                union {
-                    YWindow *ptr;
-                    XPointer xptr;
-                } win;
+                YWindow *ptr = 0;
 
-                if (XFindContext(xapp->display(), XdndDropTarget, windowContext,
-                                 &win.xptr) == 0)
+                if (windowContext.find(XdndDropTarget, &ptr))
                 {
-                    win.ptr->handleDNDEnter();
-                    pwin = win.ptr;
+                    ptr->handleDNDEnter();
+                    pwin = ptr;
                 }
             }
         }
         if (pwin == 0 && XdndDropTarget) { // !!! optimize this
-            union {
-                YWindow *ptr;
-                XPointer xptr;
-            } win;
-            if (XFindContext(xapp->display(), XdndDropTarget, windowContext,
-                             &win.xptr) == 0)
-            {
-                pwin = win.ptr;
-            } else
-                pwin = 0;
+            windowContext.find(XdndDropTarget, &pwin);
         }
         if (pwin)
             pwin->handleDNDPosition(nx, ny);
@@ -1984,7 +1974,7 @@ void YDesktop::updateXineramaInfo(unsigned &w, unsigned &h) {
         si.height = xapp->displayHeight();
         xiInfo.append(si);
     }
-    {
+    DBG {
         w = xiInfo[0].x_org + xiInfo[0].width;
         h = xiInfo[0].y_org + xiInfo[0].height;
         for (int i = 0; i < xiInfo.getCount(); i++)
@@ -1996,8 +1986,8 @@ void YDesktop::updateXineramaInfo(unsigned &w, unsigned &h) {
 
             MSG(("screen %d (%d): %d %d %d %d", i, xiInfo[i].screen_number, xiInfo[i].x_org, xiInfo[i].y_org, xiInfo[i].width, xiInfo[i].height));
         }
+        MSG(("desktop screen area: %d %d", w, h));
     }
-    MSG(("desktop screen area: %d %d", w, h));
 }
 
 
@@ -2032,7 +2022,7 @@ int YDesktop::getScreenForRect(int x, int y, unsigned width, unsigned height) {
     int screen = -1;
     long coverage = -1;
 
-    if (xiInfo.getCount() == 0)
+    if (xiInfo.getCount() < 2)
         return 0;
     for (int s = 0; s < xiInfo.getCount(); s++) {
         int x_i = intersection(x, x + int(width),

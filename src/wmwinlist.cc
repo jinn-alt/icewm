@@ -6,21 +6,12 @@
  * Window list
  */
 #include "config.h"
-#include "ykey.h"
-#include "ypaint.h"
 #include "wmwinlist.h"
 #include "ymenuitem.h"
-#include "yaction.h"
-
 #include "prefs.h"
-#include "wmaction.h"
-#include "wmclient.h"
 #include "wmframe.h"
-#include "wmmgr.h"
 #include "wmapp.h"
-#include "sysdep.h"
-#include "yrect.h"
-
+#include <assert.h>
 #include "intl.h"
 
 WindowList *windowList = 0;
@@ -80,7 +71,7 @@ void WindowListBox::activateItem(YListItem *item) {
     WindowListItem *i = (WindowListItem *)item;
     ClientData *f = i->getFrame();
     if (f) {
-        f->activateWindow(true);
+        f->activateWindow(true, false);
         windowList->getFrame()->wmHide();
     } else {
         int w = i->getWorkspace();
@@ -106,6 +97,9 @@ void WindowListBox::getSelectedWindows(YArray<YFrameWindow *> &frames) {
 }
 
 void WindowListBox::actionPerformed(YAction action, unsigned int modifiers) {
+    bool save = focusCurrentWorkspace;
+    if (save) focusCurrentWorkspace = false;
+
     YArray<YFrameWindow *> frameList;
     getSelectedWindows(frameList);
 
@@ -139,6 +133,8 @@ void WindowListBox::actionPerformed(YAction action, unsigned int modifiers) {
             frameList[i]->actionPerformed(action, modifiers);
         }
     }
+
+    if (save) focusCurrentWorkspace = save;
 }
 
 bool WindowListBox::handleKey(const XKeyEvent &key) {
@@ -211,11 +207,25 @@ void WindowListBox::handleClick(const XButtonEvent &up, int count) {
 }
 
 void WindowListBox::enableCommands(YMenu *popup) {
-    bool noItems = true;
+    bool selected = false;
+    bool minified = true;
+    bool maxified = true;
+    bool horified = true;
+    bool vertified = true;
+    bool fullscreen = true;
+    bool ishidden = true;
+    bool rolledup = true;
     long workspace = -1;
     bool sameWorkspace = false;
-    bool notHidden = false;
-    bool notMinimized = false;
+    bool restores = false;
+    bool minifies = false;
+    bool maxifies = false;
+    bool showable = false;
+    bool hidable = false;
+    bool rollable = false;
+    bool raiseable = false;
+    bool lowerable = false;
+    bool closable = false;
 
     // enable minimize,hide if appropriate
     // enable workspace selections if appropriate
@@ -224,31 +234,70 @@ void WindowListBox::enableCommands(YMenu *popup) {
     for (YListItem *i = getFirst(); i; i = i->getNext()) {
         if (isSelected(i)) {
             WindowListItem *item = (WindowListItem *)i;
-            if (!item->getFrame()) {
+            ClientData* frame = item->getFrame();
+            if (!frame) {
                 continue;
             }
-            noItems = false;
+            selected = true;
 
-            if (!item->getFrame()->isHidden())
-                notHidden = true;
-            if (!item->getFrame()->isMinimized())
-                notMinimized = true;
+            minified &= frame->isMinimized();
+            maxified &= frame->isMaximizedFully();
+            vertified &= frame->isMaximizedVert();
+            horified &= frame->isMaximizedHoriz();
+            fullscreen &= frame->isFullscreen();
+            ishidden &= frame->isHidden();
+            rolledup &= frame->isRollup();
 
-            long ws = item->getFrame()->getWorkspace();
+            restores |= (frame->canRestore());
+            minifies |= (frame->canMinimize() && !frame->isMinimized());
+            maxifies |= (frame->canMaximize());
+            showable |= (frame->isMinimized() || frame->isHidden());
+            hidable |= (frame->canHide() && !frame->isHidden());
+            rollable |= (frame->canRollup());
+            raiseable |= (frame->canRaise());
+            lowerable |= (frame->canLower());
+            closable |= (frame->canClose());
+
+            long ws = frame->getWorkspace();
             if (workspace == -1) {
                 workspace = ws;
                 sameWorkspace = true;
             } else if (workspace != ws) {
                 sameWorkspace = false;
             }
-            if (item->getFrame()->isAllWorkspaces())
+            if (frame->isAllWorkspaces())
                 sameWorkspace = false;
         }
     }
-    if (!notHidden)
-        popup->disableCommand(actionHide);
-    if (!notMinimized)
+    popup->checkCommand(actionMinimize, selected && minified);
+    popup->checkCommand(actionMaximize, selected && maxified);
+    popup->checkCommand(actionMaximizeVert, selected && vertified);
+    popup->checkCommand(actionMaximizeHoriz, selected && horified);
+    popup->checkCommand(actionFullscreen, selected && fullscreen);
+    popup->checkCommand(actionHide, selected && ishidden);
+    popup->checkCommand(actionRollup, selected && rolledup);
+    if (!restores)
+        popup->disableCommand(actionRestore);
+    if (!minifies)
         popup->disableCommand(actionMinimize);
+    if (!maxifies)
+        popup->disableCommand(actionMaximize);
+    if (!maxifies)
+        popup->disableCommand(actionMaximizeVert);
+    if (!maxifies)
+        popup->disableCommand(actionMaximizeHoriz);
+    if (!showable)
+        popup->disableCommand(actionShow);
+    if (!hidable)
+        popup->disableCommand(actionHide);
+    if (!rollable)
+        popup->disableCommand(actionRollup);
+    if (!raiseable)
+        popup->disableCommand(actionRaise);
+    if (!lowerable)
+        popup->disableCommand(actionLower);
+    if (!closable)
+        popup->disableCommand(actionClose);
 
     moveMenu->enableCommand(actionNull);
     if (sameWorkspace && workspace != -1) {
@@ -259,7 +308,7 @@ void WindowListBox::enableCommands(YMenu *popup) {
                     item->setEnabled(w != workspace);
         }
     }
-    if (noItems) {
+    if (selected == false) {
         moveMenu->disableCommand(actionNull);
         popup->disableCommand(actionNull);
     }
@@ -297,10 +346,20 @@ YFrameClient(aParent, 0) {
 
     windowListPopup = new YMenu();
     windowListPopup->setActionListener(list);
+    windowListPopup->addItem(_("_Restore"), -2, KEY_NAME(gKeyWinRestore), actionRestore);
+    windowListPopup->addItem(_("Mi_nimize"), -2, KEY_NAME(gKeyWinMinimize), actionMinimize);
+    windowListPopup->addItem(_("Ma_ximize"), -2, KEY_NAME(gKeyWinMaximize), actionMaximize);
+    windowListPopup->addItem(_("Maximize_Vert"), -2, KEY_NAME(gKeyWinMaximizeVert), actionMaximizeVert);
+    windowListPopup->addItem(_("_Fullscreen"), -2, KEY_NAME(gKeyWinFullscreen), actionFullscreen);
     windowListPopup->addItem(_("_Show"), -2, null, actionShow);
-    windowListPopup->addItem(_("_Hide"), -2, null, actionHide);
-    windowListPopup->addItem(_("_Minimize"), -2, null, actionMinimize);
+    windowListPopup->addItem(_("_Hide"), -2, KEY_NAME(gKeyWinHide), actionHide);
+    windowListPopup->addItem(_("Roll_up"), -2, KEY_NAME(gKeyWinRollup), actionRollup);
+    windowListPopup->addItem(_("_Raise"), -2, KEY_NAME(gKeyWinRaise), actionRaise);
+    windowListPopup->addItem(_("_Lower"), -2, KEY_NAME(gKeyWinLower), actionLower);
+    windowListPopup->addSeparator();
     windowListPopup->addSubmenu(_("Move _To"), -2, moveMenu);
+    windowListPopup->addItem(_("Occupy _All"), -2, KEY_NAME(gKeyWinOccupyAll), actionOccupyAllOrCurrent);
+    windowListPopup->addItem(_("Tray _icon"), -2, null, actionToggleTray);
     windowListPopup->addSeparator();
     windowListPopup->addItem(_("Tile _Vertically"), -2, KEY_NAME(gKeySysTileVertical), actionTileVertical);
     windowListPopup->addItem(_("T_ile Horizontally"), -2, KEY_NAME(gKeySysTileHorizontal), actionTileHorizontal);
@@ -338,7 +397,11 @@ YFrameClient(aParent, 0) {
     setIconTitle(_("Window list"));
     setClassHint("windowList", "IceWM");
 
-    setWinHintsHint(WinHintsSkipTaskBar);
+    setWinHintsHint(WinHintsSkipTaskBar |
+                    WinHintsSkipWindowMenu);
+    long winState = WinStateSkipTaskBar |
+                    WinStateSticky;
+    setWinStateHint(winState, winState);
     setWinWorkspaceHint(-1);
     setWinLayerHint(WinLayerAboveDock);
 }

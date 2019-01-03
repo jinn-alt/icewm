@@ -27,7 +27,8 @@ YClientContainer::YClientContainer(YWindow *parent, YFrameWindow *frame)
 }
 
 YClientContainer::~YClientContainer() {
-    releaseButtons();
+    if (destroyed() == false)
+        releaseButtons();
 }
 
 void YClientContainer::handleButton(const XButtonEvent &button) {
@@ -52,7 +53,7 @@ void YClientContainer::handleButton(const XButtonEvent &button) {
                 firstClick = true;
         }
     }
-#if 1
+
     if (clientMouseActions) {
         unsigned int k = button.button + XK_Pointer_Button1 - 1;
         unsigned int m = KEY_MODMASK(button.state);
@@ -97,15 +98,23 @@ void YClientContainer::handleButton(const XButtonEvent &button) {
                                           px, py);
             }
             return ;
-        } else if (IS_WMKEY(k, vm, gMouseWinRaise)) {
+        }
+        else if (gMouseWinRaise.eq(k, vm)
+            && (gMouseWinRaise != gMouseWinLower || getFrame()->canRaise()))
+        {
             XAllowEvents(xapp->display(), AsyncPointer, CurrentTime);
             getFrame()->wmRaise();
             return ;
         }
+        else if (gMouseWinLower.eq(k, vm)) {
+            XAllowEvents(xapp->display(), AsyncPointer, CurrentTime);
+            getFrame()->wmLower();
+            return ;
+        }
     }
-#endif
+
     ///!!! do this first?
-    if (doActivate)
+    if (doActivate && getFrame() != manager->getFocus())
         getFrame()->activate();
     if (doRaise)
         getFrame()->wmRaise();
@@ -192,6 +201,8 @@ void YClientContainer::grabActions() {
             grabVButton(gMouseWinSize.key - xkButton0, gMouseWinSize.mod);
         if (inrange(gMouseWinRaise.key, minButton, maxButton))
             grabVButton(gMouseWinRaise.key - xkButton0, gMouseWinRaise.mod);
+        if (inrange(gMouseWinLower.key, minButton, maxButton))
+            grabVButton(gMouseWinLower.key - xkButton0, gMouseWinLower.mod);
     }
 }
 
@@ -201,9 +212,7 @@ void YClientContainer::handleConfigureRequest(const XConfigureRequestEvent &conf
     if (getFrame() &&
         configureRequest.window == getFrame()->client()->handle())
     {
-        XConfigureRequestEvent cre = configureRequest;
-
-        getFrame()->configureClient(cre);
+        getFrame()->configureClient(configureRequest);
     }
 }
 

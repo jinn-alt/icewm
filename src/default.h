@@ -4,7 +4,6 @@
 #include "yconfig.h"
 
 /************************************************************************************************************************************************************/
-XIV(int, focusMode,                             1)
 XIV(bool, clickFocus,                           true)
 XIV(bool, focusOnAppRaise,                      false)
 XIV(bool, requestFocusOnAppRaise,               true)
@@ -19,6 +18,7 @@ XIV(bool, passFirstClickToClient,               true)
 XIV(bool, focusOnMap,                           true)
 XIV(bool, mapInactiveOnTop,                     true)
 XIV(bool, focusChangesWorkspace,                false)
+XIV(bool, focusCurrentWorkspace,                false)
 XIV(bool, focusOnMapTransient,                  false)
 XIV(bool, focusOnMapTransientActive,            true)
 XIV(bool, focusRootWindow,                      false)
@@ -177,7 +177,7 @@ XSV(const char *, clockCommand,                 "xterm -name cal -hold -g 21x9 -
 XSV(const char *, clockClassHint,               "cal.XClock")
 XSV(const char *, runDlgCommand,                0)
 XSV(const char *, openCommand,                  0)
-XSV(const char *, terminalCommand,              "xterm")
+XSV(const char *, terminalCommand,              "xterm -hold")
 XSV(const char *, logoutCommand,                0)
 XSV(const char *, logoutCancelCommand,          0)
 #if defined(__linux__)
@@ -197,8 +197,15 @@ XIV(int, taskBarNetDelay,                       500)
 XSV(const char *, cpuCommand,                   "xterm -name top -title 'Process Status' -e 'if [ -x /usr/bin/htop ]; then htop; else top; fi'")
 XSV(const char *, cpuClassHint,                 "top.XTerm")
 XIV(bool, cpuCombine,                           true)
-XSV(const char *, netCommand,                   "xterm -name 'socket statistics' -title 'Socket Statistics' -hold -e ss")
+
+#ifdef __linux__
+XSV(const char *, netCommand,                   "xterm -name 'ss' -title 'Socket Statistics' -hold -e sh -c 'which ss > /dev/null && watch -t ss -putswl || netstat -c'")
 XSV(const char *, netClassHint,                 "ss.XTerm")
+#else
+XSV(const char *, netCommand,                   "xterm -name netstat -title 'Network Status' -hold -e netstat -c")
+XSV(const char *, netClassHint,                 "netstat.XTerm")
+#endif
+
 XSV(const char *, netDevice,                    "[ewp]*"
 #ifdef __OpenBSD__
                                                 " vio*"
@@ -230,6 +237,7 @@ cfoption icewm_preferences[] = {
     OBV("LowerOnClickWhenRaised",               &lowerOnClickWhenRaised,        "Lower the active window when clicked again"),
     OBV("PassFirstClickToClient",               &passFirstClickToClient,        "Pass focusing click on client area to client"),
     OBV("FocusChangesWorkspace",                &focusChangesWorkspace,         "Change to the workspace of newly focused windows"),
+    OBV("FocusCurrentWorkspace",                &focusCurrentWorkspace,         "Move newly focused windows to current workspace"),
     OBV("FocusOnMap",                           &focusOnMap,                    "Focus normal window when initially mapped"),
     OBV("FocusOnMapTransient",                  &focusOnMapTransient,           "Focus dialog window when initially mapped"),
     OBV("FocusOnMapTransientActive",            &focusOnMapTransientActive,     "Focus dialog window when initially mapped only if parent frame focused"),
@@ -437,6 +445,7 @@ cfoption icewm_preferences[] = {
     OKV("MouseWinMove",                         gMouseWinMove,                  "Mouse binding for window move"),
     OKV("MouseWinSize",                         gMouseWinSize,                  "Mouse binding for window resize"),
     OKV("MouseWinRaise",                        gMouseWinRaise,                 "Mouse binding to raise window"),
+    OKV("MouseWinLower",                        gMouseWinLower,                 "Mouse binding to lower window"),
     OKV("KeyWinRaise",                          gKeyWinRaise,                   ""),
     OKV("KeyWinOccupyAll",                      gKeyWinOccupyAll,               ""),
     OKV("KeyWinLower",                          gKeyWinLower,                   ""),
@@ -474,16 +483,16 @@ cfoption icewm_preferences[] = {
     OKV("KeyWinSmartPlace",                     gKeyWinSmartPlace, "Smart window placement (minimal overlap)"),
     OKV("KeySysSwitchNext",                     gKeySysSwitchNext,              ""),
     OKV("KeySysSwitchLast",                     gKeySysSwitchLast,              ""),
+    OKV("KeySysSwitchClass",                    gKeySysSwitchClass,             ""),
     OKV("KeySysWinNext",                        gKeySysWinNext,                 ""),
     OKV("KeySysWinPrev",                        gKeySysWinPrev,                 ""),
     OKV("KeyTaskBarSwitchNext",                 gKeyTaskBarSwitchNext,          "Switch to the next window in the Task Bar"),
     OKV("KeyTaskBarSwitchPrev",                 gKeyTaskBarSwitchPrev,          "Switch to the previous window in the Task Bar"),
-    OKV("KeyTaskBarMoveNext",			gKeyTaskBarMoveNext,            "Move the Task Bar button of the current window right"),
-    OKV("KeyTaskBarMovePrev",			gKeyTaskBarMovePrev,            "Move the Task Bar button of the current window left"),
+    OKV("KeyTaskBarMoveNext",                   gKeyTaskBarMoveNext,            "Move the Task Bar button of the current window right"),
+    OKV("KeyTaskBarMovePrev",                   gKeyTaskBarMovePrev,            "Move the Task Bar button of the current window left"),
     OKV("KeySysWinMenu",                        gKeySysWinMenu,                 ""),
     OKV("KeySysDialog",                         gKeySysDialog,                  ""),
     OKV("KeySysMenu",                           gKeySysMenu,                    ""),
-///    OKV("KeySysRun",                            gKeySysRun,                     ""),
     OKV("KeySysWindowList",                     gKeySysWindowList,              ""),
     OKV("KeySysWinListMenu",                    gKeySysWinListMenu,             ""),
     OKV("KeySysAddressBar",                     gKeySysAddressBar,              ""),
