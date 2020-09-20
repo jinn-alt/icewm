@@ -1,4 +1,4 @@
 copy: altlinux/*
 spec: altlinux/icewm.spec
-tar: icewm-1-4-BRANCH:. name=@name@
-diff: icewm-1-4-BRANCH:. sisyphus:. name=@name@-@version@-@release@.patch
+tar: icewm-1-4-BRANCH:. name=@name@-@version@
+diff: icewm-1-4-BRANCH:. transit:. name=@name@-@version@-@release@.patch
