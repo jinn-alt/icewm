@@ -1,10 +1,10 @@
 # -*- mode: rpm-spec; coding: utf-8 -*-
 %define realname icewm
-%define gitrev .git569bbe7
+%define gitrev 0.4.d4a330a
 
 Name: %realname
-Version: 1.4.2
-Release: alt4%gitrev
+Version: 1.8.3.%gitrev
+Release: alt1
 Epoch:3
 
 Summary: X11 Window Manager
@@ -19,7 +19,7 @@ Requires: design-%realname >= 1.0-alt6
 Obsoletes: %realname-githubmod < %version-%release
 Obsoletes: %realname-light < %version-%release
 
-Source0: %name.tar
+Source0: %name-%version.tar
 Source2: %realname.menu-method
 Source3: %realname-16.png
 Source4: %realname-32.png
@@ -31,13 +31,15 @@ Source9: README.ALT
 Source11: restart
 Source12: icewm-old-changelog.bz2
 
-Patch0: %name-%version-%release.patch
+#Patch0: %name-%version-%release.patch
 
 BuildRequires(pre): rpm-macros-cmake
-# Automatically added by buildreq on Tue Oct 02 2018
-BuildRequires: asciidoc cmake gcc-c++ libSM-devel libXft-devel libXinerama-devel
-BuildRequires: libXrandr-devel libalsa-devel librsvg-devel libsndfile-devel
-BuildRequires: perl-Pod-Usage python-modules-compiler python-modules-encodings time
+
+# Automatically added by buildreq on Thu Oct 03 2019
+BuildRequires: asciidoctor cmake gcc-c++ gem-did-you-mean libSM-devel
+BuildRequires: libXcomposite-devel libXdamage-devel libXft-devel
+BuildRequires: libXinerama-devel libXpm-devel libXrandr-devel libalsa-devel
+BuildRequires: librsvg-devel libsndfile-devel perl-Pod-Usage
 
 %description
  Window Manager for X Window System. Can emulate the look of Windows'95, OS/2
@@ -50,14 +52,22 @@ maintained on Github https://github.com/bbidulock/icewm
 Recommends: iftop, mutt
 
 %prep
-%setup -n %name
-%patch0 -p1
+%setup -n %name-%version
+#patch0 -p1
 
 %build
-%cmake	-DCFGDIR=%_sysconfdir/X11/%realname -DPREFIX=%_prefix \
-	-DLIBDIR=%_x11x11dir/%realname -DDOCDIR=%_datadir/doc/%name-%version \
-        -DCONFIG_GUIEVENTS=on  -DICESOUND="ALSA,OSS" -DCONFIG_LIBRSVG=on \
-        -DCONFIG_XPM=off -DCONFIG_LIBPNG=off -DCONFIG_GDK_PIXBUF_XLIB=on
+%cmake	-DPREFIX=%_prefix \
+	-DCFGDIR=%_sysconfdir/X11/%realname \
+	-DLIBDIR=%_x11x11dir/%realname \
+	-DDOCDIR=%_datadir/doc/%name-%version \
+	-DCONFIG_GDK_PIXBUF_XLIB=on \
+	-DCONFIG_XPM=on \
+	-DCONFIG_LIBPNG=off \
+	-DCONFIG_LIBRSVG=on \
+	-DCONFIG_GUIEVENTS=on \
+	-DICESOUND="ALSA,OSS" \
+	-DENABLE_LTO=on \
+	-DXTERMCMD=xvt
 pushd BUILD
 %make_build
 popd
@@ -99,17 +109,7 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %_sysconfdir/X11/wmsession.d/*
 %_bindir/*
 %dir %_x11x11dir/%realname
-%_x11x11dir/%realname/icons
-%_x11x11dir/%realname/ledclock
-%_x11x11dir/%realname/mailbox
-%_x11x11dir/%realname/taskbar
-%_x11x11dir/%realname/themes
-%_x11x11dir/%realname/keys
-%_x11x11dir/%realname/menu
-%_x11x11dir/%realname/preferences
-%_x11x11dir/%realname/programs
-%_x11x11dir/%realname/toolbar
-%_x11x11dir/%realname/winoptions
+%_x11x11dir/%realname/*
 %_niconsdir/*
 %_miconsdir/*
 %_liconsdir/*
@@ -121,6 +121,60 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sun Sep 20 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.8.3.0.4.d4a330a-alt1
+- top version 1.8.3-4-d4a330a
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.8.1.0.54.bfa7a59-alt1
+- top version 1.8.1-54-bfa7a59
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.143.78b7d88-alt1
+- 78b7d88
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.118.47e790e-alt1
+- 47e790e
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.116.2d48390-alt1
+- 2d48390
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.99.162badc-alt1
+- 162badc
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.50.44891f5-alt1
+- 44891f5
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.42.66682e5-alt1
+- 66682e5
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.21.b3616aa-alt1
+- b3616aa
+
+* Fri Sep 11 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0.0.0.1a0bd2d-alt1
+- 1.7.0 from bbidulock
+
+* Sat Jul 18 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.7.0-alt1
+- 1.7.0
+
+* Fri Jun 05 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.6.6-alt1
+- 1.6.6
+
+* Fri Mar 20 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.6.5-alt1
+- 1.6.5
+
+* Mon Jan 27 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.6.4.0.2.397480d-alt1
+- 1.6.4
+
+* Wed Dec 25 2019 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.6.3-alt1
+- 1.6.3
+
+* Thu Oct 03 2019 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.6.2-alt1
+- 1.6.2
+- asciidoc replaced to asciidoctor
+- buildreq
+
+* Thu Aug 29 2019 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.6.1-alt1
+- 1.6.1 (ALT #37127)
+- buildreq
+
 * Thu Jan 03 2019 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.4.2-alt4.git569bbe7
 - git snapshot 569bbe7
 
