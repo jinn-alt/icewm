@@ -1,6 +1,8 @@
 #ifndef __BROWSE_H
 #define __BROWSE_H
 
+class YSMListener;
+
 class BrowseMenu: public ObjectMenu {
 public:
     BrowseMenu(
@@ -8,7 +10,7 @@ public:
         YSMListener *smActionListener,
         YActionListener *wmActionListener,
         upath path,
-        YWindow *parent = 0);
+        YWindow *parent = nullptr);
     virtual ~BrowseMenu();
     virtual void updatePopup();
 private:

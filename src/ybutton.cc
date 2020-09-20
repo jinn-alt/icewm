@@ -11,7 +11,7 @@
 #include "yrect.h"
 #include "yicon.h"
 #include "wpixmaps.h"
-#include "yxapp.h" // !!! remove (AltMask)
+#include "yxapp.h"
 #include "yprefs.h"
 #include "prefs.h"
 #include "ascii.h"
@@ -29,6 +29,7 @@ YColorName YButton::activeButtonFg(&clrActiveButtonText);
 
 ref<YFont> YButton::normalButtonFont;
 ref<YFont> YButton::activeButtonFont;
+int YButton::buttonObjectCount;
 
 YButton::YButton(YWindow *parent, YAction action, YMenu *popup) :
     YWindow(parent),
@@ -41,15 +42,12 @@ YButton::YButton(YWindow *parent, YAction action, YMenu *popup) :
     fPressed(false),
     fEnabled(true),
     fHotCharPos(-1), hotKey(-1),
-    fListener(NULL),
+    fListener(nullptr),
     fSelected(false), fArmed(false),
     wasPopupActive(false),
     fPopupActive(false)
 {
-    if (normalButtonFont == null)
-        normalButtonFont = YFont::getFont(XFA(normalButtonFontName));
-    if (activeButtonFont == null)
-        activeButtonFont = YFont::getFont(XFA(activeButtonFontName));
+    ++buttonObjectCount;
 }
 
 YButton::~YButton() {
@@ -62,6 +60,10 @@ YButton::~YButton() {
     if (fPopup && fPopup->isShared() == false) {
         delete fPopup;
     }
+    if (--buttonObjectCount == 0) {
+        normalButtonFont = null;
+        activeButtonFont = null;
+    }
 }
 
 void YButton::paint(Graphics &g, int const d, const YRect &r) {
@@ -69,21 +71,22 @@ void YButton::paint(Graphics &g, int const d, const YRect &r) {
     YSurface surface(getSurface());
     g.drawSurface(surface, x, y, w, h);
 
-    if (fIcon != null)
+    if (fIcon != null) {
         fIcon->draw(g,
                     x + (w - fIconSize) / 2,
                     y + (h - fIconSize) / 2,
                     fIconSize);
-    else
-    if (fImage != null)
+    }
+    else if (fImage != null) {
         g.drawImage(fImage,
                     x + (w - fImage->width()) / 2,
                     y + (h - fImage->height()) / 2);
+    }
     else if (fText != null) {
-        ref<YFont> font = fPressed ? activeButtonFont : normalButtonFont;
+        ref<YFont> font(getFont());
 
         int const w(font->textWidth(fText));
-        int const p((width() - w) / 2);
+        int const p((width() + 1 - w) / 2);
         int yp((height() - font->height()) / 2
                + font->ascent() + d);
 
@@ -97,13 +100,13 @@ void YButton::paint(Graphics &g, int const d, const YRect &r) {
         } else {
             g.drawChars(fText, d + p, yp);
         }
-        if (fHotCharPos != -1)
+        if (fHotCharPos >= 0)
             g.drawCharUnderline(d + p, yp, fText, fHotCharPos);
     }
 }
 
 void YButton::paint(Graphics &g, const YRect &/*r*/) {
-    int d((fPressed || fArmed) ? 1 : 0);
+    int d(fPressed || fArmed);
     int x(0), y(0), w(width()), h(height());
 
     if (w > 1 && h > 1) {
@@ -128,11 +131,14 @@ void YButton::paint(Graphics &g, const YRect &/*r*/) {
         if (wmLook != lookFlat) {
             paintFocus(g, YRect(x, y, w, h));
         }
+        if (surface.gradient != null) {
+            g.maxOpacity();
+        }
     }
 }
 
 void YButton::paintFocus(Graphics &g, const YRect &/*r*/) {
-    int const d = (fPressed || fArmed ? 1 : 0);
+    int const d = (fPressed || fArmed);
     int const dp(wmLook == lookMetal ? 2 : 2 + d);
     int const ds(4);
 
@@ -264,7 +270,7 @@ void YButton::updatePopup() {
 
 void YButton::handleButton(const XButtonEvent &button) {
     if (fEnabled) {
-        if (button.type == ButtonPress && button.button == 1) {
+        if (button.type == ButtonPress && button.button == Button1) {
             requestFocus(false);
             wasPopupActive = fArmed;
             setSelected(true);
@@ -278,21 +284,24 @@ void YButton::handleButton(const XButtonEvent &button) {
 
                 if ((!inWindow || wasPopupActive) && fArmed) {
                     setArmed(false, false);
-                    setSelected(false);
-                }
-            } else {
-                bool wasArmed = fArmed;
-
-                setArmed(false, false);
-                setSelected(false);
-                if (wasArmed) {
-                    actionPerformed(fAction, button.state);
-                    return ;
                 }
             }
+            setSelected(false);
         }
     }
     YWindow::handleButton(button);
+}
+
+void YButton::handleClick(const XButtonEvent &button, int count) {
+    if (fEnabled && fPopup == nullptr) {
+        bool wasArmed = fArmed;
+
+        setArmed(false, false);
+        setSelected(false);
+        if (wasArmed && count == 1 && button.button == Button1) {
+            actionPerformed(fAction, button.state);
+        }
+    }
 }
 
 void YButton::handleCrossing(const XCrossingEvent &crossing) {
@@ -317,20 +326,44 @@ void YButton::handleCrossing(const XCrossingEvent &crossing) {
     YWindow::handleCrossing(crossing);
 }
 
+ref<YFont> YButton::getActiveFont() {
+    if (activeButtonFont == null)
+        activeButtonFont = YFont::getFont(XFA(activeButtonFontName));
+    return activeButtonFont;
+}
+
+ref<YFont> YButton::getNormalFont() {
+    if (normalButtonFont == null)
+        normalButtonFont = YFont::getFont(XFA(normalButtonFontName));
+    return normalButtonFont;
+}
+
+YDimension YButton::getTextSize() {
+    if (fText != null) {
+        ref<YFont> font(getActiveFont());
+        return YDimension(font->textWidth(fText), font->height());
+    } else {
+        return YDimension(1, 1);
+    }
+}
+
 void YButton::updateSize() {
     int w = 72;
     int h = 18;
     if (fIcon != null) {
         w = h = fIconSize;
-    } else if (fImage != null) {
+    }
+    else if (fImage != null) {
         w = fImage->width();
         h = fImage->height();
-    } else if (fText != null) {
-        w = activeButtonFont->textWidth(fText);
-        h = activeButtonFont->ascent();
     }
-    setSize(w + 3 + 2 - ((wmLook == lookMetal || wmLook == lookFlat) ? 1 : 0),
-            h + 3 + 2 - ((wmLook == lookMetal || wmLook == lookFlat) ? 1 : 0));
+    else if (fText != null) {
+        YDimension d(getTextSize());
+        w = d.w;
+        h = d.h;
+    }
+    setSize(w + 3 + 2 - LOOK(lookMetal | lookFlat),
+            h + 3 + 2 - LOOK(lookMetal | lookFlat));
 }
 
 void YButton::setIcon(ref<YIcon> icon, int iconSize) {
@@ -349,34 +382,33 @@ void YButton::setImage(ref<YImage> image) {
     updateSize();
 }
 
-void YButton::setText(const ustring &str, int hotChar) {
+void YButton::setText(const mstring &str, int hotChar) {
     if (hotKey != -1) {
         removeAccelerator(hotKey, 0, this);
         if (xapp->AltMask != 0)
             removeAccelerator(hotKey, xapp->AltMask, this);
+        hotKey = -1;
     }
     fText = str;
     if (fText != null) {
         fHotCharPos = hotChar;
 
         if (fHotCharPos == -2) {
-            int i = fText.indexOf('_');
-            if (i != -1) {
-                fHotCharPos = i;
-                fText = fText.remove(i, 1);
+            fHotCharPos = fText.indexOf('_');
+            if (fHotCharPos >= 0) {
+                fText = fText.remove(fHotCharPos, 1);
             }
         }
 
-        hotKey = (fHotCharPos != -1) ? fText.charAt(fHotCharPos) : -1;
-        hotKey = ASCII::toUpper(hotKey);
-
+        hotKey = (fHotCharPos >= 0) ? fText.charAt(fHotCharPos) : -1;
         if (hotKey != -1) {
+            hotKey = ASCII::toUpper(hotKey);
+
             installAccelerator(hotKey, 0, this);
             if (xapp->AltMask != 0)
                 installAccelerator(hotKey, xapp->AltMask, this);
         }
-    } else
-        hotKey = -1;
+    }
     updateSize();
 }
 
@@ -394,8 +426,8 @@ void YButton::donePopup(YPopupWindow *popup) {
         return ;
     }
     popdown();
-    fArmed = 0;
-    fSelected = 0;
+    fArmed = false;
+    fSelected = false;
     repaint();
 }
 
@@ -408,7 +440,7 @@ void YButton::popup(bool mouseDown) {
         fPopup->setActionListener(getActionListener());
 
         int xiscreen = desktop->getScreenForRect(x, y, width(), height());
-        if (fPopup->popup(this, this, 0,
+        if (fPopup->popup(this, this, nullptr,
                           x - 2,
                           y + height(),
                           0,
@@ -441,7 +473,7 @@ void YButton::actionPerformed(YAction action, unsigned modifiers) {
 }
 
 ref<YFont> YButton::getFont() {
-    return (fPressed ? activeButtonFont : normalButtonFont);
+    return fPressed ? getActiveFont() : getNormalFont();
 }
 
 YColor YButton::getColor() {

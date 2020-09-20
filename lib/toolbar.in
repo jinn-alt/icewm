@@ -1,19 +1,8 @@
-# This is an example for IceWM's toolbar definition file.
+# This is an example for @PACKAGE_STRING@ toolbar definition file.
+# It will be installed as @LIBDIR@/toolbar.
+# Place your variants in @CFGDIR@ or in $HOME/.icewm since
+# modifications to this file will be overwritten when you reinstall icewm.
 #
-# Place your variants in /etc/X11/icewm or in $HOME/.icewm
-# since modifications to this file will be discarded when you
-# (re)install icewm.
-#
-prog Screensaver lock xscreensaver-command -lock
-prog Terminal xterm xvt
-prog Emacs emacs emacs
-runonce Chromium chromium chromium chromium
-runonce Firefox firefox firefox-bin firefox
-runonce Palemoon newmoon palemoon-bin palemoon
-runonce Seamonkey seamonkey seamonkey-bin seamonkey
-runonce Thunderbird thunderbird thunderbird-bin thunderbird
-prog XChat xchat xchat
-prog licq licq licq
-runonce GQView gqview gqview gqview
-runonce Xmms xmms XMMS_Player xmms
-prog Video xine xine
+prog "@XTERMCMD@" utilities-terminal @XTERMCMD@
+prog "Web browser" web-browser xdg-open about:blank
+

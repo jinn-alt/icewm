@@ -17,30 +17,28 @@
 #include "wmmgr.h"
 #include "wmframe.h"
 #include "wmwinmenu.h"
+#include "workspaces.h"
 
 #include "intl.h"
 
 class ActivateWindowMenuItem: public YMenuItem {
 public:
     ActivateWindowMenuItem(YFrameWindow *frame):
-        YMenuItem(frame->getTitle(), -1, null, YAction(), 0),
+        YMenuItem(frame->getTitle(), -1, null, YAction(), nullptr),
         fFrame(frame)
     {
         if (fFrame->clientIcon() != null)
             setIcon(fFrame->clientIcon());
     }
 
-    virtual void actionPerformed(YActionListener * /*listener*/, YAction /*action*/, unsigned int modifiers) {
-        YFrameWindow *f = manager->topLayer();
-
-        while (f) {
-            if ((void *)f == fFrame) {
+    void actionPerformed(YActionListener *, YAction, unsigned modifiers) override {
+        for (YFrameWindow *f = manager->topLayer(); f; f = f->nextLayer()) {
+            if (f == fFrame) {
                 if (modifiers & ShiftMask)
                     f->wmOccupyOnlyWorkspace(manager->activeWorkspace());
                 f->activateWindow(true, false);
                 return ;
             }
-            f = f->nextLayer();
         }
     }
 private:
@@ -59,7 +57,7 @@ YMenu *YWindowManager::createWindowMenu(YMenu *menu, long workspace) {
     /// !!! fix performance (smarter update, on change only)
     for (int layer = 0 ; layer < WinLayerCount; layer++) {
         layerCount = 0;
-        if (top(layer) == 0)
+        if (top(layer) == nullptr)
             continue;
         for (level = 0; level < 4; level++) {
             levelCount = 0;
@@ -68,10 +66,9 @@ YMenu *YWindowManager::createWindowMenu(YMenu *menu, long workspace) {
                     continue;
                 if (!frame->visibleOn(workspace))
                     continue;
-                if (frame->frameOptions() & YFrameWindow::foIgnoreWinList)
+                if (frame->frameOption(YFrameWindow::foIgnoreWinList))
                     continue;
-                if (workspace != activeWorkspace() &&
-                    frame->visibleOn(activeWorkspace()))
+                if (workspace != activeWorkspace() && frame->visibleNow())
                     continue;
 
                 windowLevel = 0;
@@ -99,8 +96,10 @@ YMenu *YWindowManager::createWindowMenu(YMenu *menu, long workspace) {
     return menu;
 }
 
-WindowListMenu::WindowListMenu(IApp *app, YWindow *parent): YMenu(parent) {
-    this->app = app;
+WindowListMenu::WindowListMenu(YActionListener *app, YWindow *parent):
+    YMenu(parent)
+{
+    setActionListener(app);
 }
 
 void WindowListMenu::updatePopup() {
@@ -110,7 +109,7 @@ void WindowListMenu::updatePopup() {
 
     bool first = true;
 
-    for (long d = 0; d < manager->workspaceCount(); d++) {
+    for (int d = 0; d < workspaceCount; d++) {
         if (d == manager->activeWorkspace())
             continue;
         if (first) {
@@ -120,15 +119,20 @@ void WindowListMenu::updatePopup() {
         char s[128];
         snprintf(s, sizeof s,
                 _("%lu. Workspace %-.32s"), (unsigned long)(d + 1),
-                manager->workspaceName(d));
+                workspaceNames[d]);
 
-        YMenu *sub = 0;
+        YMenu *sub = nullptr;
         if (manager->windowCount(d) > 0) // !!! do lazy create menu instead
-            sub = manager->createWindowMenu(0, d);
+            sub = manager->createWindowMenu(nullptr, d);
         addItem(s, (d < 10) ? 0 : -1, workspaceActionActivate[d], sub);
     }
     addSeparator();
     addItem(_("_Window list"), -2, KEY_NAME(gKeySysWindowList), actionWindowList);
+}
+
+void WindowListMenu::activatePopup(int flags) {
+    super::activatePopup(flags);
+    repaint();
 }
 
 // vim: set sw=4 ts=4 et:

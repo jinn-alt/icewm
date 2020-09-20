@@ -37,8 +37,8 @@ YClock::YClock(YSMListener *smActionListener, IAppletContainer* iapp, YWindow *a
     transparent(-1),
     smActionListener(smActionListener),
     iapp(iapp),
-    fMenu(0),
-    fTimeFormat(0),
+    fMenu(nullptr),
+    fTimeFormat(nullptr),
     fPid(0),
     negativePosition(INT_MAX),
     clockBg(&clrClock),
@@ -66,7 +66,7 @@ YClock::~YClock() {
 
 void YClock::autoSize() {
     char s[TimeSize];
-    time_t newTime = time(NULL);
+    time_t newTime = time(nullptr);
     struct tm t = *localtime(&newTime);
     int maxMonth = -1;
     int maxWidth = -1;
@@ -126,7 +126,7 @@ void YClock::handleButton(const XButtonEvent &button) {
 
 void YClock::updateToolTip() {
     char s[DateSize];
-    time_t newTime = time(NULL);
+    time_t newTime = time(nullptr);
     struct tm *t;
 
     if (toolTipUTC)
@@ -171,6 +171,7 @@ void YClock::handleClick(const XButtonEvent &up, int count) {
         fMenu = new YMenu();
         fMenu->setActionListener(this);
         fMenu->addItem(_("CLOCK"), -2, null, actionNull)->setEnabled(false);
+        fMenu->addSeparator();
         fMenu->addItem("%H:%M:%S", -2, null, actionHide);
         fMenu->addItem("%d %H:%M", -2, null, actionShow);
         if (!prettyClock)
@@ -178,18 +179,11 @@ void YClock::handleClick(const XButtonEvent &up, int count) {
         fMenu->addItem(_("Default"), -2, null, actionLower);
         fMenu->addItem(_("_Disable"), -2, null, actionClose);
         fMenu->addItem(_("_UTC"), -2, null, actionDepth)->setChecked(clockUTC);
-        fMenu->popup(0, 0, 0, up.x_root, up.y_root,
+        fMenu->popup(nullptr, nullptr, nullptr, up.x_root, up.y_root,
                      YPopupWindow::pfCanFlipVertical |
                      YPopupWindow::pfCanFlipHorizontal |
                      YPopupWindow::pfPopupMenu);
     }
-}
-
-void YClock::handleExpose(const XExposeEvent& e) {
-    if (clockTicked)
-        repaint();
-    else
-        IApplet::handleExpose(e);
 }
 
 void YClock::changeTimeFormat(const char* format) {
@@ -224,7 +218,7 @@ void YClock::actionPerformed(YAction action, unsigned int modifiers) {
         changeTimeFormat(" %c ");
     }
     else if (action == actionLower) {
-        changeTimeFormat(0);
+        changeTimeFormat(nullptr);
     }
 }
 
@@ -277,7 +271,7 @@ void YClock::fill(Graphics& g)
     }
 
     if (hasTransparency()) {
-        ref<YImage> gradient(parent()->getGradient());
+        ref<YImage> gradient(getGradient());
 
         if (gradient != null)
             g.drawImage(gradient, this->x(), this->y(),
@@ -301,7 +295,7 @@ void YClock::fill(Graphics& g, int x, int y, int w, int h)
         g.fillRect(x, y, w, h);
     }
     else {
-        ref<YImage> gradient(parent()->getGradient());
+        ref<YImage> gradient(getGradient());
 
         if (gradient != null)
             g.drawImage(gradient, this->x() + x, this->y() + y,

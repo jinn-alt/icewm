@@ -14,6 +14,7 @@ public:
         PRECONDITION(ww < INT_MAX);
         PRECONDITION(hh < INT_MAX);
     }
+    YRect(const XRectangle& r) : xx(r.x), yy(r.y), ww(r.width), hh(r.height) { }
 
     int x() const { return xx; }
     int y() const { return yy; }
@@ -30,14 +31,14 @@ public:
 
     // does the same as gdk_rectangle_union
     void unionRect(int x, int y, unsigned width, unsigned height) {
-        int mx = min(xx, x), w = int(max(xx + ww, x + width));
-        int my = min(yy, y), h = int(max(yy + hh, y + height));
-        setRect(mx, my, w - mx, h - my);
+        int mx = min(xx, x), w = int(max(xx + int(ww), x + int(width)));
+        int my = min(yy, y), h = int(max(yy + int(hh), y + int(height)));
+        setRect(mx, my, unsigned(w - mx), unsigned(h - my));
     }
 
     YRect intersect(const YRect& r) const {
-        int x = max(xx, r.xx), w = int(min(xx + ww, r.xx + r.ww));
-        int y = max(yy, r.yy), h = int(min(yy + hh, r.yy + r.hh));
+        int x = max(xx, r.xx), w = int(min(xx + int(ww), r.xx + int(r.ww)));
+        int y = max(yy, r.yy), h = int(min(yy + int(hh), r.yy + int(r.hh)));
         if (x < w && y < h)
             return YRect(x, y, unsigned(w - x), unsigned(h - y));
         return YRect();
@@ -58,9 +59,26 @@ public:
         return !(*this == r);
     }
 
-private:
     int xx, yy;
     unsigned ww, hh;
+};
+
+class YRect2 : public YRect {
+public:
+    YRect2(const YRect& r1, const YRect& r2) :
+        YRect(r1),
+        old(r2)
+    { }
+
+    const YRect old;
+
+    int deltaX() const { return x() - old.x(); }
+    int deltaY() const { return y() - old.y(); }
+    bool moved() const { return deltaX() | deltaY(); }
+    int deltaWidth() const { return int(width()) - int(old.width()); }
+    int deltaHeight() const { return int(height()) - int(old.height()); }
+    bool resized() const { return deltaWidth() | deltaHeight(); }
+    bool enlarged() const { return 0 < deltaWidth() || 0 < deltaHeight(); }
 };
 
 #endif

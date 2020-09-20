@@ -43,11 +43,11 @@ MailCheck::MailCheck(mstring url, MailBoxStatus *mbx):
     fCurUnseen(0),
     fLastCountSize(-1),
     fLastCountTime(0),
-    fAddr(0),
+    fAddr(nullptr),
     fPort(0),
     fPid(0),
     fInst(++fInstanceCounter),
-    fTrace(getenv("ICEWM_MAILCHECK_TRACE") != 0)
+    fTrace(getenv("ICEWM_MAILCHECK_TRACE") != nullptr)
 {
     bf[0] = '\0';
     sk.setListener(this);
@@ -61,7 +61,7 @@ MailCheck::MailCheck(mstring url, MailBoxStatus *mbx):
     else if (fURL.scheme != null)
         warn(_("Invalid mailbox protocol: \"%s\""), fURL.scheme.c_str());
     else
-        warn(_("Invalid mailbox path: \"%s\""), cstring(url).c_str());
+        warn(_("Invalid mailbox path: \"%s\""), url.c_str());
 
     if (net()) {
         resolve();
@@ -72,7 +72,7 @@ MailCheck::~MailCheck() {
     release();
     if (fAddr) {
         freeaddrinfo(fAddr);
-        fAddr = 0;
+        fAddr = nullptr;
     }
 }
 
@@ -127,7 +127,7 @@ void MailCheck::resolve() {
             hints.ai_family = AF_INET6;
             hints.ai_flags |= AI_NUMERICHOST;
         }
-        int rc = getaddrinfo(fURL.host, cstring(fPort), &hints, &fAddr);
+        int rc = getaddrinfo(fURL.host, mstring(fPort), &hints, &fAddr);
         if (rc) {
             snprintf(bf, sizeof bf,
                      _("DNS name lookup failed for %s"),
@@ -267,11 +267,11 @@ void MailCheck::startCheck() {
         }
         else if (S_ISDIR(st.st_mode)) {
             fLastUnseen = 0;
-            cdir dir(cstring(upath(fURL.path).child("new")));
+            cdir dir(upath(fURL.path).child("new").string());
             while (dir.next())
                 fLastUnseen++;
             fLastCount = fLastUnseen;
-            dir.open(cstring(upath(fURL.path).child("cur")));
+            dir.open(upath(fURL.path).child("cur").string());
             while (dir.next())
                 fLastCount++;
             if (fLastCount < 1)
@@ -297,7 +297,7 @@ void MailCheck::startCheck() {
             if (fTrace) tlog("(%d) starting SSL", fInst);
             startSSL();
         }
-        else if (sk.connect(fAddr->ai_addr, fAddr->ai_addrlen) == 0) {
+        else if (fAddr && sk.connect(fAddr->ai_addr, fAddr->ai_addrlen) == 0) {
             if (fTrace) tlog("(%d) connected non-SSL", fInst);
             setState(CONNECTING);
             got = 0;
@@ -305,7 +305,8 @@ void MailCheck::startCheck() {
             int e = errno;
             snprintf(bf, sizeof bf,
                      _("Could not connect to %s: %s"),
-                     fURL.host.c_str(), strerror(e));
+                     fURL.host.c_str(),
+                     fAddr ? strerror(e) : gai_strerror(EAI_NONAME));
             if (fTrace || testOnce(fURL.host, fPort))
                 warn("%s", bf);
             error(bf);
@@ -318,8 +319,8 @@ void MailCheck::startCheck() {
 
 void MailCheck::startSSL() {
     const char file[] = "openssl";
-    cstring path(findPath(getenv("PATH"), X_OK, file));
-    if (path == null) {
+    csmart path(path_lookup(file));
+    if (path == nullptr) {
         if (ONCE)
             warn(_("Failed to find %s command"), file);
         return;
@@ -327,28 +328,29 @@ void MailCheck::startSSL() {
 
     int other;
     if (sk.socketpair(&other) == 0 && other > 0) {
+        XFlush(xapp->display());
         fflush(stderr);
         fflush(stdout);
         fPid = fork();
         if (fPid == -1) {
             close(other);
-            sk.close();
+            sk.terminate();
         }
         else if (fPid == 0) {
-            sk.close();
+            sk.terminate();
             dup2(other, 0);
             dup2(other, 1);
             if (other > 2)
                 close(other);
             dup2(open("/dev/null", O_WRONLY), 2);
 
-            cstring hostnamePort(mstring(fURL.host, ":", cstring(fPort)));
+            mstring hostnamePort(mstring(fURL.host, ":", mstring(fPort)));
             const char* args[] = {
                 file, "s_client", "-quiet", "-no_ign_eof",
-                "-connect", hostnamePort, 0
+                "-connect", hostnamePort, nullptr
             };
             execv(path, (char* const*) args);
-            fail(_("Failed to execute %s"), path.c_str());
+            fail(_("Failed to execute %s"), (char *) path);
             _exit(1);
         }
         else {
@@ -368,13 +370,13 @@ void MailCheck::socketConnected() {
 void MailCheck::release() {
     if (ssl()) {
         sk.shutdown();
-        sk.close();
+        sk.terminate();
         if (fPid > 1) {
             kill(fPid, SIGKILL);
             fPid = 0;
         }
     }
-    else sk.close();
+    else sk.terminate();
 }
 
 void MailCheck::socketError(int err) {
@@ -398,7 +400,7 @@ void MailCheck::error(mstring str) {
     fMbx->mailChecked(MailBoxStatus::mbxError, -1, -1);
 }
 
-cstring MailCheck::inbox() {
+mstring MailCheck::inbox() {
    return fURL.path == null || fURL.path == "/" ? "INBOX" : fURL.path + 1;
 }
 
@@ -439,7 +441,7 @@ int MailCheck::write(const char *buf, int len) {
     return n;
 }
 
-int MailCheck::write(const cstring& str) {
+int MailCheck::write(mstring str) {
     return write(str, str.length());
 }
 
@@ -662,12 +664,13 @@ const char* MailCheck::s(ProtocolState p) {
         case ERROR:       return "ERROR";
         case SUCCESS:     return "SUCCESS";
     }
-    return 0;
+    return nullptr;
 }
 
 MailBoxStatus::MailBoxStatus(MailHandler* handler,
                              mstring mailbox, YWindow *aParent):
-    YWindow(aParent),
+    IApplet(this, aParent),
+    fOldState(MailBoxState(-1)),
     fState(mbxNoMail),
     check(mailbox, this),
     fHandler(handler),
@@ -677,22 +680,37 @@ MailBoxStatus::MailBoxStatus(MailHandler* handler,
     setSize(16, 16);
     setTitle("MailBox");
     if (mailbox != null) {
-        MSG((_("Using MailBox \"%s\"\n"), cstring(mailbox).c_str()));
-        checkMail();
-        if (mailCheckDelay > 0) {
-            // caution creating too many openssl processes hogging the cpu
-            long delay = check.ssl() ? max(30, mailCheckDelay)
-                       : check.net() ? max(10, mailCheckDelay)
-                       : mailCheckDelay;
-            fMailboxCheckTimer->setTimer(delay * 1000L, this, true);
-        }
+        MSG((_("Using MailBox \"%s\"\n"), mailbox.c_str()));
     }
 }
 
 MailBoxStatus::~MailBoxStatus() {
 }
 
-void MailBoxStatus::paint(Graphics &g, const YRect &/*r*/) {
+int MailBoxStatus::checkDelay() const {
+    int delay = 0;
+    if (mailCheckDelay > 0) {
+        // caution creating too many openssl processes hogging the cpu
+        delay = check.ssl() ? max(30, mailCheckDelay)
+              : check.net() ? max(10, mailCheckDelay)
+              : mailCheckDelay;
+    }
+    return delay;
+}
+
+bool MailBoxStatus::picture() {
+    bool create = (hasPixmap() == false);
+
+    Graphics G(getPixmap(), width(), height(), depth());
+
+    if (create)
+        G.clear();
+
+    return (fState != fOldState)
+         ? draw(G), true : create;
+}
+
+ref<YPixmap> MailBoxStatus::statePixmap() {
     ref<YPixmap> pixmap;
     switch (fState) {
     case mbxHasMail:
@@ -711,9 +729,13 @@ void MailBoxStatus::paint(Graphics &g, const YRect &/*r*/) {
         pixmap = errMailPixmap;
         break;
     }
+    return pixmap;
+}
 
+void MailBoxStatus::draw(Graphics& g) {
+    ref<YPixmap> pixmap(statePixmap());
     if (pixmap == null || pixmap->mask()) {
-        ref<YImage> gradient = parent()->getGradient();
+        ref<YImage> gradient(getGradient());
 
         if (gradient != null)
             g.drawImage(gradient, x(), y(), width(), height(), 0, 0);
@@ -767,7 +789,9 @@ void MailBoxStatus::handleCrossing(const XCrossingEvent &crossing) {
 }
 
 void MailBoxStatus::checkMail() {
-    check.startCheck();
+    if (suspended() == false) {
+        check.startCheck();
+    }
 }
 
 void MailBoxStatus::mailChecked(MailBoxState mst, long count, long unread) {
@@ -775,8 +799,6 @@ void MailBoxStatus::mailChecked(MailBoxState mst, long count, long unread) {
     fCount = count;
     fUnread = unread;
 
-    if (mst != mbxError && fMailboxCheckTimer && mailCheckDelay > 0)
-        fMailboxCheckTimer->startTimer();
     if (mst != fState) {
         fState = mst;
         repaint();
@@ -787,7 +809,7 @@ void MailBoxStatus::mailChecked(MailBoxState mst, long count, long unread) {
 }
 
 void MailBoxStatus::updateToolTip() {
-    cstring header(check.url().host.length()
+    mstring header(check.url().host.length()
                    ? check.url().user + "@" + check.url().host + "\n"
                    : check.url().path + "\n");
     if (suspended())
@@ -823,10 +845,10 @@ void MailBoxStatus::newMailArrived(long count, long unread) {
         xapp->alert();
     if (nonempty(newMailCommand)) {
         const int size = 3;
-        struct { const char* name; cstring value; } envs[size] = {
-            { "ICEWM_MAILBOX", cstring(check.inst()), },
-            { "ICEWM_COUNT",   cstring(count), },
-            { "ICEWM_UNREAD",  cstring(unread), },
+        struct { const char* name; mstring value; } envs[size] = {
+            { "ICEWM_MAILBOX", mstring(check.inst()), },
+            { "ICEWM_COUNT",   mstring(count), },
+            { "ICEWM_UNREAD",  mstring(unread), },
         };
         for (int i = 0; i < size; ++i)
             setenv(envs[i].name, envs[i].value, True);
@@ -836,25 +858,14 @@ void MailBoxStatus::newMailArrived(long count, long unread) {
     }
 }
 
-bool MailBoxStatus::handleTimer(YTimer *t) {
-    if (t == fMailboxCheckTimer && suspended() == false) {
-        checkMail();
-        return true;
-    }
-    return false;
-}
-
 void MailBoxStatus::suspend(bool suspend) {
     if (fSuspended != suspend) {
         fSuspended = suspend;
         if (suspend) {
-            fMailboxCheckTimer->stopTimer();
             if (fState != mbxNoMail) {
                 fState = mbxNoMail;
                 repaint();
             }
-        } else {
-            fMailboxCheckTimer->runTimer();
         }
     }
 }
@@ -865,14 +876,42 @@ MailBoxControl::MailBoxControl(IApp *app, YSMListener *smActionListener,
     smActionListener(smActionListener),
     taskBar(taskBar),
     aParent(aParent),
-    fMenuClient(0),
-    fPid(0)
+    fMenuClient(nullptr),
+    fPid(0),
+    fCount(0),
+    fDelay(0),
+    fDelta(1)
 {
     populate();
+    if (fDelay && fMailBoxes.nonempty()) {
+        fCheckTimer->setTimer(fDelta * 1000L, this, true);
+    }
 }
 
 MailBoxControl::~MailBoxControl()
 {
+}
+
+bool MailBoxControl::handleTimer(YTimer* t)
+{
+    if (t == fCheckTimer) {
+        if (fCount < fMailBoxes.getCount()) {
+            fMailBoxes[fCount]->checkMail();
+        }
+        if (++fCount < fMailBoxes.getCount()) {
+            t->setInterval(fDelta * 1000L);
+        }
+        else {
+            int remaining = fDelay - (fCount - 1) * fDelta;
+            if (fCount * fDelta < fDelay) {
+                ++fDelta;
+            }
+            t->setInterval(max(fDelta, remaining) * 1000L);
+            fCount = 0;
+        }
+        return fMailBoxes.nonempty();
+    }
+    return false;
 }
 
 void MailBoxControl::populate()
@@ -885,21 +924,21 @@ void MailBoxControl::populate()
             }
         }
     }
-    if (fMailBoxStatus.getCount() == 0 && (env = getenv("MAILPATH")) != 0) {
+    if (fMailBoxes.isEmpty() && (env = getenv("MAILPATH")) != nullptr) {
         for (mstring s(env), r; s.splitall(':', &s, &r); s = r) {
             if (0 <= s.indexOf('/')) {
                 createStatus(s);
             }
         }
     }
-    if (fMailBoxStatus.getCount() == 0 && (env = getenv("MAIL")) != 0) {
+    if (fMailBoxes.isEmpty() && (env = getenv("MAIL")) != nullptr) {
         mstring s(env);
         if (0 <= s.indexOf('/')) {
             createStatus(s);
         }
     }
-    if (fMailBoxStatus.getCount() == 0 &&
-        ((env = getenv("LOGNAME")) != 0 || (env = getlogin()) != 0))
+    if (fMailBoxes.isEmpty() &&
+        ((env = getenv("LOGNAME")) != nullptr || (env = getlogin()) != nullptr))
     {
         const char* varmail[] = { "/var/spool/mail/", "/var/mail/", };
         for (int i = 0; i < int ACOUNT(varmail); ++i) {
@@ -915,7 +954,8 @@ void MailBoxControl::populate()
 void MailBoxControl::createStatus(mstring mailBox)
 {
     MailBoxStatus* box = new MailBoxStatus(this, mailBox, aParent);
-    fMailBoxStatus += box;
+    fMailBoxes += box;
+    fDelay = max(fDelay, box->checkDelay());
 }
 
 void MailBoxControl::runCommandOnce(const char *resource, const char *cmdline)
@@ -934,12 +974,13 @@ void MailBoxControl::handleClick(const XButtonEvent &up, MailBoxStatus *client)
         fMenu = new YMenu;
         fMenu->setActionListener(this);
         fMenu->addItem(_("MAIL"), -2, null, actionNull)->setEnabled(false);
+        fMenu->addSeparator();
         fMenu->addItem(_("_Check"), -2, null, actionRun);
         fMenu->addItem(_("_Disable"), -2, null, actionClose);
         fMenu->addItem(_("_Suspend"), -2, null, actionSuspend)
              ->setChecked(client->suspended());
         fMenuClient = client;
-        fMenu->popup(0, 0, 0, up.x_root, up.y_root,
+        fMenu->popup(nullptr, nullptr, nullptr, up.x_root, up.y_root,
                      YPopupWindow::pfCanFlipVertical |
                      YPopupWindow::pfCanFlipHorizontal |
                      YPopupWindow::pfPopupMenu);
@@ -949,7 +990,7 @@ void MailBoxControl::handleClick(const XButtonEvent &up, MailBoxStatus *client)
 void MailBoxControl::actionPerformed(YAction action, unsigned int modifiers)
 {
     if (action == actionClose) {
-        if (findRemove(fMailBoxStatus, fMenuClient)) {
+        if (findRemove(fMailBoxes, fMenuClient)) {
             taskBar->relayout();
         }
     }
@@ -959,8 +1000,8 @@ void MailBoxControl::actionPerformed(YAction action, unsigned int modifiers)
     else if (action == actionSuspend) {
         fMenuClient->suspend(fMenuClient->suspended() ^ true);
     }
-    fMenu = 0;
-    fMenuClient = 0;
+    fMenu = nullptr;
+    fMenuClient = nullptr;
 }
 
 // vim: set sw=4 ts=4 et:

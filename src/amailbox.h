@@ -1,5 +1,5 @@
-#ifndef __MAILBOX_H
-#define __MAILBOX_H
+#ifndef AMAILBOX_H
+#define AMAILBOX_H
 
 #include "ywindow.h"
 #include "ytimer.h"
@@ -7,6 +7,7 @@
 #include "ysocket.h"
 #include "yurl.h"
 #include "yaction.h"
+#include "applet.h"
 
 class IAppletContainer;
 class MailBoxControl;
@@ -57,7 +58,7 @@ public:
 
     void startCheck();
     void startSSL();
-    cstring inbox();
+    mstring inbox();
     int portNumber();
     void setState(ProtocolState newState);
 
@@ -69,7 +70,7 @@ public:
     void parseImap();
 
     int write(const char* buf, int len = 0);
-    int write(const cstring& str);
+    int write(mstring str);
     void error(mstring str);
     void release();
     bool ssl() const;
@@ -107,7 +108,10 @@ private:
     void escape(const char* buf, int len, char* tmp, int siz);
 };
 
-class MailBoxStatus: public YWindow, public YTimerListener {
+class MailBoxStatus:
+    public IApplet,
+    private Picturer
+{
 public:
     enum MailBoxState {
         mbxNoMail,
@@ -121,30 +125,36 @@ public:
                   mstring mailBox, YWindow *aParent);
     virtual ~MailBoxStatus();
 
-    virtual void paint(Graphics &g, const YRect &r);
     virtual void handleClick(const XButtonEvent &up, int count);
     virtual void handleCrossing(const XCrossingEvent &crossing);
 
+    int checkDelay() const;
     void checkMail();
     void mailChecked(MailBoxState mst, long count, long unread);
     void newMailArrived(long count, long unread);
     void suspend(bool suspend);
     bool suspended() const { return fSuspended; }
 
-    virtual bool handleTimer(YTimer *t);
-    virtual void updateToolTip();
-
 private:
+    virtual bool picture();
+    virtual void updateToolTip();
+    ref<YPixmap> statePixmap();
+    void draw(Graphics& g);
+
+    MailBoxState fOldState;
     MailBoxState fState;
     MailCheck check;
-    lazy<YTimer> fMailboxCheckTimer;
     MailHandler *fHandler;
     long fCount;
     long fUnread;
     bool fSuspended;
 };
 
-class MailBoxControl : public MailHandler, private YActionListener {
+class MailBoxControl :
+    public MailHandler,
+    private YTimerListener,
+    private YActionListener
+{
 public:
     MailBoxControl(IApp *app, YSMListener *smActionListener,
                    IAppletContainer *taskBar, YWindow *aParent);
@@ -156,11 +166,12 @@ private:
 
     virtual void actionPerformed(YAction button, unsigned int modifiers);
     virtual void handleClick(const XButtonEvent &up, MailBoxStatus *client);
+    virtual bool handleTimer(YTimer *t);
     virtual void runCommandOnce(const char *resource, const char *cmdline);
     virtual void runCommand(const char *cmdline);
 
     typedef YObjectArray<MailBoxStatus> ArrayType;
-    ArrayType fMailBoxStatus;
+    ArrayType fMailBoxes;
 
 public:
     IApp *app;
@@ -169,10 +180,14 @@ public:
     YWindow *aParent;
     osmart<YMenu> fMenu;
     MailBoxStatus *fMenuClient;
+    lazy<YTimer> fCheckTimer;
     long fPid;
+    int fCount;
+    int fDelay;
+    int fDelta;
 
     typedef ArrayType::IterType IterType;
-    IterType iterator() { return fMailBoxStatus.reverseIterator(); }
+    IterType iterator() { return fMailBoxes.reverseIterator(); }
 };
 
 #endif

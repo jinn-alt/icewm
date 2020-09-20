@@ -18,12 +18,15 @@ public:
                                                      unsigned nw, unsigned nh);
     static ref<YImage> createFromIconProperty(long *pixels,
                                               unsigned width, unsigned height);
+    static bool supportsDepth(unsigned depth);
 
     unsigned width() const { return fWidth; }
     unsigned height() const { return fHeight; }
+    virtual unsigned depth() const = 0;
+    virtual bool hasAlpha() const = 0;
     virtual bool valid() const = 0;
 
-    virtual ref<YPixmap> renderToPixmap(unsigned depth) = 0;
+    virtual ref<YPixmap> renderToPixmap(unsigned depth, bool premult = false) = 0;
     virtual ref<YImage> scale(unsigned width, unsigned height) = 0;
     virtual void draw(Graphics &g, int dx, int dy) = 0;
     virtual void draw(Graphics &g, int x, int y, unsigned w, unsigned h, int dx, int dy) = 0;

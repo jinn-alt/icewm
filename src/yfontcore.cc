@@ -22,7 +22,7 @@ public:
     virtual bool valid() const { return (NULL != fFont); }
     virtual int descent() const { return fFont->max_bounds.descent; }
     virtual int ascent() const { return fFont->max_bounds.ascent; }
-    virtual int textWidth(const ustring &s) const;
+    virtual int textWidth(mstring s) const;
     virtual int textWidth(char const * str, int len) const;
 
     virtual void drawGlyphs(class Graphics & graphics, int x, int y,
@@ -41,7 +41,7 @@ public:
     virtual bool valid() const { return (None != fFontSet); }
     virtual int descent() const { return fDescent; }
     virtual int ascent() const { return fAscent; }
-    int textWidth(const ustring &s) const;
+    virtual int textWidth(mstring s) const;
     virtual int textWidth(char const * str, int len) const;
 
     virtual void drawGlyphs(class Graphics & graphics, int x, int y,
@@ -68,7 +68,8 @@ static char *getNameElement(const char *pattern, unsigned const element) {
 
 YCoreFont::YCoreFont(char const * name) {
     if (NULL == (fFont = XLoadQueryFont(xapp->display(), name))) {
-        warn(_("Could not load font \"%s\"."), name);
+        if (testOnce(name, __LINE__))
+            warn(_("Could not load font \"%s\"."), name);
 
         if (NULL == (fFont = XLoadQueryFont(xapp->display(), "fixed")))
             warn(_("Loading of fallback font \"%s\" failed."), "fixed");
@@ -83,9 +84,8 @@ YCoreFont::~YCoreFont() {
     }
 }
 
-int YCoreFont::textWidth(const ustring &s) const {
-    cstring cs(s);
-    return textWidth(cs.c_str(), cs.c_str_len());
+int YCoreFont::textWidth(mstring s) const {
+    return textWidth(s.c_str(), s.length());
 }
 
 int YCoreFont::textWidth(const char *str, int len) const {
@@ -104,14 +104,16 @@ void YCoreFont::drawGlyphs(Graphics & graphics, int x, int y,
 #ifdef CONFIG_I18N
 
 YFontSet::YFontSet(char const * name):
-fFontSet(None), fAscent(0), fDescent(0) {
-    int nMissing;
-    char **missing, *defString;
+    fFontSet(None), fAscent(0), fDescent(0)
+{
+    int nMissing = 0;
+    char **missing = 0, *defString = 0;
 
     fFontSet = getFontSetWithGuess(name, &missing, &nMissing, &defString);
 
     if (None == fFontSet) {
-        warn(_("Could not load fontset \"%s\"."), name);
+        if (testOnce(name, __LINE__))
+            warn(_("Could not load fontset \"%s\"."), name);
         if (nMissing) XFreeStringList(missing);
 
         fFontSet = XCreateFontSet(xapp->display(), "fixed",
@@ -122,7 +124,7 @@ fFontSet(None), fAscent(0), fDescent(0) {
     }
 
     if (fFontSet) {
-        if (nMissing) {
+        if (nMissing && testOnce(name, __LINE__)) {
             warn(_("Missing codesets for fontset \"%s\":"), name);
             for (int n(0); n < nMissing; ++n)
                 warn("  %s\n", missing[n]);
@@ -147,9 +149,8 @@ YFontSet::~YFontSet() {
     }
 }
 
-int YFontSet::textWidth(const ustring &s) const {
-    cstring cs(s);
-    return textWidth(cs.c_str(), cs.c_str_len());
+int YFontSet::textWidth(mstring s) const {
+    return textWidth(s.c_str(), s.length());
 }
 
 int YFontSet::textWidth(const char *str, int len) const {

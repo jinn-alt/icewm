@@ -1,39 +1,42 @@
-#ifndef __TASKBAR_H
-#define __TASKBAR_H
+#ifndef TASKBAR_H
+#define TASKBAR_H
 
 #include "yaction.h"
-#include "ybutton.h"
-#include "ymenu.h"
 #include "ytimer.h"
 #include "wmclient.h"
 #include "yxtray.h"
-#include "base.h"
-#include "ypointer.h"
 #include "applet.h"
 
 class ObjectBar;
+class ObjectButton;
 class MEMStatus;
 class CPUStatusControl;
 class NetStatusControl;
 class AddressBar;
+class KeyboardStatus;
 class MailBoxControl;
 class MailBoxStatus;
+class YButton;
 class YClock;
 class YApm;
+class TaskBarMenu;
 class TaskPane;
 class TrayPane;
+class AWorkspaces;
 class WorkspacesPane;
 class YXTray;
 class YSMListener;
-class IApp;
-
 class TaskBar;
+class TaskBarApp;
+class TrayApp;
 
 class EdgeTrigger: public YWindow, public YTimerListener {
 public:
     EdgeTrigger(TaskBar *owner);
     virtual ~EdgeTrigger();
 
+    bool enabled() const;
+    void show();
     void startHide();
     void stopHide();
 
@@ -66,47 +69,49 @@ private:
     virtual void handleClick(const XButtonEvent &up, int count);
     virtual void handleDrag(const XButtonEvent &down, const XMotionEvent &motion);
     virtual void handleEndDrag(const XButtonEvent &down, const XButtonEvent &up);
-
+    virtual void handleFocus(const XFocusChangeEvent& focus);
     virtual void handleCrossing(const XCrossingEvent &crossing);
-#if false
-    virtual bool handleTimer(YTimer *t);
-#endif
+    virtual void handleExpose(const XExposeEvent &expose) {}
 
     virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual void handlePopDown(YPopupWindow *popup);
-    virtual void handleEndPopup(YPopupWindow *popup);
 
     void updateWMHints();
     void updateLocation();
-    void configure(const YRect &r);
+    void updateWinLayer();
+    virtual void configure(const YRect2 &r);
+    virtual void repaint();
 
     YClock *clock() { return fClock; }
 
 public:
     bool windowTrayRequestDock(Window w);
-    void setWorkspaceActive(long workspace, int active);
+    void setWorkspaceActive(long workspace, bool active);
+    void workspacesRepaint();
+    void workspacesUpdateButtons();
+    void workspacesRelabelButtons();
+    void keyboardUpdate(mstring keyboard);
 
-    void removeTasksApp(YFrameWindow *w);
-    class TaskBarApp *addTasksApp(YFrameWindow *w);
+    void updateFrame(YFrameWindow* frame);
+    void delistFrame(YFrameWindow* frame, TaskBarApp* task, TrayApp* tray);
+    void removeTasksApp(YFrameWindow* frame);
+    TaskBarApp* addTasksApp(YFrameWindow* frame);
     void relayoutTasks();
-
-    WorkspacesPane *workspacesPane() const { return fWorkspaces; }
+    void relayoutTray();
+    TrayApp* addTrayApp(YFrameWindow* frame);
+    void removeTrayApp(YFrameWindow* frame);
 
     void popupStartMenu();
     void popupWindowListMenu();
 
     void showAddressBar();
-    void showBar(bool visible);
+    void showBar();
     void handleCollapseButton();
 
     void relayout() { fNeedRelayout = true; }
     void relayoutNow();
 
     void detachDesktopTray();
-
-    void relayoutTray();
-    class TrayApp *addTrayApp(YFrameWindow *w);
-    void removeTrayApp(YFrameWindow *w);
 
     bool hidden() const { return fIsCollapsed | fIsHidden | !fIsMapped; }
     bool autoTimer(bool show);
@@ -116,6 +121,7 @@ public:
     void switchToNext();
     void movePrev();
     void moveNext();
+    void refresh();
 
 private:
     void popOut();
@@ -124,59 +130,69 @@ private:
     TaskPane *taskPane() const { return fTasks; }
     TrayPane *windowTrayPane() const { return fWindowTray; }
 
-    virtual ref<YImage> getGradient() const { return fGradient; }
+    virtual ref<YImage> getGradient() { return fGradient; }
+    const YSurface& getSurface() const { return fSurface; }
 
     void contextMenu(int x_root, int y_root);
-
+    void buttonUpdate();
     void trayChanged();
     YXTray *netwmTray() { return fDesktopTray; }
 
 private:
+    YSurface fSurface;
     TaskPane *fTasks;
 
-    YButton *fCollapseButton;
+    ObjectButton *fCollapseButton;
     TrayPane *fWindowTray;
     YClock *fClock;
-    MailBoxControl *fMailBoxStatus;
+    KeyboardStatus *fKeyboardStatus;
+    MailBoxControl *fMailBoxControl;
     MEMStatus *fMEMStatus;
     CPUStatusControl *fCPUStatus;
     YApm *fApm;
-    ref<NetStatusControl> fNetStatus;
+    NetStatusControl *fNetStatus;
 
     ObjectBar *fObjectBar;
-    YButton *fApplications;
-    YButton *fWinList;
-    YButton *fShowDesktop;
+    ObjectButton *fApplications;
+    ObjectButton *fWinList;
+    ObjectButton *fShowDesktop;
     AddressBar *fAddressBar;
-    WorkspacesPane *fWorkspaces;
+    AWorkspaces *fWorkspaces;
     YXTray *fDesktopTray;
+    EdgeTrigger *fEdgeTrigger;
     YActionListener *wmActionListener;
     YSMListener *smActionListener;
     IApp *app;
+
+    lazy<TaskBarMenu> taskBarMenu;
+    ref<YImage> fGradient;
+    YArray<YFrameWindow*> fUpdates;
 
     bool fIsHidden;
     bool fFullscreen;
     bool fIsCollapsed;
     bool fIsMapped;
     bool fMenuShown;
-#if false
-    YTimer *fAutoHideTimer;
-#endif
+    bool fNeedRelayout;
+    bool fButtonUpdate;
 
-    YMenu *taskBarMenu;
 
     friend class WindowList;
     friend class WindowListBox;
 
-    ref<YImage> fGradient;
-
-    bool fNeedRelayout;
-
-    void initMenu();
     void initApplets();
     void updateLayout(unsigned &size_w, unsigned &size_h);
 
-    EdgeTrigger *fEdgeTrigger;
+    class YStrut {
+    public:
+        Atom left, right, top, bottom;
+        YStrut() : left(0), right(0), top(0), bottom(0) { }
+        bool operator!=(const YStrut& s) const {
+            return left != s.left || right != s.right
+                || top != s.top || bottom != s.bottom;
+        }
+        const Atom* operator&() const { return &left; }
+    } fStrut;
 };
 
 extern TaskBar *taskBar; // !!! get rid of this

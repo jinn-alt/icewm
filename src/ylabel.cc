@@ -13,23 +13,47 @@
 YColorName YLabel::labelFg(&clrLabelText);
 YColorName YLabel::labelBg(&clrLabel);
 ref<YFont> YLabel::labelFont;
+int YLabel::labelObjectCount;
 
-YLabel::YLabel(const ustring &label, YWindow *parent):
-    YWindow(parent), fLabel(label)
+YLabel::YLabel(const mstring &label, YWindow *parent):
+    YWindow(parent),
+    fLabel(label),
+    fPainted(false)
 {
+    setParentRelative();
     setBitGravity(NorthWestGravity);
 
     if (labelFont == null)
         labelFont = YFont::getFont(XFA(labelFontName));
+    ++labelObjectCount;
 
     autoSize();
 }
 
 YLabel::~YLabel() {
+    if (--labelObjectCount == 0)
+        labelFont = null;
+}
+
+void YLabel::handleExpose(const XExposeEvent& expose) {
+    if (fPainted == false) {
+        repaint();
+    }
+}
+
+void YLabel::configure(const YRect2& r) {
+    if (visible() && created()) {
+        repaint();
+    }
+}
+
+void YLabel::repaint() {
+    fPainted = true;
+    GraphicsBuffer(this).paint();
 }
 
 void YLabel::paint(Graphics &g, const YRect &/*r*/) {
-    ref<YImage> gradient(parent() ? parent()->getGradient() : null);
+    ref<YImage> gradient(getGradient());
 
     if (gradient != null)
         g.drawImage(gradient, x() - 1, y() - 1, width(), height(), 0, 0);
@@ -45,7 +69,7 @@ void YLabel::paint(Graphics &g, const YRect &/*r*/) {
         int y = 1 + labelFont->ascent();
         int x = 1;
         int h = labelFont->height();
-        ustring s(null), r(null);
+        mstring s(null), r(null);
 
         g.setColor(labelFg);
         g.setFont(labelFont);
@@ -57,7 +81,7 @@ void YLabel::paint(Graphics &g, const YRect &/*r*/) {
     }
 }
 
-void YLabel::setText(const ustring &label) {
+void YLabel::setText(const mstring &label) {
     fLabel = label;
     autoSize();
 }
@@ -67,7 +91,7 @@ void YLabel::autoSize() {
     int w = 0;
     if (fLabel != null) {
         int w1;
-        ustring s(null), r(null);
+        mstring s(null), r(null);
         int n = 0;
 
         for (s = fLabel; s.splitall('\n', &s, &r); s = r) {

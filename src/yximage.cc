@@ -5,7 +5,7 @@
 #include <png.h>
 #endif
 
-#if defined CONFIG_XPM
+#if defined CONFIG_XPM && !defined(CONFIG_GDK_PIXBUF_XLIB)
 
 #include <stdlib.h>
 #include <math.h>
@@ -21,6 +21,8 @@
 #include <jpeglib.h>
 #include <setjmp.h>
 #endif
+
+#define ATH 55  /* highest alpha threshold that can show anti-aliased lines */
 
 struct Verbose {
     const bool verbose;
@@ -51,7 +53,7 @@ public:
         if (fImage != 0)
             XDestroyImage(fImage);
     }
-    virtual ref<YPixmap> renderToPixmap(unsigned depth);
+    virtual ref<YPixmap> renderToPixmap(unsigned depth, bool premult);
     virtual ref<YImage> scale(unsigned width, unsigned height);
     virtual void draw(Graphics &g, int dx, int dy);
     virtual void draw(Graphics &g, int x, int y, unsigned w, unsigned h, int dx, int dy);
@@ -60,15 +62,19 @@ public:
     unsigned depth() const { return fImage ? fImage->depth : 0; }
     static ref<YImage> loadxbm(upath filename);
     static ref<YImage> loadxpm(upath filename);
+    static ref<YImage> loadxpm2(upath filename, int& status);
 #ifdef CONFIG_LIBPNG
     static ref<YImage> loadpng(upath filename);
+    static void pngload(ref<YImage>& image, FILE* f,
+                        png_structp png_ptr,
+                        png_infop info_ptr);
     bool savepng(upath filename, const char** error);
 #endif
 #ifdef CONFIG_LIBJPEG
     static ref<YImage> loadjpg(upath filename);
 #endif
     static ref<YImage> combine(XImage *xdraw, XImage *xmask);
-    static pstring detectImageType(upath filename);
+    static mstring detectImageType(upath filename);
 
     bool isBitmap() const { return fBitmap; }
     bool hasAlpha() const { return fImage ? fImage->depth == 32 : false; }
@@ -82,7 +88,8 @@ public:
     }
 
     static XImage* createImage(unsigned width, unsigned height, unsigned depth) {
-        XImage* ximage = XCreateImage(xapp->display(), xapp->visual(), depth,
+        Visual* visual = xapp->visualForDepth(depth);
+        XImage* ximage = XCreateImage(xapp->display(), visual, depth,
                                       ZPixmap, 0, NULL, width, height, 8, 0);
         if (ximage == 0)
             tlog("ERROR: could not create %ux%ux%u ximage", width, height, depth);
@@ -120,10 +127,14 @@ private:
     bool fBitmap;
 };
 
+bool YImage::supportsDepth(unsigned depth) {
+    return depth == 32 || depth == xapp->depth();
+}
+
 ref<YImage> YImage::load(upath filename)
 {
     ref<YImage> image;
-    pstring ext(filename.getExtension().lower());
+    mstring ext(filename.getExtension().lower());
     bool unsup = false;
 
     if (ext.isEmpty())
@@ -152,18 +163,19 @@ ref<YImage> YImage::load(upath filename)
     else {
         unsup = true;
         if (ONCE)
-            warn(_("Unsupported file format: %s"), cstring(ext).c_str());
+            warn(_("Unsupported file format: %s"), ext.c_str());
     }
 
     if (image == null && !unsup)
-        fail(_("Could not load image \"%s\""), filename.string().c_str());
+        fail(_("Could not load image \"%s\""), filename.string());
     return image;
 }
 
-pstring YXImage::detectImageType(upath filename) {
+mstring YXImage::detectImageType(upath filename) {
      const int xpm = 9, png = 8, jpg = 4, len = max(xpm, png);
-     char buf[len+1] = {};
-     if (read_file(filename.string(), buf, sizeof buf) >= len) {
+     char buf[len+1];
+     memset(buf, 0, sizeof buf);
+     if (filereader(filename.string()).read_all(buf, sizeof buf) >= len) {
          if (0 == memcmp(buf, "/* XPM */", xpm)) {
              return ".xpm";
          }
@@ -174,11 +186,11 @@ pstring YXImage::detectImageType(upath filename) {
              return ".jpg";
          }
          else {
-             msg("Unknown image type: \"%s\".", filename.string().c_str());
+             msg("Unknown image type: \"%s\".", filename.string());
              return null;
          }
      }
-     fail(_("Could not load image \"%s\""), filename.string().c_str());
+     fail(_("Could not load image \"%s\""), filename.string());
      return null;
 }
 
@@ -193,7 +205,7 @@ ref <YImage> YXImage::loadxbm(upath filename)
 
     status = XReadBitmapFileData(filename.string(), &w, &h, (unsigned char **) &data, &x, &y);
     if (status != BitmapSuccess) {
-        tlog("ERROR: could not read pixmap file %s\n", filename.string().c_str());
+        tlog("ERROR: could not read pixmap file %s\n", filename.string());
         goto error;
     }
     xdraw = createBitmap(w, h, data);
@@ -212,10 +224,38 @@ ref <YImage> YXImage::loadxbm(upath filename)
 
 ref<YImage> YXImage::loadxpm(upath filename)
 {
+    int status = XpmSuccess;
+    ref<YImage> image(loadxpm2(filename, status));
+    if (status != XpmFileInvalid)
+        return image;
+
+    // support themes with indirect XPM images, like OnyX:
+    const int lim = 64;
+    for (int k = 9; --k > 0 && inrange(int(filename.fileSize()), 5, lim); ) {
+        fileptr fp(filename.fopen("r"));
+        if (fp == 0)
+            break;
+
+        char buf[lim];
+        if (fgets(buf, lim, fp) == 0)
+            break;
+
+        mstring match(mstring(buf).match("^[a-z][-_a-z0-9]*\\.xpm$", "i"));
+        if (match == null)
+            break;
+
+        filename = filename.parent().relative(match);
+        if (filename.fileSize() > lim)
+            return loadxpm2(filename, status);
+    }
+    return image;
+}
+
+ref<YImage> YXImage::loadxpm2(upath filename, int& status)
+{
     ref<YImage> image;
     XImage *xdraw = 0, *xmask = 0;
     XpmAttributes xa;
-    int status;
 
     xa.visual = xapp->visual();
     xa.colormap = xapp->colormap();
@@ -259,9 +299,6 @@ ref<YImage> YXImage::loadxpm(upath filename)
 ref<YImage> YXImage::loadpng(upath filename)
 {
     ref<YImage> image;
-    // working around clobbering issues with high optimization levels, see https://stackoverflow.com/questions/7721854/what-sense-do-these-clobbered-variable-warnings-make
-    volatile png_byte *png_pixels = 0, **row_pointers = 0;
-    volatile XImage *ximage = 0;
     png_structp png_ptr;
     png_infop info_ptr;
     png_byte buf[8];
@@ -269,15 +306,15 @@ ref<YImage> YXImage::loadpng(upath filename)
     FILE *f;
 
     if (!(f = fopen(filename.string(), "rb"))) {
-        tlog("could not open %s: %s\n", filename.string().c_str(), strerror(errno));
+        tlog("could not open %s: %s\n", filename.string(), strerror(errno));
         goto nofile;
     }
     if ((ret = fread(buf, 1, 8, f)) != 8) {
-        tlog("could not read PNG signature %s: %s\n", filename.string().c_str(), strerror(errno));
+        tlog("could not read PNG signature %s: %s\n", filename.string(), strerror(errno));
         goto noread;
     }
     if (png_sig_cmp(buf, 0, 8)) {
-        tlog("invalid PNG signature in %s\n", filename.string().c_str());
+        tlog("invalid PNG signature in %s\n", filename.string());
         goto noread;
     }
     if (!(png_ptr = png_create_read_struct(png_get_libpng_ver(NULL), NULL, NULL, NULL))) {
@@ -288,9 +325,25 @@ ref<YImage> YXImage::loadpng(upath filename)
         tlog("could not allocate PNG info struture\n");
         goto noinfo;
     }
+
+    pngload(image, f, png_ptr, info_ptr);
+
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    goto noread;
+  noinfo:
+    png_destroy_read_struct(&png_ptr, NULL, NULL);
+  noread:
+    fclose(f);
+  nofile:
+    return image;
+}
+
+void YXImage::pngload(ref<YImage>& image, FILE* f,
+                      png_structp png_ptr,
+                      png_infop info_ptr)
+{
     if (setjmp(png_jmpbuf(png_ptr))) {
         tlog("ERROR: longjump from setjump\n");
-        goto pngerr;
     } else {
         png_uint_32 width, height, row_bytes, i, j;
         int bit_depth, color_type, channels;
@@ -327,21 +380,19 @@ ref<YImage> YXImage::loadpng(upath filename)
         else
             channels = 0;
         row_bytes = png_get_rowbytes(png_ptr, info_ptr);
-        png_pixels = (volatile png_byte *)calloc(row_bytes * height, sizeof(*png_pixels));
-        row_pointers = (volatile png_byte **)calloc(height, sizeof(*row_pointers));
+        png_byte *png_pixels = static_cast<png_byte *>(
+                  calloc(row_bytes * height, sizeof(*png_pixels)));
+        png_byte **row_pointers = static_cast<png_byte **>(
+                   calloc(height, sizeof(*row_pointers)));
         for (i = 0; i < height; i++)
             row_pointers[i] = png_pixels + i * row_bytes;
-        png_read_image(png_ptr, (png_byte **)row_pointers);
+        png_read_image(png_ptr, row_pointers);
         png_read_end(png_ptr, info_ptr);
-        ximage = createImage(width, height, 32U);
-        if (ximage == 0) {
-            goto pngerr;
-        } else {
-            png_byte *p, *nv_png_pixels = (png_byte *) png_pixels;
+        XImage *ximage = createImage(width, height, 32U);
+        if (ximage) {
             unsigned long pixel, A = 0, R = 0, G = 0, B = 0;
-            XImage *nv_ximage = (XImage *) ximage;
-
-            for (p = nv_png_pixels, j = 0; j < height; j++) {
+            png_byte *p = png_pixels;
+            for (j = 0; j < height; j++) {
                 for (i = 0; i < width; i++, p += channels) {
                     switch(color_type) {
                         case PNG_COLOR_TYPE_GRAY:
@@ -366,24 +417,17 @@ ref<YImage> YXImage::loadpng(upath filename)
                             break;
                     }
                     pixel = (A << 24)|(R <<16)|(G<<8)|(B<<0);
-                    XPutPixel(nv_ximage, i, j, pixel);
+                    XPutPixel(ximage, i, j, pixel);
                 }
             }
+
+            image.init(new YXImage(ximage));
         }
+        if (png_pixels)
+            free(png_pixels);
+        if (row_pointers)
+            free(row_pointers);
     }
-  pngerr:
-    free((png_byte *)png_pixels);
-    free((png_byte **)row_pointers);
-    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-    goto noread;
-  noinfo:
-    png_destroy_read_struct(&png_ptr, NULL, NULL);
-  noread:
-    fclose(f);
-  nofile:
-    if (ximage)
-        image.init(new YXImage((XImage *)ximage));
-    return image;
 }
 #endif
 
@@ -393,7 +437,7 @@ void YXImage::save(upath filename) {
     const char* error = "";
     if (savepng(filename, &error) == false) {
         fail("Cannot write YXImage %s: %s",
-            filename.string().c_str(), error);
+            filename.string(), error);
     }
 #endif
 }
@@ -427,6 +471,7 @@ bool YXImage::savepng(upath filename, const char** error) {
 
     if (setjmp(png_jmpbuf(png_ptr))) {
         *error = "Error during PNG file output";
+        saved = false;
         goto end;
     }
 
@@ -485,7 +530,7 @@ ref<YImage> YXImage::loadjpg(upath filename)
     int row_stride;
     FILE* infile = filename.fopen("rb");
     if (infile == 0) {
-        fail("could not open %s", filename.string().c_str());
+        fail("could not open %s", filename.string());
         return yximage;
     }
 
@@ -888,7 +933,7 @@ ref<YImage> YXImage::scale(unsigned nw, unsigned nh)
     unsigned w = fImage->width;
     unsigned h = fImage->height;
     if (nw == w && nh == h)
-        return subimage(0, 0, w, h);
+        return ref<YImage>(this);
     if (nw <= w && nh <= h)
         return downscale(nw, nh);
     return upscale(nw, nh);
@@ -1019,7 +1064,7 @@ ref<YImage> YImage::createFromPixmapAndMaskScaled(Pixmap pix, Pixmap mask,
     return image;
 }
 
-ref <YPixmap> YXImage::renderToPixmap(unsigned depth)
+ref <YPixmap> YXImage::renderToPixmap(unsigned depth, bool premult)
 {
     ref <YPixmap> pixmap;
     bool has_mask = false;
@@ -1028,6 +1073,9 @@ ref <YPixmap> YXImage::renderToPixmap(unsigned depth)
     XGCValues xg;
     GC gcd = None, gcm = None;
 
+    if (depth == 0) {
+        depth = xapp->depth();
+    }
     if (!valid()) {
         tlog("ERROR: invalid YXImage\n");
         goto error;
@@ -1041,8 +1089,8 @@ ref <YPixmap> YXImage::renderToPixmap(unsigned depth)
                 for (unsigned i = 0; !has_mask && i < w; i++)
                     if (((XGetPixel(fImage, i, j) >> 24) & 0xff) < 128)
                         has_mask = true;
-        if (hasAlpha()) {
-            xdraw = createImage(w, h, xapp->depth());
+        if (hasAlpha() || depth != this->depth()) {
+            xdraw = createImage(w, h, depth);
             if (xdraw == 0) {
                 goto error;
             }
@@ -1062,7 +1110,8 @@ ref <YPixmap> YXImage::renderToPixmap(unsigned depth)
         for (unsigned j = 0; j < h; j++)
             for (unsigned i = 0; i < w; i++)
                 XPutPixel(xmask, i, j,
-                        has_mask ? (((XGetPixel(fImage, i, j) >> 24) & 0xff) < 128 ? 0 : 1) : 1);
+                          !has_mask ||
+                          ((XGetPixel(fImage, i, j) >> 24) & 0xff) >= ATH);
         // tlog("created ximage %ux%ux%u for mask\n", xmask->width, xmask->height, xmask->depth);
 
         // tlog("next request %lu at %s: +%d : %s()\n", NextRequest(xapp->display()), __FILE__, __LINE__, __func__);
@@ -1155,8 +1204,12 @@ void YXImage::composite(Graphics& g, int x, int y,
     unsigned hi = fImage->height;
     unsigned di = fImage->depth;
     bool bitmap = isBitmap();
-    unsigned long fg = g.color() ? g.color().pixel() & 0x00FFFFFF : 0;
-    unsigned long bg = 0x00000000; /* for now */
+    unsigned fg = g.color() ? g.color().pixel() & 0x00FFFFFF : 0;
+    unsigned bg = 0x00000000; /* for now */
+    unsigned backAlpha = (g.rdepth() == 32) ? 0 : 0xFF;
+    unsigned backAmask = (g.rdepth() == 32) ? 0xFF : 0;
+    unsigned foreAlpha = (depth() == 32) ? 0 : 0xFF;
+    unsigned foreAmask = (depth() == 32) ? 0xFF : 0;
 
     if (verbose)
     tlog("compositing %ux%u+%d+%d of %ux%ux%u onto drawable 0x%lx at +%d+%d\n", w, h, x, y, wi, hi, di, g.drawable(), dx, dy);
@@ -1223,7 +1276,7 @@ void YXImage::composite(Graphics& g, int x, int y,
     xback = XGetImage(xapp->display(), g.drawable(), dx - g.xorigin(), dy - g.yorigin(), w, h, AllPlanes, ZPixmap);
     if (!xback) {
         tlog("ERROR: could not get backing image\n");
-        return;
+        xback = createImage(w, h, g.rdepth());
     }
     // tlog("got ximage %ux%ux%u\n", xback->width, xback->height, xback->depth);
 
@@ -1239,13 +1292,14 @@ void YXImage::composite(Graphics& g, int x, int y,
                 tlog("ERROR: point x = %u is out of bounds\n", i);
                 continue;
             }
-            unsigned Rb, Gb, Bb, A, R, G, B;
-            unsigned long pixel;
+            unsigned Rb, Gb, Bb, Ab, A, R, G, B;
+            unsigned pixel;
 
             pixel = XGetPixel(xback, i, j);
             Rb = (pixel >> 16) & 0xff;
             Gb = (pixel >>  8) & 0xff;
             Bb = (pixel >>  0) & 0xff;
+            Ab = ((pixel >> 24) & backAmask) | backAlpha;
             pixel = XGetPixel(fImage, i + x, j + y);
             if (bitmap) {
                 if (pixel & 0x00FFFFFF)
@@ -1253,7 +1307,7 @@ void YXImage::composite(Graphics& g, int x, int y,
                 else
                     pixel = (pixel & 0xFF000000) | bg;
             }
-            A = (pixel >> 24) & 0xff;
+            A = ((pixel >> 24) & foreAmask) | foreAlpha;
             R = (pixel >> 16) & 0xff;
             G = (pixel >>  8) & 0xff;
             B = (pixel >>  0) & 0xff;
@@ -1261,7 +1315,8 @@ void YXImage::composite(Graphics& g, int x, int y,
             Rb = ((A * R) + ((255 - A) * Rb)) / 255;
             Gb = ((A * G) + ((255 - A) * Gb)) / 255;
             Bb = ((A * B) + ((255 - A) * Bb)) / 255;
-            pixel = (Rb << 16)|(Gb << 8)|(Bb << 0);
+            Ab = (A + Ab + 1) / 2;
+            pixel = (Rb << 16)|(Gb << 8)|(Bb << 0)|(Ab << 24);
             XPutPixel(xback, i, j, pixel);
         }
     }

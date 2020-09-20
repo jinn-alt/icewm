@@ -1,16 +1,14 @@
-# This is an example for IceWM's window options file.
-#
-# Place your variants in /etc/X11/icewm or in $HOME/.icewm
-# since modifications to this file will be discarded when you
-# (re)install icewm.
+# This is an example for @PACKAGE_STRING@ window options file.
+# It will be installed as @LIBDIR@/winoptions.
+# Place your variants in @CFGDIR@ or in $HOME/.icewm since
+# modifications to this file will be overwritten when you reinstall icewm.
 
-xvt.icon: xterm
-urxvt.URxvt.icon: xterm
-XTerm.UXTerm.icon: xterm
-xterm.UXTerm.icon: xterm
-
-pcmanfm.Pcmanfm.icon: folder
-
+xterm.XTerm.icon: xterm
+rxvt.icon: xterm
+nxterm.icon: xterm
+fte.icon: fte
+emacs.Emacs.icon: emacs
+AWTapp.icon: java
 # workaround for XV window repositioning problems
 xv.nonICCCMconfigureRequest: 1
 

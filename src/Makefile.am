@@ -41,10 +41,7 @@ bin_PROGRAMS = \
 	icesh \
 	icehelp \
 	icewmhint \
-	icewmbg \
-	icewmtray
-
-AM_INSTALLCHECK_STD_OPTIONS_EXEMPT = icewmtray
+	icewmbg
 
 noinst_PROGRAMS = \
 	genpref
@@ -73,131 +70,191 @@ if BUILD_MENU_FDO
 bin_PROGRAMS += icewm-menu-fdo
 endif
 
+if BUILD_ICEWMTRAY
+bin_PROGRAMS += icewmtray
+AM_INSTALLCHECK_STD_OPTIONS_EXEMPT = icewmtray
+endif
+
 libice_la_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
+	MwmUtil.h \
+	WinMgr.h \
+	argument.h \
+	ascii.h \
 	base.h \
+	binascii.h \
 	bindkey.h \
-	themable.h \
+	debug.h \
 	default.h \
-	prefs.h \
-	ypoll.h \
-	ylib.h \
-	ykey.h \
-	yfull.h \
-	ref.cc \
-	ref.h \
-	ystring.h \
+	guievent.h \
+	intl.h \
+	logevent.cc \
+	logevent.h \
+	misc.cc \
 	mstring.cc \
 	mstring.h \
-	upath.cc \
-	upath.h \
+	objmenu.h \
+	prefs.h \
+	ref.cc \
+	ref.h \
+	sysdep.h \
+	themable.h \
 	udir.cc \
 	udir.h \
+	upath.cc \
+	upath.h \
+	wmmgr.h \
+	wmprog.h \
+	workspaces.h \
+	yaction.h \
 	yapp.cc \
 	yapp.h \
-	MwmUtil.h \
-	yxapp.cc \
-	yxapp.h \
-	ytimer.cc \
-	ytimer.h \
-	ascii.h \
-	ylist.h \
-	ywindow.cc \
-	ywindow.h \
-	ycolor.cc \
-	ycolor.h \
-	ypaint.cc \
-	ypaint.h \
-	ypopup.cc \
-	ypopup.h \
-	misc.cc \
-	ycursor.cc \
-	ycursor.h \
-	ysocket.cc \
-	ysocket.h \
-	ypaths.cc \
-	ypaths.h \
-	ylocale.cc \
-	ylocale.h \
 	yarray.cc \
 	yarray.h \
-	ycollections.h \
-	ycollections.cc \
-	ypipereader.cc \
-	ypipereader.h \
-	yxembed.cc \
-	yxembed.h \
-	binascii.h \
-	argument.h \
+	ycolor.cc \
+	ycolor.h \
 	yconfig.cc \
 	yconfig.h \
-	yprefs.cc \
-	yprefs.h \
+	ycursor.cc \
+	ycursor.h \
+	yfileio.cc \
+	yfileio.h \
 	yfont.cc \
 	yfontcore.cc \
 	yfontxft.cc \
-	ypixmap.cc \
-	ypixmap.h \
+	yfull.h \
 	yimage.h \
 	yimage_gdk.cc \
-	yximage.cc \
+	ykey.h \
+	ylib.h \
+	ylist.h \
+	ylocale.cc \
+	ylocale.h \
+	ymenu.h \
+	ymsgbox.h \
+	ypaint.cc \
+	ypaint.h \
+	ypaths.cc \
+	ypaths.h \
+	ypipereader.cc \
+	ypipereader.h \
+	ypixmap.cc \
+	ypixmap.h \
+	ypointer.h \
+	ypoll.h \
+	ypopup.cc \
+	ypopup.h \
+	yprefs.cc \
+	yprefs.h \
+	yrect.h \
+	ysocket.cc \
+	ysocket.h \
+	ystring.h \
+	ytime.cc \
+	ytime.h \
+	ytimer.cc \
+	ytimer.h \
 	ytooltip.cc \
-	ytooltip.h
+	ytooltip.h \
+	ytrace.h \
+	ywindow.cc \
+	ywindow.h \
+	ywordexp.h \
+	yxapp.cc \
+	yxapp.h \
+	yxcontext.h \
+	yxembed.cc \
+	yxembed.h \
+	yximage.cc
 
 libitk_la_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
+	WinMgr.h \
+	applet.h \
+	appnames.h \
+	ascii.h \
 	base.h \
-	ascii.h \
 	bindkey.h \
-	themable.h \
+	debug.h \
 	default.h \
-	prefs.h \
-	yaction.h \
-	yinputline.h \
-	ylib.h \
-	yrect.h \
-	ykey.h \
-	yfull.h \
-	ymenu.cc \
-	ymenu.h \
-	ylabel.cc \
-	ylabel.h \
-	yscrollview.cc \
-	yscrollview.h \
-	ymenuitem.cc \
-	ymenuitem.h \
-	yscrollbar.cc \
-	yscrollbar.h \
-	ascii.h \
-	ybutton.cc \
-	ybutton.h \
-	ascii.h \
-	ylistbox.cc \
-	ylistbox.h \
-	yinput.cc \
 	globit.cc \
 	globit.h \
-	yicon.cc \
-	yicon.h \
+	intl.h \
+	logevent.h \
+	mstring.h \
+	prefs.h \
+	ref.h \
+	sysdep.h \
+	themable.h \
+	udir.h \
+	upath.h \
+	wmaction.h \
+	wmclient.h \
 	wmconfig.cc \
 	wmconfig.h \
+	wmmgr.h \
+	wmoption.h \
+	wmtaskbar.h \
+	workspaces.h \
 	wpixmaps.h \
 	wpixres.cc \
-	wpixres.h
+	wpixres.h \
+	yaction.h \
+	yapp.h \
+	yarray.h \
+	ybutton.cc \
+	ybutton.h \
+	ycolor.h \
+	yconfig.h \
+	ycursor.h \
+	yfull.h \
+	yicon.cc \
+	yicon.h \
+	yimage.h \
+	yinput.cc \
+	yinputline.h \
+	ykey.h \
+	ylabel.cc \
+	ylabel.h \
+	ylib.h \
+	ylist.h \
+	ylistbox.cc \
+	ylistbox.h \
+	ymenu.cc \
+	ymenu.h \
+	ymenuitem.cc \
+	ymenuitem.h \
+	ymsgbox.h \
+	ypaint.h \
+	ypaths.h \
+	ypixmap.h \
+	ypointer.h \
+	ypoll.h \
+	ypopup.h \
+	yprefs.h \
+	yrect.h \
+	yscrollbar.cc \
+	yscrollbar.h \
+	yscrollview.cc \
+	yscrollview.h \
+	ytime.h \
+	ytimer.h \
+	ytrace.h \
+	ywindow.h \
+	ywordexp.h \
+	yxapp.h \
+	yxtray.h
 libitk_la_LIBADD = libice.la
 
 genpref_SOURCES = \
-	intl.h \
-	debug.h \
-	sysdep.h \
 	base.h \
+	ascii.h \
+	appnames.h \
+	ykey.h \
+	sysdep.h \
+	yprefs.h \
 	bindkey.h \
-	themable.h \
 	default.h \
+	themable.h \
+	icewmbg_prefs.h \
 	genpref.cc
 genpref_LDADD = libice.la @LIBINTL@
 
@@ -253,6 +310,7 @@ icewm_SOURCES = \
 	wmclient.h \
 	wmmgr.cc \
 	wmmgr.h \
+	workspaces.h \
 	appnames.h \
 	guievent.h \
 	wmapp.cc \
@@ -281,6 +339,8 @@ icewm_SOURCES = \
 	aworkspaces.h \
 	amailbox.cc \
 	amailbox.h \
+	akeyboard.cc \
+	akeyboard.h \
 	aclock.cc \
 	aclock.h \
 	acpustatus.cc \
@@ -322,9 +382,11 @@ icewm_session_SOURCES = \
 	intl.h \
 	sysdep.h \
 	yapp.h \
+	ytrace.h \
+	ytime.h \
 	ytimer.h \
 	icesm.cc
-icewm_session_LDADD = libice.la @LIBINTL@
+icewm_session_LDADD = libice.la $(X_LIBS) -lX11 @LIBINTL@
 
 icewmhint_SOURCES = \
 	intl.h \
@@ -355,14 +417,22 @@ icesound_SOURCES = \
 	intl.h \
 	upath.h \
 	ypointer.h \
+	ytime.h \
 	ytimer.h \
 	icesound.cc
 icesound_LDADD = libice.la $(AUDIO_LIBS) $(CORE_LIBS) @LIBINTL@
 
 icewm_menu_fdo_SOURCES = \
-	sysdep.h \
+	appnames.h \
 	base.h \
+	debug.h \
 	fdospecgen.h \
+	intl.h \
+	sysdep.h \
+	yarray.h \
+	ycollections.cc \
+	ycollections.h \
+	sysdep.h \
 	fdomenu.cc
 icewm_menu_fdo_LDADD = libice.la $(GIO_LIBS)
 
@@ -392,6 +462,8 @@ iceclock_SOURCES = \
 	themable.h \
 	default.h \
 	prefs.h \
+	applet.cc \
+	applet.h \
 	aclock.cc \
 	aclock.h
 iceclock_LDADD = libitk.la libice.la $(IMAGE_LIBS) $(CORE_LIBS) @LIBINTL@

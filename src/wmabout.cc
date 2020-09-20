@@ -6,25 +6,22 @@
  * Dialogs
  */
 #include "config.h"
-
-#include "ylib.h"
 #include "wmabout.h"
-
 #include "yprefs.h"
 #include "prefs.h"
-#include "wmapp.h"
 #include "wmframe.h"
-#include "sysdep.h"
-#include "WinMgr.h"
+#ifdef CONFIG_I18N
+#include <langinfo.h>
+#endif
 
 #include "intl.h"
 
 AboutDlg::AboutDlg(): YDialog() {
     char const *version("IceWM " VERSION " (" HOSTOS "/" HOSTCPU ")");
-    ustring copyright =
-        ustring("Copyright ")
+    mstring copyright =
+        mstring("Copyright ")
         .append(_("(C)"))
-        .append(" 1997-2008 Marko Macek, ")
+        .append(" 1997-2012 Marko Macek, ")
         .append(_("(C)"))
         .append(" 2001 Mathias Hasselmann");
 
@@ -69,7 +66,7 @@ AboutDlg::AboutDlg(): YDialog() {
     setClassHint("about", "IceWM");
 
     setWinLayerHint(WinLayerAboveDock);
-    setWinWorkspaceHint(-1);
+    setWinWorkspaceHint(AllWorkspaces);
     setWinHintsHint(WinHintsSkipWindowMenu);
     setMwmHints(MwmHints(
        MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS,
@@ -182,11 +179,11 @@ void AboutDlg::autoSize() {
 void AboutDlg::showFocused() {
     int dx, dy;
     unsigned dw, dh;
-    manager->getScreenGeometry(&dx, &dy, &dw, &dh);
+    desktop->getScreenGeometry(&dx, &dy, &dw, &dh);
 
-    if (getFrame() == 0)
+    if (getFrame() == nullptr)
         manager->manageClient(handle(), false);
-    if (getFrame() != 0) {
+    if (getFrame() != nullptr) {
         getFrame()->setNormalPositionOuter(
             dx + int(dw / 2 - getFrame()->width() / 2),
             dy + int(dh / 2 - getFrame()->height() / 2));

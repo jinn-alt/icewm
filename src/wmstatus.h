@@ -8,55 +8,74 @@ class YFrameWindow;
 
 class YWindowManagerStatus: public YWindow {
 public:
-    YWindowManagerStatus(YWindow *aParent, const ustring &sampleString);
+    YWindowManagerStatus();
     virtual ~YWindowManagerStatus();
 
+    virtual void configure(const YRect2& r2);
+    virtual void handleExpose(const XExposeEvent& expose) {}
     virtual void paint(Graphics &g, const YRect &r);
+    virtual void repaint() { repaintSync(); }
+    virtual void repaintSync();
 
     void begin();
-    void end() { hide(); }
+    virtual void end() { hide(); }
 
-    virtual ustring getStatus() = 0;
+    virtual mstring getStatus() = 0;
+    virtual mstring longestStatus() = 0;
 
 protected:
     static YColorName statusFg;
     static YColorName statusBg;
     static ref<YFont> statusFont;
+
+private:
+    void configureStatus();
+    bool fConfigured;
 };
 
 class MoveSizeStatus: public YWindowManagerStatus {
+    typedef YWindowManagerStatus super;
+
 public:
-    MoveSizeStatus(YWindow *aParent);
+    MoveSizeStatus();
     virtual ~MoveSizeStatus();
 
-    virtual ustring getStatus();
+    virtual void end();
+    virtual mstring getStatus();
+    virtual mstring longestStatus();
 
     void begin(YFrameWindow *frame);
     void setStatus(YFrameWindow *frame, const YRect &r);
     void setStatus(YFrameWindow *frame);
 private:
+
     int fX, fY, fW, fH;
 };
 
 class WorkspaceStatus: public YWindowManagerStatus, public YTimerListener {
+    typedef YWindowManagerStatus super;
+
 public:
-    static WorkspaceStatus * createInstance(YWindow *aParent);
+    WorkspaceStatus();
     virtual ~WorkspaceStatus();
 
-    virtual ustring getStatus();
+    virtual void end();
+    virtual mstring getStatus();
+    virtual mstring longestStatus();
+
     void begin(long workspace);
     virtual void setStatus(long workspace);
     virtual bool handleTimer(YTimer *timer);
 private:
-    WorkspaceStatus(YWindow *aParent, ustring templateString);
-    static ustring getStatus(const char* name);
+    WorkspaceStatus(YWindow *aParent, mstring templateString);
+    static mstring getStatus(const char* name);
 
     long workspace;
     YTimer timer;
 };
 
-extern MoveSizeStatus *statusMoveSize;
-extern WorkspaceStatus *statusWorkspace;
+extern lazy<MoveSizeStatus> statusMoveSize;
+extern lazy<WorkspaceStatus> statusWorkspace;
 
 #endif
 

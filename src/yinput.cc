@@ -7,16 +7,24 @@
 #include "globit.h"
 #include "yinputline.h"
 #include "ymenu.h"
-#include "ymenuitem.h"
 #include "yxapp.h"
 #include "prefs.h"
 #include "intl.h"
+#include <X11/keysym.h>
 
-#ifndef UINT_MAX
-#include <limits.h>
-#endif
+class YInputMenu: public YMenu {
+public:
+    YInputMenu() {
+        addItem(_("_Copy"), -2, _("Ctrl+C"), actionCopy);
+        addItem(_("Cu_t"), -2, _("Ctrl+X"), actionCut);
+        addItem(_("_Paste"), -2, _("Ctrl+V"), actionPaste);
+        addItem(_("Paste _Selection"), -2, _("Ctrl+P"), actionPasteSelection);
+        addSeparator();
+        addItem(_("Select _All"), -2, _("Ctrl+A"), actionSelectAll);
+    }
+};
 
-YInputLine::YInputLine(YWindow *parent):
+YInputLine::YInputLine(YWindow *parent, YInputListener *listener):
     YWindow(parent),
     fText(null),
     markPos(0),
@@ -27,25 +35,15 @@ YInputLine::YInputLine(YWindow *parent):
     fCursorVisible(true),
     fSelecting(false),
     fBlinkTime(333),
+    fListener(listener),
     inputFont(YFont::getFont(XFA(inputFontName))),
     inputBg(&clrInput),
     inputFg(&clrInputText),
     inputSelectionBg(&clrInputSelection),
     inputSelectionFg(&clrInputSelectionText),
-    inputMenu(new YMenu())
+    inputMenu()
 {
-    inputMenu->setActionListener(this);
-    inputMenu->addItem(_("_Copy"), -2, _("Ctrl+C"), actionCopy)
-             ->setEnabled(true);
-    inputMenu->addItem(_("Cu_t"), -2, _("Ctrl+X"), actionCut)
-             ->setEnabled(true);
-    inputMenu->addItem(_("_Paste"), -2, _("Ctrl+V"), actionPaste)
-             ->setEnabled(true);
-    inputMenu->addItem(_("Paste _Selection"), -2, _("Ctrl+P"), actionPasteSelection)
-             ->setEnabled(true);
-    inputMenu->addSeparator();
-    inputMenu->addItem(_("Select _All"), -2, _("Ctrl+A"), actionSelectAll);
-
+    addStyle(wsNoExpose);
     if (inputFont != null)
         setSize(width(), inputFont->height() + 2);
 }
@@ -53,7 +51,7 @@ YInputLine::YInputLine(YWindow *parent):
 YInputLine::~YInputLine() {
 }
 
-void YInputLine::setText(const ustring &text, bool asMarked) {
+void YInputLine::setText(const mstring &text, bool asMarked) {
     fText = text;
     leftOfs = 0;
     curPos = fText.length();
@@ -62,8 +60,20 @@ void YInputLine::setText(const ustring &text, bool asMarked) {
     repaint();
 }
 
-ustring YInputLine::getText() {
+mstring YInputLine::getText() {
     return fText;
+}
+
+void YInputLine::repaint() {
+    if (width() > 1) {
+        GraphicsBuffer(this).paint();
+    }
+}
+
+void YInputLine::configure(const YRect2& r) {
+    if (r.resized()) {
+        repaint();
+    }
 }
 
 void YInputLine::paint(Graphics &g, const YRect &/*r*/) {
@@ -169,9 +179,19 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
             case '\\':
                 unselectAll();
                 return true;
+            case 'u':
+            case 'U':
+                if ( !deleteSelection())
+                    deleteToBegin();
+                return true;
             case 'v':
             case 'V':
                 requestSelection(false);
+                return true;
+            case 'w':
+            case 'W':
+                if ( !deleteSelection())
+                    deletePreviousWord();
                 return true;
             case 'X':
             case 'x':
@@ -284,11 +304,26 @@ bool YInputLine::handleKey(const XKeyEvent &key) {
             complete();
             break;
         default:
+            if (fListener &&
+                ((k == XK_Return && m == 0) ||
+                 (k == XK_KP_Enter && m == 0) ||
+                 (k == XK_j && m == ControlMask) ||
+                 (k == XK_m && m == ControlMask)))
+            {
+                fListener->inputReturn(this);
+                return true;
+            }
+            else if (fListener && (k == XK_Escape && m == 0))
+            {
+                fListener->inputEscape(this);
+                return true;
+            }
+            else
             {
                 char s[16];
 
                 if (getCharFromEvent(key, s, sizeof(s))) {
-                    replaceSelection(ustring(s, strlen(s)));
+                    replaceSelection(mstring(s, strlen(s)));
                     return true;
                 }
             }
@@ -310,7 +345,7 @@ void YInputLine::handleButton(const XButtonEvent &button) {
             }
         }
     } else if (button.type == ButtonRelease) {
-        autoScroll(0, 0);
+        autoScroll(0, nullptr);
         if (fSelecting && button.button == 1) {
             fSelecting = false;
             //curPos = offsetToPos(button.x + leftOfs);
@@ -374,10 +409,10 @@ void YInputLine::handleClickDown(const XButtonEvent &down, int count) {
 
 void YInputLine::handleClick(const XButtonEvent &up, int /*count*/) {
     if (up.button == 3 && IS_BUTTON(up.state, Button3Mask)) {
-        if (inputMenu)
-            inputMenu->popup(this, 0, 0, up.x_root, up.y_root,
-                             YPopupWindow::pfCanFlipVertical |
-                             YPopupWindow::pfCanFlipHorizontal);
+        inputMenu->setActionListener(this);
+        inputMenu->popup(this, nullptr, nullptr, up.x_root, up.y_root,
+                         YPopupWindow::pfCanFlipVertical |
+                         YPopupWindow::pfCanFlipHorizontal);
     } else if (up.button == 2 && IS_BUTTON(up.state, Button2Mask)) {
         requestSelection(true);
     }
@@ -385,28 +420,11 @@ void YInputLine::handleClick(const XButtonEvent &up, int /*count*/) {
 
 void YInputLine::handleSelection(const XSelectionEvent &selection) {
     if (selection.property != None) {
-        Atom type;
-        long extra;
-        int format;
-        long nitems;
-        union {
-            char *ptr;
-            unsigned char *xptr;
-        } data;
-
-        XGetWindowProperty(xapp->display(),
-                           selection.requestor, selection.property,
-                           0L, 32 * 1024, True,
-                           selection.target, &type, &format,
-                           (unsigned long *)&nitems,
-                           (unsigned long *)&extra,
-                           &(data.xptr));
-
-        if (nitems > 0 && data.ptr != NULL) {
-            replaceSelection(mstring(data.ptr, nitems));
+        YProperty prop(selection.requestor, selection.property,
+                       F8, 32 * 1024, selection.target, True);
+        if (prop) {
+            replaceSelection(mstring(prop.data<char>(), prop.size()));
         }
-        if (data.xptr != NULL)
-            XFree(data.xptr);
     }
 }
 
@@ -440,6 +458,9 @@ void YInputLine::handleFocus(const XFocusChangeEvent &focus) {
         fHasFocus = false;
         repaint();
         cursorBlinkTimer = null;
+        if (fListener) {
+            fListener->inputLostFocus(this);
+        }
     }
 }
 
@@ -509,17 +530,13 @@ void YInputLine::limit() {
     }
 }
 
-void YInputLine::replaceSelection(const ustring &str) {
-    unsigned from=min(curPos, markPos);
-    unsigned to=max(curPos, markPos);
-    ustring newStr = fText.replace(from, to - from, str);
-
-    if (newStr != null) {
-        fText = newStr;
-        curPos = markPos = from + str.length();
-        limit();
-        repaint();
-    }
+void YInputLine::replaceSelection(const mstring &str) {
+    unsigned from = min(curPos, markPos);
+    unsigned to = max(curPos, markPos);
+    fText = fText.replace(from, to - from, str);
+    curPos = markPos = from + str.length();
+    limit();
+    repaint();
 }
 
 bool YInputLine::deleteSelection() {
@@ -635,29 +652,15 @@ void YInputLine::unselectAll() {
         repaint();
     }
 }
-void YInputLine::cutSelection() {
-    if (fText == null)
-        return ;
-    if (hasSelection()) {
-        copySelection();
-        deleteSelection();
-    }
+
+bool YInputLine::cutSelection() {
+    return copySelection() && deleteSelection();
 }
 
-void YInputLine::copySelection() {
-    int min, max;
-    if (hasSelection()) {
-        if (fText == null)
-            return ;
-        if (curPos > markPos) {
-            min = markPos;
-            max = curPos;
-        } else {
-            min = curPos;
-            max = markPos;
-        }
-        xapp->setClipboardText(fText.substring(min, max - min));
-    }
+bool YInputLine::copySelection() {
+    int min = ::min(curPos, markPos), max = ::max(curPos, markPos);
+    return min < max && fText.nonempty()
+        && (xapp->setClipboardText(fText.substring(min, max - min)), true);
 }
 
 void YInputLine::actionPerformed(YAction action, unsigned int /*modifiers*/) {
@@ -679,8 +682,8 @@ void YInputLine::autoScroll(int delta, const XMotionEvent *motion) {
 }
 
 void YInputLine::complete() {
-    char* res = 0;
-    int res_count = globit_best(cstring(fText), &res, 0, 0);
+    char* res = nullptr;
+    int res_count = globit_best(fText, &res, nullptr, nullptr);
     // directory is not a final match
     if(res_count == 1 && upath(res).dirExists())
         res_count++;

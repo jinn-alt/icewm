@@ -4,20 +4,20 @@
 #include "upath.h"
 #include "yarray.h"
 #include "ypoll.h"
+#include "ytrace.h"
 
 class YTimer;
-class YClipboard;
 
 class YSignalPoll: public YPoll<class YApplication> {
 public:
+    explicit YSignalPoll(YApplication* owner) : YPoll(owner) { }
     virtual void notifyRead();
-    virtual void notifyWrite();
-    virtual bool forRead();
-    virtual bool forWrite();
+    virtual bool forRead() { return true; }
 };
 
 class IApp {
 public:
+    virtual ~IApp();
     virtual upath findConfigFile(upath relativePath) = 0;
     virtual void runCommand(const char *prog) = 0;
     virtual int runProgram(const char *path, const char *const *args) = 0;
@@ -27,6 +27,7 @@ public:
 
 class IMainLoop {
 public:
+    virtual ~IMainLoop();
     virtual void registerTimer(YTimer *t) = 0;
     virtual void unregisterTimer(YTimer *t) = 0;
     virtual void registerPoll(YPollBase *t) = 0;
@@ -39,6 +40,7 @@ public:
     virtual ~YApplication();
 
     int mainLoop();
+    int exitCode() const { return fExitCode; }
     void exitLoop(int exitCode);
     virtual void exit(int exitCode);
 
@@ -53,6 +55,7 @@ public:
     virtual int waitProgram(int p);
 
     virtual upath findConfigFile(upath relativePath);
+    static upath locateConfigFile(upath relativePath);
     static const upath& getLibDir();
     static const upath& getConfigDir();
     static const upath& getPrivConfDir();
@@ -61,14 +64,15 @@ public:
 private:
     YArray<YTimer*> timers;
     YArray<YPollBase*> polls;
+    typedef YArray<YPollBase*>::IterType YPollIterType;
 
     YSignalPoll sfd;
     friend class YSignalPoll;
 
     int fLoopLevel;
-    int fExitLoop;
     int fExitCode;
-    int fExitApp;
+    bool fExitLoop;
+    bool fExitApp;
 
     bool getTimeout(struct timeval *timeout);
     void handleTimeouts();

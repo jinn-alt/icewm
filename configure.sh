@@ -25,12 +25,19 @@ case "`uname -m`" in
 	;;
 esac
 
+# Clang has no variable tracking options
+if [[ $CC =~ ^clang || $CC =~ /clang ]]
+then
+    DEBUG_CFLAGS=${DEBUG_CFLAGS%%-fvar-tracking-assignments*}
+fi
+if [[ $CXX =~ ^clang || $CXX =~ /clang ]]
+then
+    DEBUG_CXXFLAGS=${DEBUG_CXXFLAGS%%-fvar-tracking-assignments*}
+fi
+
 ./configure \
 	--enable-maintainer-mode \
 	--enable-dependency-tracking \
-	--prefix=/usr \
-	--sysconfdir=/etc \
-	--mandir=/usr/share/man \
 	CPPFLAGS="$CPPFLAGS" \
 	CFLAGS="$DEBUG_CFLAGS -Wall -Werror $CFLAGS" \
 	CXXFLAGS="$DEBUG_CXXFLAGS -Wall -Werror $CXXFLAGS" \
@@ -38,6 +45,3 @@ esac
 	DEBUG_CFLAGS="$DEBUG_CFLAGS" \
 	DEBUG_CXXFLAGS="$DEBUG_CXXFLAGS"
 
-# cscope target won't work without this
-#
-[ -f po/Makefile ] && echo -e '\n%:\n\t@:\n\n' >> po/Makefile

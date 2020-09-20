@@ -27,8 +27,13 @@ public:
     unsigned width() const { return fWidth; }
     unsigned height() const { return fHeight; }
     unsigned depth() const { return fDepth; }
+    unsigned verticalOffset() const;
     ref<YImage> image();
     Pixmap pixmap32();
+    Pixmap pixmap24();
+    Pixmap pixmap(unsigned depth);
+    Picture picture();
+    void freePicture();
     ref<YPixmap> scale(unsigned w, unsigned h);
     ref<YPixmap> subimage(unsigned x, unsigned y, unsigned w, unsigned h);
 
@@ -41,8 +46,10 @@ private:
         fDepth(depth),
         fPixmap(pixmap),
         fMask(mask),
+        fPicture(None),
         fImage(image),
-        fPixmap32()
+        fPixmap32(),
+        fPixmap24()
     {
     }
     virtual ~YPixmap();
@@ -56,8 +63,10 @@ private:
 
     Pixmap fPixmap;
     Pixmap fMask;
+    Picture fPicture;
     ref<YImage> fImage;
     ref<YPixmap> fPixmap32;
+    ref<YPixmap> fPixmap24;
 };
 
 #endif

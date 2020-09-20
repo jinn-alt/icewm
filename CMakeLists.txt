@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 2.6)
-IF (POLICY CMP0053) # in CMake 3.1.0+
-  CMAKE_POLICY (SET CMP0053 OLD) # keep old-style @VAR@ expansion
-ENDIF (POLICY CMP0053)
+CMAKE_POLICY (SET CMP0053 NEW)
 PROJECT(ICEWM CXX C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+
+enable_testing()
 
 set(PROJECT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/src)
 include_directories(${CMAKE_BINARY_DIR})
@@ -61,7 +61,7 @@ else()
 		ENDIF()
 	endforeach()
 endif()
-
+set(PACKAGE_STRING ${PACKAGE})
 
 add_subdirectory(src)
 add_subdirectory(po)

@@ -10,29 +10,24 @@
 
 #ifdef CONFIG_SESSION
 
-#include "yfull.h"
 #include "wmframe.h"
 #include "wmsession.h"
-#include "base.h"
 #include "wmapp.h"
-
-#include "mstring.h"
-#include <stdio.h>
-#include <string.h>
+#include "workspaces.h"
 
 #include "intl.h"
 
-SMWindowKey::SMWindowKey(YFrameWindow */*f*/):
+SMWindowKey::SMWindowKey(YFrameWindow *):
     clientId(null), windowRole(null), windowClass(null), windowInstance(null)
 {
 }
 
-SMWindowKey::SMWindowKey(ustring id, ustring role):
+SMWindowKey::SMWindowKey(mstring id, mstring role):
     clientId(id), windowRole(role), windowClass(null), windowInstance(null)
 {
 }
 
-SMWindowKey::SMWindowKey(ustring id, ustring klass, ustring instance):
+SMWindowKey::SMWindowKey(mstring id, mstring klass, mstring instance):
     clientId(id), windowRole(null), windowClass(klass), windowInstance(instance)
 {
 }
@@ -43,7 +38,7 @@ SMWindowKey::~SMWindowKey() {
 SMWindowInfo::SMWindowInfo(YFrameWindow *f): key(f) {
 }
 
-SMWindowInfo::SMWindowInfo(ustring id, ustring role,
+SMWindowInfo::SMWindowInfo(mstring id, mstring role,
                            int ax, int ay, int w, int h,
                            unsigned long astate, int alayer, int aworkspace): key(id, role)
 {
@@ -56,7 +51,7 @@ SMWindowInfo::SMWindowInfo(ustring id, ustring role,
     workspace = aworkspace;
 }
 
-SMWindowInfo::SMWindowInfo(ustring id, ustring klass, ustring instance,
+SMWindowInfo::SMWindowInfo(mstring id, mstring klass, mstring instance,
                            int ax, int ay, int w, int h,
                            unsigned long astate, int alayer, int aworkspace): key(id, klass, instance)
 {
@@ -76,10 +71,10 @@ void SMWindows::addWindowInfo(SMWindowInfo *info) {
     fWindows.append(info);
 }
 
-void SMWindows::setWindowInfo(YFrameWindow */*f*/) {
+void SMWindows::setWindowInfo(YFrameWindow *) {
 }
 
-bool SMWindows::getWindowInfo(YFrameWindow */*f*/, SMWindowInfo */*info*/) {
+bool SMWindows::getWindowInfo(YFrameWindow *, SMWindowInfo *) {
     return false;
 }
 
@@ -88,7 +83,7 @@ bool SMWindows::findWindowInfo(YFrameWindow *f) {
     Window leader = f->client()->clientLeader();
     if (leader == None) return false;
 
-    ustring cid = f->client()->getClientId(leader);
+    mstring cid = f->client()->getClientId(leader);
     if (cid == null) return false;
 
     for (int i = 0; i < fWindows.getCount(); ++i) {
@@ -98,8 +93,8 @@ bool SMWindows::findWindowInfo(YFrameWindow *f) {
             if (window->key.windowClass != null &&
                 window->key.windowInstance != null)
             {
-                ustring klass = null;
-                ustring instance = null;
+                mstring klass = null;
+                mstring instance = null;
                 XClassHint *ch = f->client()->classHint();
 
                 if (ch) {
@@ -111,7 +106,7 @@ bool SMWindows::findWindowInfo(YFrameWindow *f) {
                     instance.equals(window->key.windowInstance))
                 {
                     MSG(("got c %s %s %s %d:%d:%d:%d %d %ld %d",
-                         cstring(cid).c_str(), cstring(klass).c_str(), cstring(instance).c_str(),
+                         cid.c_str(), klass.c_str(), instance.c_str(),
                          window->x, window->y, window->width, window->height,
                          window->workspace, window->state, window->layer));
                     f->configureClient(window->x, window->y,
@@ -127,11 +122,11 @@ bool SMWindows::findWindowInfo(YFrameWindow *f) {
     return false;
 }
 
-bool SMWindows::removeWindowInfo(YFrameWindow */*f*/) {
+bool SMWindows::removeWindowInfo(YFrameWindow *) {
     return false;
 }
 
-SMWindows *sminfo = 0;
+SMWindows *sminfo = nullptr;
 
 static int wr_str(FILE *f, const char *s) {
     if (!s)
@@ -203,10 +198,10 @@ void loadWindowInfo() {
 
     upath name = getsesfile();
     FILE *fp = name.fopen("r");
-    if (fp == NULL)
+    if (fp == nullptr)
         return ;
 
-    while (fgets(line, sizeof(line), fp) != 0) {
+    while (fgets(line, sizeof(line), fp) != nullptr) {
         if (line[0] == 'c') {
             if (sscanf(line, "c %s %s %s %d:%d:%d:%d %ld %lu %ld",
                        cid, klass, instance, &x, &y, &w, &h,
@@ -244,7 +239,7 @@ void loadWindowInfo() {
             int ws = 0;
 
             if (sscanf(line, "w %d", &ws) == 1) {
-                if (ws >= 0 && ws < manager->workspaceCount())
+                if (ws >= 0 && ws < workspaceCount)
                     manager->activateWorkspace(ws);
             }
         } else {
@@ -268,9 +263,9 @@ void YWMApp::smDie() {
 
 void YWMApp::smSaveYourselfPhase2() {
     upath name = getsesfile();
-    YFrameWindow *f = 0;
+    YFrameWindow *f = nullptr;
     FILE *fp = name.fopen("w+");
-    if (fp == NULL)
+    if (fp == nullptr)
         goto end;
 
     f = manager->topLayer();
@@ -282,21 +277,21 @@ void YWMApp::smSaveYourselfPhase2() {
         //msg("window=%s", f->client()->windowTitle());
         if (leader != None) {
             //msg("leader=%lX", leader);
-            ustring cid = f->client()->getClientId(leader);
+            mstring cid = f->client()->getClientId(leader);
 
             if (cid != null) {
                 f->client()->getWindowRole();
-                ustring role = f->client()->windowRole();
+                mstring role = f->client()->windowRole();
 
                 if (role != null) {
                     fprintf(fp, "r ");
                     //%s %s ", cid, role);
-                    wr_str(fp, cstring(cid).c_str());
-                    wr_str(fp, cstring(role).c_str());
+                    wr_str(fp, cid.c_str());
+                    wr_str(fp, role.c_str());
                 } else {
                     f->client()->getClassHint();
-                    char *klass = 0;
-                    char *instance = 0;
+                    char *klass = nullptr;
+                    char *instance = nullptr;
                     XClassHint *ch = f->client()->classHint();
                     if (ch) {
                         klass = ch->res_class;
@@ -307,9 +302,9 @@ void YWMApp::smSaveYourselfPhase2() {
                         //msg("k=%s, i=%s", klass, instance);
                         fprintf(fp, "c ");
                         //%s %s %s ", cid, klass, instance);
-                        wr_str(fp, cstring(cid).c_str());
-                        wr_str(fp, cstring(klass).c_str());
-                        wr_str(fp, cstring(instance).c_str());
+                        wr_str(fp, cid.c_str());
+                        wr_str(fp, klass);
+                        wr_str(fp, instance);
                     } else {
                         continue;
                     }

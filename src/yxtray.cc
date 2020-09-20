@@ -3,6 +3,8 @@
 #include "prefs.h"
 #include "wmoption.h"
 #include "ytimer.h"
+#include <X11/Xutil.h>
+#include <X11/Xproto.h>
 
 extern YColorName taskBarBg;
 
@@ -37,7 +39,7 @@ public:
 bool TrayMessage::append(const char* data, long size) {
     MSG(("TrayMessage::append"));
     if (offset < length) {
-        if (bytes == NULL) {
+        if (bytes == nullptr) {
             bytes = new char[1 + length];
         }
         long extra = min(length - offset, size);
@@ -49,25 +51,27 @@ bool TrayMessage::append(const char* data, long size) {
     return false;
 }
 
-bool windowDestroyed(Window win) {
+static bool windowDestroyed(Window win) {
     XWindowAttributes attr;
     return None == XGetWindowAttributes(xapp->display(), win, &attr);
 }
 
-int getOrder(cstring title) {
+static int getOrder(mstring title) {
     WindowOption opt(title);
-    if (defOptions)
-        defOptions->mergeWindowOption(opt, title, false);
     if (hintOptions)
         hintOptions->mergeWindowOption(opt, title, true);
+    if (defOptions)
+        defOptions->mergeWindowOption(opt, title, false);
     return opt.order;
 }
 
 struct DockRequest {
     Window window;
     lazy<YTimer> timer;
-    cstring title;
-    DockRequest(Window w, YTimer* t, cstring s): window(w), timer(t), title(s) {}
+    mstring title;
+    DockRequest(Window w, YTimer* t, mstring s):
+        window(w), timer(t), title(s)
+    { }
 };
 
 class YXTrayProxy: public YWindow, private YTimerListener {
@@ -77,18 +81,21 @@ public:
 
     virtual void handleClientMessage(const XClientMessageEvent &message);
 private:
-    YAtom _NET_SYSTEM_TRAY_OPCODE;
-    YAtom _NET_SYSTEM_TRAY_MESSAGE_DATA;
     YAtom _NET_SYSTEM_TRAY_S0;
-    YAtom _NET_WM_NAME;
     YXTray *fTray;
     lazy<YTimer> fUpdateTimer;
+    YObjectArray<DockRequest> fDockRequests;
     typedef YObjectArray<DockRequest>::IterType DockIter;
     mstring toolTip;
+    unsigned char error_code;
+    unsigned char request_code;
+    static YXTrayProxy* singleton;
 
-    void requestDock(Window win);
-    cstring fetchTitle(Window win);
+    bool requestDock(Window win);
     bool enableBackingStore(Window win);
+    void handleError(XErrorEvent *xerr);
+    mstring fetchTitle(Window win);
+    static int dockError(Display *disp, XErrorEvent *xerr);
 
     typedef YObjectArray<TrayMessage> MessageListType;
     typedef MessageListType::IterType IterType;
@@ -103,44 +110,39 @@ private:
         static const char s0[] = "_NET_SYSTEM_TRAY_S";
         return 0 == strncmp(_NET_SYSTEM_TRAY_S0.str(), s0, sizeof s0 - 1);
     }
+    bool trace() const {
+        return fTray->trace();
+    }
 
     virtual bool handleTimer(YTimer *timer);
     virtual void updateToolTip();
 };
+YXTrayProxy* YXTrayProxy::singleton;
 
 YXTrayProxy::YXTrayProxy(const YAtom& atom, YXTray *tray):
-    _NET_SYSTEM_TRAY_OPCODE("_NET_SYSTEM_TRAY_OPCODE"),
-    _NET_SYSTEM_TRAY_MESSAGE_DATA("_NET_SYSTEM_TRAY_MESSAGE_DATA"),
     _NET_SYSTEM_TRAY_S0(atom),
-    _NET_WM_NAME("_NET_WM_NAME"),
-    fTray(tray)
+    fTray(tray),
+    error_code(0),
+    request_code(0)
 {
+    singleton = this;
+    addStyle(wsNoExpose);
     setTitle("YXTrayProxy");
     if (isExternal()) {
         long orientation = SYSTEM_TRAY_ORIENTATION_HORZ;
-        XChangeProperty(xapp->display(), handle(),
-                        YAtom("_NET_SYSTEM_TRAY_ORIENTATION"),
-                        XA_CARDINAL, 32, PropModeReplace,
-                        (unsigned char *) &orientation, 1);
+        setProperty(_XA_NET_SYSTEM_TRAY_ORIENTATION, XA_CARDINAL, orientation);
 
-    /** Visual not needed as long as we always use the default.
         unsigned long visualid = xapp->visual()->visualid;
-        XChangeProperty(xapp->display(), handle(),
-                        YAtom("_NET_SYSTEM_TRAY_VISUAL"),
-                        XA_VISUALID, 32, PropModeReplace,
-                        (unsigned char *) &visualid, 1);
-    **/
+        setProperty(_XA_NET_SYSTEM_TRAY_VISUAL, XA_VISUALID, visualid);
     }
 
-    XSetSelectionOwner(xapp->display(),
-                       _NET_SYSTEM_TRAY_S0,
-                       handle(),
-                       CurrentTime);
+    XSetSelectionOwner(xapp->display(), _NET_SYSTEM_TRAY_S0,
+                       handle(), CurrentTime);
 
     XClientMessageEvent xev = {};
     xev.type = ClientMessage;
     xev.window = desktop->handle();
-    xev.message_type = YAtom("MANAGER");
+    xev.message_type = _XA_MANAGER;
     xev.format = 32;
     xev.data.l[0] = CurrentTime;
     xev.data.l[1] = _NET_SYSTEM_TRAY_S0;
@@ -152,22 +154,23 @@ YXTrayProxy::YXTrayProxy(const YAtom& atom, YXTray *tray):
 YXTrayProxy::~YXTrayProxy() {
     Window w = XGetSelectionOwner(xapp->display(), _NET_SYSTEM_TRAY_S0);
     if (w == handle()) {
-        XSetSelectionOwner(xapp->display(),
-                           _NET_SYSTEM_TRAY_S0,
-                           None,
-                           CurrentTime);
+        XSetSelectionOwner(xapp->display(), _NET_SYSTEM_TRAY_S0,
+                           None, CurrentTime);
     }
 }
 
 void YXTrayProxy::beginMessage(Window win, long msec, long size, long ident) {
-    MSG(("YXTrayProxy::beginMessage"));
+    if (trace())
+        tlog("systray begin message 0x%08lx: ms=%ld, sz=%ld, id=%ld",
+                win, msec, size, ident);
     if (messages.getCount() < MaxTrayNumMessages) {
         messages.append(new TrayMessage(win, msec, size, ident));
     }
 }
 
 void YXTrayProxy::cancelMessage(Window win, long ident) {
-    MSG(("YXTrayProxy::cancelMessage"));
+    if (trace())
+        tlog("systray cancel message 0x%08lx: id=%ld", win, ident);
     bool change = false;
     for (IterType iter = messages.reverseIterator(); ++iter; ) {
         if (iter->window == win && iter->ident == ident) {
@@ -180,7 +183,8 @@ void YXTrayProxy::cancelMessage(Window win, long ident) {
 }
 
 void YXTrayProxy::messageData(Window win, const char* bytes, long len) {
-    MSG(("YXTrayProxy::messageData"));
+    if (trace())
+        tlog("systray message data 0x%08lx: len=%ld", win, len);
     bool change = false;
     for (IterType iter = messages.reverseIterator(); ++iter; ) {
         if (iter->window == win) {
@@ -204,7 +208,7 @@ void YXTrayProxy::expireMessages() {
 void YXTrayProxy::updateToolTip() {
     MSG(("YXTrayProxy::updateToolTip"));
     long size = 0;
-    if (messages.getCount() > 0) {
+    if (messages.nonempty()) {
         expireMessages();
         for (IterType iter = messages.iterator(); ++iter; ) {
             if (iter->offset > 0) {
@@ -261,6 +265,13 @@ bool YXTrayProxy::handleTimer(YTimer *timer) {
         return false;
     }
 
+    DockIter dock = fDockRequests.iterator();
+    while (++dock && timer != dock->timer);
+    if (dock) {
+        fTray->trayRequestDock(dock->window, dock->title);
+        dock.remove();
+    }
+
     return false;
 }
 
@@ -275,13 +286,13 @@ bool YXTrayProxy::enableBackingStore(Window win) {
     return okay;
 }
 
-void YXTrayProxy::requestDock(Window win) {
-    cstring title(fetchTitle(win));
+bool YXTrayProxy::requestDock(Window win) {
+    mstring title(fetchTitle(win));
     MSG(("systemTrayRequestDock 0x%lX, title \"%s\"", win, title.c_str()));
 
-    if (title == null && windowDestroyed(win)) {
+    if (title == null && (error_code == BadWindow || windowDestroyed(win))) {
         MSG(("Ignoring tray request for unknown window 0x%08lX", win));
-        return;
+        return false;
     }
 
     /*
@@ -290,171 +301,266 @@ void YXTrayProxy::requestDock(Window win) {
      */
     if (enableBackingStore(win) == false) {
         MSG(("Cannot get attributes for dock window 0x%08lX", win));
-        return;
+        return false;
     }
 
-    fTray->trayRequestDock(win, title);
+    if (title == "Pidgin") {
+        long delay = 200L + 25L * fDockRequests.getCount();
+        YTimer* tm = new YTimer(delay, this, true, true);
+        fDockRequests.append(new DockRequest(win, tm, title));
+        return true;
+    }
+
+    return fTray->trayRequestDock(win, title);
 }
 
-cstring YXTrayProxy::fetchTitle(Window win) {
+mstring YXTrayProxy::fetchTitle(Window win) {
+    mstring title;
     xsmart<char> name;
-    if (XFetchName(xapp->display(), win, &name) && name && name[0]) {
-    } else {
-        XTextProperty text = {};
-        if (XGetTextProperty(xapp->display(), win, &text, _NET_WM_NAME))
-            name = (char *) text.value;
+    error_code = request_code = 0;
+    if (XFetchName(xapp->display(), win, &name)) {
+        title = (char *) name;
     }
-    return name && name[0] ? cstring(name) : null;
+    else if (error_code == BadWindow) {
+        return null;
+    }
+    if (title.isEmpty()) {
+        XTextProperty text = {};
+        if (XGetTextProperty(xapp->display(), win, &text, _XA_NET_WM_NAME)) {
+            title = reinterpret_cast<char *>(text.value);
+            XFree(text.value);
+        }
+        else if (error_code == BadWindow) {
+            return null;
+        }
+    }
+    if (title.isEmpty()) {
+        XClassHint hint;
+        if (XGetClassHint(xapp->display(), win, &hint)) {
+            title = hint.res_name;
+            XFree(hint.res_name);
+            XFree(hint.res_class);
+        }
+        else if (error_code == BadWindow) {
+            return null;
+        }
+    }
+    return title;
+}
+
+void YXTrayProxy::handleError(XErrorEvent* e) {
+    request_code = e->request_code;
+    error_code = e->error_code;
+
+    if (trace()) {
+        Display* display = xapp->display();
+        char message[80], req[80], number[80];
+
+        snprintf(number, 80, "%d", e->request_code);
+        XGetErrorDatabaseText(display, "XRequest",
+                              number, "",
+                              req, sizeof(req));
+        if (req[0] == 0)
+            snprintf(req, 80, "[request_code=%d]", e->request_code);
+
+        if (XGetErrorText(display, e->error_code, message, 80) != Success)
+            *message = '\0';
+
+        tlog("systray %s(0x%08lx): %s", req, e->resourceid, message);
+    }
+}
+
+int YXTrayProxy::dockError(Display *disp, XErrorEvent* e) {
+    if (singleton) {
+        singleton->handleError(e);
+    }
+    // Ignore bad dock attempts.
+    return Success;
 }
 
 void YXTrayProxy::handleClientMessage(const XClientMessageEvent &message) {
     const Window window = message.window;
     unsigned long type = message.message_type;
-    const long opcode = message.data.l[1];
 
-    if (type == _NET_SYSTEM_TRAY_OPCODE) {
+    if (type == _XA_NET_SYSTEM_TRAY_OPCODE) {
+        const long opcode = message.data.l[1];
         if (opcode == SYSTEM_TRAY_REQUEST_DOCK) {
-            const Window window = message.data.l[2];
-            requestDock(window);
+            const Window dock = message.data.l[2];
+            XErrorHandler old = XSetErrorHandler(dockError);
+            error_code = request_code = 0;
+            requestDock(dock);
+            XSetErrorHandler(old);
         }
         else if (opcode == SYSTEM_TRAY_BEGIN_MESSAGE) {
             const long milli = message.data.l[2];
             const long bytes = message.data.l[3];
             const long ident = message.data.l[4];
-            MSG(("systemTrayBeginMessage win=%lX, mil=%ld, len=%ld, id=%ld",
-                  window, milli, bytes, ident));
             beginMessage(window, milli, bytes, ident);
         }
         else if (opcode == SYSTEM_TRAY_CANCEL_MESSAGE) {
             const long ident = message.data.l[2];
-            MSG(("systemTrayCancelMessage win=%lX, id=%ld", window, ident));
             cancelMessage(window, ident);
         }
-        else {
-            MSG(("systemTray???Message %ld ignored", opcode));
+        else if (trace()) {
+            tlog("systray ignoring unknown opcode %ld from 0x%08lx",
+                 opcode, window);
         }
     }
-    else if (type == _NET_SYSTEM_TRAY_MESSAGE_DATA) {
-        MSG(("systemTrayMessageData"));
+    else if (type == _XA_NET_SYSTEM_TRAY_MESSAGE_DATA) {
         const long length = long(sizeof message.data.b);
         messageData(window, message.data.b, length);
     }
-    else {
-        MSG(("YXTrayProxy::handleClientMessage type %lu ignored", type));
+    else if (trace()) {
+        tlog("systray unknown client message type %ld from 0x%08lx",
+             type, window);
     }
 }
 
-YXTrayEmbedder::YXTrayEmbedder(YXTray *tray, Window win, Window ldr, cstring title):
+YXTrayEmbedder::YXTrayEmbedder(YXTray *tray, Window win, Window ldr, mstring title):
     YWindow(tray),
     fVisible(false),
     fTray(tray),
     fClient(new YXEmbedClient(this, this, win)),
     fLeader(Elvis(ldr, win)),
     fTitle(title),
-    fRepaint(fTitle == "XXkb"), // issue #235
+    fDamage(None),
+    fComposing(xapp->alpha() && composite.supported &&
+               xapp->format() && damage.supported),
     fOrder(getOrder(fTitle))
 {
     if (fClient->destroyed())
         return;
 
+    setStyle(wsManager | wsNoExpose);
     setParentRelative();
-    setStyle(wsManager);
     setTitle("YXTrayEmbedder");
 
     fClient->setBorderWidth(0);
     XAddToSaveSet(xapp->display(), win);
     fClient->reparent(this, 0, 0);
 
-    YAtom _XEMBED("_XEMBED");
-    XClientMessageEvent xev = {};
+    if (composing()) {
+        fDamage = XDamageCreate(xapp->display(), win, XDamageReportNonEmpty);
+        XCompositeRedirectWindow(xapp->display(), win, CompositeRedirectManual);
+    }
 
-    long info[2] = { XEMBED_PROTOCOL_VERSION, XEMBED_MAPPED };
+    if (xapp->alpha() == false)
+        fClient->setParentRelative();
+}
 
-    XChangeProperty(xapp->display(), win,
-            YAtom("_XEMBED_INFO"),
-            XA_CARDINAL, 32, PropModeReplace,
-            (unsigned char *) &info, 2);
-
-    xev.type = ClientMessage;
-    xev.window = win;
-    xev.message_type = _XEMBED;
-    xev.format = 32;
-    xev.data.l[0] = CurrentTime;
-    xev.data.l[1] = XEMBED_EMBEDDED_NOTIFY;
-    xev.data.l[2] = 0; // no detail
-    xev.data.l[3] = handle();
-    xev.data.l[4] = XEMBED_PROTOCOL_VERSION;
-    xapp->send(xev, win, NoEventMask);
-
-    xev.type = ClientMessage;
-    xev.window = win;
-    xev.message_type = _XEMBED;
-    xev.format = 32;
-    xev.data.l[0] = CurrentTime;
-    xev.data.l[1] = XEMBED_WINDOW_ACTIVATE;
-    xev.data.l[2] = 0; // no detail
-    xev.data.l[3] = 0; // no data1
-    xev.data.l[4] = 0; // no data2
-    xapp->send(xev, win, NoEventMask);
-
-    fClient->setParentRelative();
-    fVisible = true;
-    fClient->show();
+void YXTrayEmbedder::realise() {
+    client()->show();
+    client()->infoMapped();
+    client()->sendNotify();
+    client()->sendActivate();
 }
 
 YXTrayEmbedder::~YXTrayEmbedder() {
     if (false == fClient->destroyed()) {
+        if (fDamage) {
+            XDamageDestroy(xapp->display(), fDamage);
+            fDamage = None;
+        }
         fClient->hide();
         fClient->reparent(desktop, 0, 0);
     }
     delete fClient;
 }
 
+bool YXTrayEmbedder::trace() const {
+    return fTray->trace();
+}
+
+void YXTrayEmbedder::damagedClient() {
+    if (trace())
+        tlog("systray damage repaint 0x%08lx", fClient->handle());
+    repaint();
+}
+
 void YXTrayEmbedder::detach() {
     if (false == fClient->destroyed()) {
+        if (fDamage) {
+            XDamageDestroy(xapp->display(), fDamage);
+            fDamage = None;
+        }
         XAddToSaveSet(xapp->display(), fClient->handle());
         fClient->reparent(desktop, 0, 0);
         fClient->hide();
         XRemoveFromSaveSet(xapp->display(), fClient->handle());
+        if (trace())
+            tlog("systray detached dock window 0x%08lx", fClient->handle());
     }
 }
 
 bool YXTrayEmbedder::destroyedClient(Window win) {
+    fDamage = None;
     return fTray->destroyedClient(win);
 }
 
 void YXTrayEmbedder::handleClientUnmap(Window win) {
-    fTray->showClient(win, false);
+    if (trace())
+        tlog("systray client unmaps  0x%08lx when %s",
+                win, fVisible ? "visible" : "unmapped");
+    if (fVisible)
+        fTray->showClient(win, false);
+    else if (client()->testDestroyed())
+        fTray->destroyedClient(client_handle());
 }
 
 void YXTrayEmbedder::handleClientMap(Window win) {
+    if (trace())
+        tlog("systray client map window 0x%08lx", win);
     fClient->show();
     fTray->showClient(win, true);
 }
 
 void YXTrayEmbedder::paint(Graphics &g, const YRect& r) {
-    if (fRepaint) {
-        extern ref<YPixmap> taskbackPixmap;
-        if (taskbackPixmap != null) {
-            g.fillPixmap(taskbackPixmap,
-                         r.x(), r.y(), r.width(), r.height(),
-                         x() + r.x(), y() + r.y());
+    extern ref<YPixmap> taskbackPixmap;
+    if (taskbackPixmap != null) {
+        g.fillPixmap(taskbackPixmap,
+                     r.x(), r.y(), r.width(), r.height(),
+                     x() + r.x(), y() + r.y() + parent()->y());
+    }
+    else {
+        g.setColor(taskBarBg);
+        g.fillRect(r.x(), r.y(), r.width(), r.height());
+    }
+
+    if (composing()) {
+        XDamageSubtract(xapp->display(), fDamage, None, None);
+        Picture source = fClient->createPicture();
+        Picture target = g.picture();
+        if (source && target) {
+            XRenderComposite(xapp->display(), PictOpOver,
+                             source, None, target,
+                             0, 0, 0, 0, 0, 0,
+                             width(), height());
         }
-        else {
-            g.setColor(taskBarBg);
-            g.fillRect(r.x(), r.y(), r.width(), r.height());
-        }
+        if (source)
+            XRenderFreePicture(xapp->display(), source);
     }
 }
 
-void YXTrayEmbedder::configure(const YRect &r) {
-    YWindow::configure(r);
-    fClient->setGeometry(YRect(0, 0, r.width(), r.height()));
+void YXTrayEmbedder::configure(const YRect2 &r) {
+    if (r.resized()) {
+        repaint();
+        fClient->setGeometry(YRect(0, 0, r.width(), r.height()));
+    }
+}
+
+void YXTrayEmbedder::repaint() {
+    GraphicsBuffer(this).paint();
 }
 
 void YXTrayEmbedder::handleConfigureRequest(const XConfigureRequestEvent &configureRequest)
 {
     fTray->handleConfigureRequest(configureRequest);
+}
+
+void YXTrayEmbedder::handleClientMessage(const XClientMessageEvent& message)
+{
+    if (trace())
+        logClientMessage(message);
 }
 
 void YXTrayEmbedder::handleMapRequest(const XMapRequestEvent &mapRequest) {
@@ -468,14 +574,15 @@ YXTray::YXTray(YXTrayNotifier *notifier,
                YWindow *aParent,
                bool drawBevel):
     YWindow(aParent),
-    fTrayProxy(0),
+    fTrayProxy(nullptr),
     fNotifier(notifier),
-    NET_TRAY_WINDOWS("_KDE_NET_SYSTEM_TRAY_WINDOWS"),
-    WM_CLIENT_LEADER("WM_CLIENT_LEADER"),
     fLocked(false),
     fRunProxy(internal == false),
+    fTrace(YTrace::traces("systray")),
     fDrawBevel(drawBevel)
 {
+    DBG { fTrace = true; }
+    addStyle(wsNoExpose);
     setTitle("YXTray");
     setParentRelative();
     fTrayProxy = new YXTrayProxy(atom, this);
@@ -483,7 +590,7 @@ YXTray::YXTray(YXTrayNotifier *notifier,
 }
 
 YXTray::~YXTray() {
-    delete fTrayProxy; fTrayProxy = 0;
+    delete fTrayProxy; fTrayProxy = nullptr;
 }
 
 void YXTray::getScaleSize(unsigned& w, unsigned& h)
@@ -505,37 +612,25 @@ void YXTray::getScaleSize(unsigned& w, unsigned& h)
 }
 
 Window YXTray::getLeader(Window win) {
-    Atom type = None;
-    int format = None;
-    const long justOne = 1L;
-    unsigned long count = 0;
-    unsigned long extra = 0;
-    xsmart<Window> data;
-    Window leader = None;
-    int status =
-        XGetWindowProperty(xapp->display(), win,
-                           WM_CLIENT_LEADER, 0L, justOne,
-                           False, XA_WINDOW,
-                           &type, &format, &count, &extra,
-                           (unsigned char **) &data);
-    if (status == Success && data != 0 && format == 32 && count == justOne) {
-        leader = data[0];
-    }
-    return leader;
+    YProperty prop(win, _XA_WM_CLIENT_LEADER, F32, 1L, XA_WINDOW);
+    return prop ? *prop : None;
 }
 
-void YXTray::trayRequestDock(Window win, cstring title) {
-    MSG(("trayRequestDock win 0x%lX, title \"%s\"", win, title.c_str()));
+bool YXTray::trayRequestDock(Window win, mstring title) {
+    if (trace())
+        tlog("systray dock requested 0x%08lx \"%s\"", win, title.c_str());
 
     if (destroyedClient(win)) {
-        MSG(("Ignoring tray request for destroyed window 0x%08lX", win));
-        return;
+        if (trace())
+            tlog("systray ignoring destroyed window 0x%08lx", win);
+        return false;
     }
 
     Window leader = getLeader(win);
     if (leader == None && windowDestroyed(win)) {
-        MSG(("Ignoring tray request for failing window 0x%08lX", win));
-        return;
+        if (trace())
+            tlog("systray ignoring destroyed window 0x%08lx", win);
+        return false;
     }
 
     YXTrayEmbedder *embed = new YXTrayEmbedder(this, win, leader, title);
@@ -543,7 +638,8 @@ void YXTray::trayRequestDock(Window win, cstring title) {
     unsigned ww = embed->client()->width();
     unsigned hh = embed->client()->height();
 
-    MSG(("docking window size %d %d", ww, hh));
+    if (trace())
+        tlog("systray docking window 0x%08lx size %d %d", win, ww, hh);
 
     /* Workaround for GTK-Apps */
     if (ww == 0 && hh == 0)
@@ -565,40 +661,47 @@ void YXTray::trayRequestDock(Window win, cstring title) {
              inrange(find(fRegained, iter->leader()), 0, found - 1))));
 
     iter.insert(embed);
+    embed->realise();
     updateTrayWindows();
+
+    if (trace())
+        tlog("systray docked window  0x%08lx at %d", win, iter.where());
 
     unsigned w = max(width(), 2U * fDrawBevel) + ww;
     unsigned h = max(height(), hh + fDrawBevel);
     trayUpdateGeometry(w, h, true);
     relayout(true);
+    return true;
 }
 
 bool YXTray::destroyedClient(Window win) {
-    MSG(("undock N=%d, win=%lX", fDocked.getCount(), win));
     bool change = false;
     for (IterType ec = fDocked.reverseIterator(); ++ec; ) {
-        MSG(("win %lX, %d handle %lX", win, ec.where(), ec->handle()));
         if (ec->client_handle() == win) {
-            MSG(("removing i=%d, win=%lX", ec.where(), win));
             ec.remove();
-            updateTrayWindows();
+            if (trace())
+                tlog("systray removed window 0x%08lx from %d",
+                     win, ec.where());
             change = true;
         }
     }
-    if (change)
+    if (change) {
+        updateTrayWindows();
         relayout(true);
+    }
     return change;
 }
 
-void YXTray::handleConfigureRequest(const XConfigureRequestEvent &configureRequest)
+void YXTray::handleConfigureRequest(const XConfigureRequestEvent &request)
 {
-    MSG(("tray configureRequest w=%d h=%d\n",
-        configureRequest.width, configureRequest.height));
+    if (trace())
+        tlog("systrace configure req 0x%08lx to w=%d h=%d",
+            request.window, request.width, request.height);
     bool changed = false;
     for (IterType ec = fDocked.iterator(); ++ec; ) {
-        if (ec->client_handle() == configureRequest.window) {
-            unsigned ww = configureRequest.width;
-            unsigned hh = configureRequest.height;
+        if (ec->client_handle() == request.window) {
+            unsigned ww = request.width;
+            unsigned hh = request.height;
             if (fRunProxy) {
                 /* scale icons */
                 getScaleSize(ww, hh);
@@ -628,12 +731,8 @@ void YXTray::showClient(Window win, bool showClient) {
 }
 
 void YXTray::detachTray() {
-    for (IterType ec = fDocked.reverseIterator(); ++ec; ) {
-        ec->detach();
-    }
     fDocked.clear();
 }
-
 
 void YXTray::paint(Graphics &g, const YRect &/*r*/) {
     if (!fDrawBevel)
@@ -643,11 +742,19 @@ void YXTray::paint(Graphics &g, const YRect &/*r*/) {
         g.draw3DRect(0, 0, width() - 1, height() - 1, false);
 }
 
-void YXTray::configure(const YRect& rect) {
+void YXTray::configure(const YRect2& rect) {
     bool enforce = (fGeometry != rect);
     fGeometry = rect;
-    YWindow::configure(rect);
-    relayout(enforce);
+    if (rect.resized() || enforce) {
+        repaint();
+        relayout(true);
+    } else {
+        relayout(false);
+    }
+}
+
+void YXTray::repaint() {
+    GraphicsBuffer(this).paint();
 }
 
 void YXTray::backgroundChanged() {
@@ -674,6 +781,8 @@ void YXTray::relayout(bool enforced) {
 
     for (IterType ec = fDocked.reverseIterator(); ++ec; ) {
         if (ec->client()->destroyed()) {
+            if (trace())
+                tlog("systray destroyed %08lx", ec->client_handle());
             ec.remove();
             updateTrayWindows();
             enforced = true;
@@ -698,7 +807,8 @@ void YXTray::relayout(bool enforced) {
             countVisible++;
         }
         else {
-            MSG(("relayout sanity remove %lX", ec->client_handle()));
+            if (trace())
+                tlog("systray sanity remove %08lx", ec->client_handle());
             ec.remove();
             updateTrayWindows();
             --ec;
@@ -742,29 +852,6 @@ void YXTray::trayUpdateGeometry(unsigned w, unsigned h, bool visible) {
     }
 }
 
-bool YXTray::kdeRequestDock(Window win) {
-    if (fDocked.getCount() == 0)
-        return false;
-    puts("trying to dock");
-    YAtom _NET_SYSTEM_TRAY_S0("_NET_SYSTEM_TRAY_S", true);
-    YAtom opcode("_NET_SYSTEM_TRAY_OPCODE");
-    Window w = XGetSelectionOwner(xapp->display(), _NET_SYSTEM_TRAY_S0);
-
-    if (w && w != handle()) {
-        XClientMessageEvent xev = {};
-        xev.type = ClientMessage;
-        xev.window = w;
-        xev.message_type = opcode; //_NET_SYSTEM_TRAY_OPCODE;
-        xev.format = 32;
-        xev.data.l[0] = CurrentTime;
-        xev.data.l[1] = SYSTEM_TRAY_REQUEST_DOCK;
-        xev.data.l[2] = win; //fTray2->handle();
-        xapp->send(xev, w, StructureNotifyMask);
-        return true;
-    }
-    return false;
-}
-
 void YXTray::updateTrayWindows() {
     const int count = fDocked.getCount();
     Window windows[count];
@@ -772,32 +859,16 @@ void YXTray::updateTrayWindows() {
     for (IterType ec = fDocked.iterator(); ++ec; )
         windows[ec.where()] = ec->leader();
 
-    XChangeProperty(xapp->display(), xapp->root(),
-                    NET_TRAY_WINDOWS,
-                    XA_WINDOW, 32, PropModeReplace,
-                    (unsigned char *) windows, count);
+    desktop->setProperty(_XA_KDE_NET_SYSTEM_TRAY_WINDOWS, XA_WINDOW,
+                         windows, count);
 }
 
 void YXTray::regainTrayWindows() {
-    const bool destroy = true;
-    Atom type = None;
-    int format = None;
-    const long limit = 123L;
-    unsigned long count = 0;
-    unsigned long extra = 0;
-    xsmart<Window> data;
-    int status =
-        XGetWindowProperty(xapp->display(), xapp->root(),
-                           NET_TRAY_WINDOWS,
-                           0L, limit, destroy, XA_WINDOW,
-                           &type, &format, &count, &extra,
-                           (unsigned char **) &data);
-
+    YProperty prop(desktop, _XA_KDE_NET_SYSTEM_TRAY_WINDOWS,
+                   F32, 123L, XA_WINDOW, True);
     fRegained.clear();
-    if (status == Success && data != 0 && type == XA_WINDOW && format == 32) {
-        for (int i = 0; i < int(count); ++i) {
-            fRegained.append(data[i]);
-        }
+    for (int i = 0; i < int(prop.size()); ++i) {
+        fRegained.append(prop[i]);
     }
 }
 

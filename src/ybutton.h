@@ -9,13 +9,14 @@ class YIcon;
 
 class YButton: public YWindow {
 public:
-    YButton(YWindow *parent, YAction action, YMenu *popup = 0);
+    YButton(YWindow *parent, YAction action, YMenu *popup = nullptr);
     virtual ~YButton();
 
     virtual void paint(Graphics &g, const YRect &r);
     virtual void paintFocus(Graphics &g, const YRect &r);
     virtual bool handleKey(const XKeyEvent &key);
     virtual void handleButton(const XButtonEvent &button);
+    virtual void handleClick(const XButtonEvent &button, int count);
     virtual void handleCrossing(const XCrossingEvent &crossing);
 
     YAction getAction() const { return fAction; }
@@ -23,7 +24,11 @@ public:
     void setPopup(YMenu * popup);
     void setIcon(ref<YIcon> image, int size);
     void setImage(ref<YImage> image);
-    void setText(const ustring &str, int hot = -1);
+    void setText(const mstring &str, int hot = -1);
+    mstring getText() const { return fText; }
+    bool hasImage() const { return fImage != null; }
+    bool hasText() const { return fText.nonempty(); }
+    bool hasPopup() const { return fPopup; }
 
     void setPressed(int pressed);
     virtual bool isFocusTraversable();
@@ -31,7 +36,7 @@ public:
     void updateSize();
     virtual void donePopup(YPopupWindow *popup);
 
-    void popupMenu();
+    virtual void popupMenu();
     virtual void updatePopup();
 
     void setActionListener(YActionListener *listener) { fListener = listener; }
@@ -48,8 +53,11 @@ public:
 
     virtual void actionPerformed(YAction action, unsigned int modifiers);
     virtual ref<YFont> getFont();
+    virtual ref<YFont> getActiveFont();
+    virtual ref<YFont> getNormalFont();
     virtual YColor   getColor();
     virtual YSurface getSurface();
+    virtual YDimension getTextSize();
 
     void setEnabled(bool enabled);
 
@@ -64,7 +72,7 @@ private:
     ref<YIcon> fIcon;
     int fIconSize;
     ref<YImage> fImage;
-    ustring fText;
+    mstring fText;
     int fPressed;
     bool fEnabled;
     int fHotCharPos;
@@ -90,6 +98,7 @@ protected:
 private:
     static ref<YFont> normalButtonFont;
     static ref<YFont> activeButtonFont;
+    static int buttonObjectCount;
 };
 
 #endif

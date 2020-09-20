@@ -1,16 +1,18 @@
 = IceWM Manual
 :!webfonts:
-Marko Macek <Marko.Macek@gmx.net>
-v1.4.2, 2017 November 18
+:author: Marko Macek
+:revdate: 2017 November 18
+:revnumber: 1.4.2
 :homepage: https://ice-wm.org/
 :toc:
 :toclevels: 2
 
-[#introduction]
+[[introduction]]
 == Introduction
 
 This document is the manual for the *IceWM* X11 window manager.
-The IceWM manpages provide additional documentation.
+The https://ice-wm.org/man[IceWM manpages] provide additional
+documentation.
 
 The goal of IceWM is to provide a small, fast and familiar window
 manager for the X11 window system, which is compatible with the
@@ -30,44 +32,43 @@ development],
 which includes the https://github.com/bbidulock/icewm/issues/[support
 requests].
 
-[#copying]
+[[copying]]
 == Copying
 
 IceWM and its documentation are covered by a GNU LGPL license,
 which is included in the distribution.
 
-[#first-steps]
+[[first-steps]]
 == First steps
 
-[#icewm-components]
+[[icewm-components]]
 === IceWM components
 
 The IceWM suite consists of the following core applications provided
 by the main package:
 
-* *https://ice-wm.org/man/icewm.html[icewm]* - The actual window
-manager binary. It handles window placement and draws the window
-decorations.
-* *https://ice-wm.org/man/icewmbg.html[icewmbg]* - The background
-setting application. It can assign plain background color or images in
+* *https://ice-wm.org/man/icewm[icewm]* - The actual window manager
+binary. It handles window placement and draws the window decorations.
+* *https://ice-wm.org/man/icewmbg[icewmbg]* - The background setting
+application. It can assign plain background color or images in
 different formats to the X background. Either shared or separate for
 different workspaces. This program should be started before `icewm`.
-* *https://ice-wm.org/man/icewm-session.html[icewm-session]* - The
-IceWM session manager runs all of the above. This is the preferred
-program to start IceWM.
-* *https://ice-wm.org/man/icewm-menu-fdo.html[icewm-menu-fdo]* -
-This generates IceWM program menus from FreeDesktop `.desktop` files.
-* *https://ice-wm.org/man/icewmhint.html[icewmhint]* - Is a simple
+* *https://ice-wm.org/man/icewm-session[icewm-session]* - The IceWM
+session manager runs all of the above. This is the preferred program
+to start IceWM.
+* *https://ice-wm.org/man/icewm-menu-fdo[icewm-menu-fdo]* - This
+generates IceWM program menus from FreeDesktop `.desktop` files.
+* *https://ice-wm.org/man/icewmhint[icewmhint]* - Is a simple
 utility for passing IceWM hints to IceWM by window class and
 instance. Icewmhint uses a special property, '"_ICEWM_WINOPHINT"',
 on the root window to pass special hints to IceWM.
-* *https://ice-wm.org/man/icehelp.html[icehelp]* - Is used by icewm
+* *https://ice-wm.org/man/icehelp[icehelp]* - Is used by icewm
 to display the 'IceWM manual' and the manpages. See the output of
 `icehelp --help` for details.
-* *https://ice-wm.org/man/icesh.html[icesh]* - Could be used to manage
+* *https://ice-wm.org/man/icesh[icesh]* - Could be used to manage
 IceWM internals from the command line.
 
-[#starting-icewm]
+[[starting-icewm]]
 === Starting icewm
 
 The `icewm` program alone is suitable for use with desktop environments
@@ -86,7 +87,7 @@ distribution and make sure that there is no concurrency between the
 X startup scripts. Ensure that the script is executable. Mine looks
 something like this:
 
-....
+----
 #!/bin/bash
 # run profile to set $PATH and other env vars correctly
 . $HOME/.bash_profile
@@ -97,14 +98,14 @@ xinput set-ptr-feedback 0 7 1.9 1
 # start icewm-session
 exec icewm-session
 xterm
-....
+----
 
 The xterm on the last line is there simply to make sure that your X
 session doesn't crash if IceWM does (should never happen). You can
 restart IceWM from there or start some other window manager. The
 session will close if you close the xterm.
 
-[#startup-and-shutdown-scripts]
+[[startup-and-shutdown-scripts]]
 === Startup and shutdown scripts
 
 After initialization `icewm-session` will search the resource
@@ -114,14 +115,14 @@ executable `icewm-session` will run this script. During termination of
 
 Example `~/.icewm/startup` script:
 
-....
+----
 #!/bin/bash
 
 [ -x ~/.icewm/restart ] && source ~/.icewm/restart
 
 gnome-terminal --geometry 80x25+217+235 &
 xscreensaver &
-....
+----
 
 On termination the `shutdown` script will be run first, then
 `icewm-session` will terminate icewm and icewmbg.
@@ -131,7 +132,7 @@ is part of IceWM due to popular demand. For more sophisticated session
 management one could use a real session manager. IceWM supports the
 XSESSION protocol.
 
-[#extra-session-environment]
+[[extra-session-environment]]
 === Extra session environment
 
 Please note that if icewm-session is used as the only startup mechanism
@@ -147,7 +148,7 @@ Example `env`:
  PATH=~/bin:$PATH
  LANG=de_DE.UTF-8
 
-[#focus-models]
+[[focus-models]]
 == Focus models
 
 IceWM implements four general focus models:
@@ -178,10 +179,10 @@ for the active window.
 Detailed configuration is possible using the configuration file
 options.
 
-[#mouse-commands]
+[[mouse-commands]]
 == Mouse Commands
 
-[#frame-commands]
+[[frame-commands]]
 === Frame Commands
 
 * *Left Button*
@@ -193,7 +194,7 @@ Select and raise the window. On the window frame, resize the window.
 When dragged, moves the window. When clicked, displays the context
 menu.
 
-[#title-bar-commands]
+[[title-bar-commands]]
 === Title Bar Commands
 
 * *Any Button Drag*
@@ -215,7 +216,7 @@ Rollup/Unroll the window.
 The Ctrl key can be used together with a mouse button to prevent a
 window from being raised to the top of the stack.
 
-[#taskbar-commands]
+[[taskbar-commands]]
 === Taskbar commands
 
 * *Left Button Click*
@@ -248,7 +249,7 @@ Lower the window.
 +
 Display a context menu.
 
-[#keyboard-commands]
+[[keyboard-commands]]
 == Keyboard Commands
 
 The Alt key is assumed to be the key defined as the Mod1 modifier.
@@ -384,7 +385,15 @@ which is navigable by the Up and Down keys. A rich set of editing
 operations is supported, including cut-/copy-/paste-operations and
 file completion using *Tab* or *Ctrl-I*.
 
-[#the-resource-path]
+* `Ctrl+Alt+d`
++
+Show the desktop.
+
+* `Ctrl+Alt+h`
++
+Toggle taskbar visibility.
+
+[[the-resource-path]]
 == The Resource Path
 
 IceWM looks in several locations for configuration information,
@@ -416,60 +425,60 @@ directory and copy all the theme files there and then modify as
 necessary. Each theme has its own subdirectory. Themes can be
 downloaded from https://themes.ice-wm.org.
 
-[#configuration-files]
+[[configuration-files]]
 == Configuration Files
 
 IceWM uses the following configuration files:
 
-* *https://ice-wm.org/man/icewm-theme.html[theme]*
+* *https://ice-wm.org/man/icewm-theme[theme]*
 +
 Currently selected theme
 
-* *https://ice-wm.org/man/icewm-preferences.html[preferences]*
+* *https://ice-wm.org/man/icewm-preferences[preferences]*
 +
 General settings - paths, colors, fonts...
 
-* *https://ice-wm.org/man/icewm-prefoverride.html[prefoverride]*
+* *https://ice-wm.org/man/icewm-prefoverride[prefoverride]*
 +
 Settings that should override the themes.
 
-* *https://ice-wm.org/man/icewm-menu.html[menu]*
+* *https://ice-wm.org/man/icewm-menu[menu]*
 +
 Menu of startable applications. Usually customized by the user.
 
-* *https://ice-wm.org/man/icewm-programs.html[programs]*
+* *https://ice-wm.org/man/icewm-programs[programs]*
 +
 Automatically generated menu of startable applications (this should
 be used for *wmconfig*, *menu* or similar packages, perhaps as a part
 of the login or X startup sequence).
 
-* *https://ice-wm.org/man/icewm-winoptions.html[winoptions]*
+* *https://ice-wm.org/man/icewm-winoptions[winoptions]*
 +
 Application window options
 
-* *https://ice-wm.org/man/icewm-keys.html[keys]*
+* *https://ice-wm.org/man/icewm-keys[keys]*
 +
 Global keybindings to launch applications (not window manager related)
 
-* *https://ice-wm.org/man/icewm-toolbar.html[toolbar]*
+* *https://ice-wm.org/man/icewm-toolbar[toolbar]*
 +
 Quick launch application icons on the taskbar.
 
-[#theme]
+[[theme]]
 == Theme
 
 The `theme` file contains the currently selected theme. It will be
 overwritten automatically when a theme is selected from the Themes
 menu.
 
-[#preferences]
+[[preferences]]
 == Preferences
 
 This section shows preferences that can be set in `preferences`. Themes
 will not be able to override these settings. Default values are shown
 following the equal sign.
 
-[#focus-and-behavior]
+[[focus-and-behavior]]
 === Focus and Behavior
 
 The following settings can be set to value 1 (enabled) or value 0
@@ -522,8 +531,8 @@ Windows will raise automatically after AutoRaiseDelay when focused.
 * `StrongPointerFocus = 0`
 +
 When focus follows mouse always give the focus to the window under
-mouse pointer - Even when no mouse motion has occured. Using this is
-not recommended. Please prefer to use just ClickToFocus=0.
+mouse pointer - Even when no mouse motion has occurred. Using this
+is not recommended. Please prefer to use just ClickToFocus=0.
 
 * `FocusOnMap = 1`
 +
@@ -660,9 +669,9 @@ Similar to delayed auto raise.
 
 * `Win95Keys = 0`
 +
-Makes 3 additional keys perform sensible functions. The keys must be
-mapped to MetaL,MetaR and Menu. The left one will activate the start
-menu and the right one will display the window list.
+Makes 3 additional keys perform sensible functions. The keys must
+be mapped to MetaL, MetaR and Menu. The left one will activate the
+start menu and the right one will display the window list.
 
 * `ModSuperIsCtrlAlt = 1`
 +
@@ -773,8 +782,6 @@ Command to run on mailbox.
 +
 WM_CLASS to allow runonce for MailCommand.
 
-* `NewMailCommand =`
-Command to run when new mail arrives.
 * `LockCommand =`
 Command to lock display/screensaver.
 * `ClockCommand = xclock -name icewm -title Clock`
@@ -824,8 +831,8 @@ Command to run for address bar entries.
 * `XRRPrimaryScreenName =`
 screen/output name of the primary screen.
 
-[#quick-switch-list]
-==== Quick Switch List
+[[quick-switch-list]]
+=== Quick Switch List
 
 * `QuickSwitch = 1`
 +
@@ -841,7 +848,7 @@ Alt+Tab to hidden windows.
 
 * `QuickSwitchToUrgent = 1`
 +
-Priorize Alt+Tab to urgent windows.
+Prioritize Alt+Tab to urgent windows.
 
 * `QuickSwitchToAllWorkspaces = 1`
 +
@@ -879,8 +886,8 @@ Show the huge (48x48) of the window icon for the active window.
 +
 Fill the rectangle highlighting the current icon.
 
-[#edge-workspace-switching]
-==== Edge Workspace Switching
+[[edge-workspace-switching]]
+=== Edge Workspace Switching
 
 * `EdgeSwitch = 0`
 +
@@ -898,7 +905,7 @@ Workspace switches by moving mouse to top/bottom screen edge.
 +
 Workspace switches continuously when moving mouse to screen edge.
 
-[#task-bar]
+[[task-bar]]
 === Task Bar
 
 The following settings can be set to value 1 (enabled) or value 0
@@ -930,7 +937,7 @@ Task bar clock is visible.
 
 * `TaskBarShowAPMStatus = 0`
 +
-Show APM/ACPI/Battery/Power status monitor on task bar.
+Show battery status monitor on task bar.
 
 * `TaskBarShowAPMAuto = 1`
 +
@@ -938,11 +945,11 @@ Enable TaskBarShowAPMStatus if a battery is present.
 
 * `TaskBarShowAPMTime = 1`
 +
-Show APM status on task bar in time-format.
+Show battery status on task bar in time-format.
 
 * `TaskBarShowAPMGraph = 1`
 +
-Show APM status in graph mode.
+Show battery status in graph mode.
 
 * `TaskBarShowMailboxStatus = 1`
 +
@@ -1134,7 +1141,7 @@ Taskbar justify left, right or center.
 
 * `TaskBarApmGraphWidth = 10`
 +
-Width of APM Monitor.
+Width of battery Monitor.
 
 * `TaskBarGraphHeight = 20`
 +
@@ -1144,8 +1151,12 @@ Height of taskbar monitoring applets.
 +
 Primary screen for xinerama (taskbar, ...).
 
-[#mailbox-monitoring-updated-2018-03-04]
+[[mailbox-monitoring-updated-2018-03-04]]
 === Mailbox Monitoring (updated 2018-03-04)
+
+* `MailCheckDelay = 30`
++
+Delay between new-mail checks. (seconds).
 
 * `MailBoxPath = ""`
 
@@ -1155,7 +1166,7 @@ then IceWM will monitor each mailbox for status changes each
 `MailCheckDelay` seconds. For each mailbox IceWM will show an icon on
 the taskbar. The icon shows if there is mail, if there is unread mail,
 or if there is new mail. Hovering the mouse pointer over an icon shows
-the number of messages in this mailbox and also the number unread
+the number of messages in this mailbox and also the number of unread
 mails. A mailbox can be the path to a file in conventional _mbox_
 format. If the path points to a directory then _Maildir_ format is
 assumed. Remote mail boxes are specified by an URL using the Common
@@ -1194,10 +1205,21 @@ unwise to store a password on file ever. Consider a wallet extension
 for IceWM. The following Perl snippet demonstrates how to hex encode
 a password like `!p@a%s&s~`:
 
- $ perl -e 'foreach(split("", $ARGV[0])) { printf "%%%02x", ord($_);  }; print "\n";' '!p@a%s&s~'
+ perl -e 'foreach(split("", $ARGV[0])) { printf "%%%02x", ord($_);  }; print "\n";' '!p@a%s&s~'
  %21%40%23%24%25%5e%26%2a%7e
 
-[#menus]
+* `NewMailCommand =`
++
+The command to be run when new mail arrives. It is executed by
+`/bin/sh -c`.
+The following environment variables will be set:
+
+ ** `ICEWM_MAILBOX` mailbox index number of `MailBoxPath` starting
+ from 1.
+ ** `ICEWM_COUNT` gives the total number of messages in this mailbox.
+ ** `ICEWM_UNREAD` gives the number of unread messages in this mailbox.
+
+[[menus]]
 === Menus
 
 * `AutoReloadMenus = 1`
@@ -1253,7 +1275,7 @@ Maximal width of popup menus, 2/3 of the screen's width if set to zero.
 Minimal number of themes after which the Themes menu becomes nested
 (0=disabled).
 
-[#timings]
+[[timings]]
 === Timings
 
 * `DelayFuzziness = 10`
@@ -1329,10 +1351,6 @@ Auto scroll delay
 +
 Time before workspace status window is hidden.
 
-* `MailCheckDelay = 30`
-+
-Delay between new-mail checks. (seconds).
-
 * `TaskBarCPUDelay = 500`
 +
 Delay between CPU Monitor samples in ms.
@@ -1359,7 +1377,7 @@ disabled).
 +
 Delay between power status updates (seconds).
 
-[#buttons-and-keys]
+[[buttons-and-keys]]
 === Buttons and Keys
 
 * `UseRootButtons = 255`
@@ -1394,7 +1412,7 @@ TitleBar mouse-button double click to rollup the window.
 +
 Does it support the 'O' title bar button images (for mouse rollover)
 
-[#workspaces]
+[[workspaces]]
 === Workspaces
 
 * WorkspaceNames
@@ -1403,7 +1421,7 @@ List of workspace names, for example:
 +
 WorkspaceNames=" 1 ", " 2 ", " 3 ", " 4 "
 
-[#paths]
+[[paths]]
 === Paths
 
 * LibPath
@@ -1415,7 +1433,7 @@ Path to the icewm/lib directory.
 Path to the icon directory. Multiple paths can be given using the
 colon as a separator.
 
-[#programs]
+[[programs]]
 === Programs
 
 * ClockCommand
@@ -1434,28 +1452,28 @@ program to run to lock the screen.
 +
 program to run when *Run* is selected from the start menu.
 
-[#window-menus]
+[[window-menus]]
 === Window Menus
 
 WinMenuItems
-Items to show in the window menus, posible values are:
+Items to show in the window menus, possible values are:
 
-* `  a=rAise`
-* `  c=Close`
-* `  f=Fullscreen`
-* `  h=Hide`
-* `  i=trayIcon`
-* `  k=Kill`
-* `  l=Lower`
-* `  m=Move`
-* `  n=miNimize`
-* `  r=Restore`
-* `  s=Size`
-* `  t=moveTo`
-* `  u=rollUp`
-* `  w=WindowsList`
-* `  x=maXimize`
-* `  y=laYer`
+* `a=rAise`
+* `c=Close`
+* `f=Fullscreen`
+* `h=Hide`
+* `i=trayIcon`
+* `k=Kill`
+* `l=Lower`
+* `m=Move`
+* `n=miNimize`
+* `r=Restore`
+* `s=Size`
+* `t=moveTo`
+* `u=rollUp`
+* `w=WindowsList`
+* `x=maXimize`
+* `y=laYer`
 +
 Examples:
 +
@@ -1463,7 +1481,7 @@ WinMenuItems=rmsnxfhualyticw   #Default menu
   WinMenuItems=rmsnxfhualytickw  #Menu with all possible options
   WinMenuItems=rmsnxc            #MS-Windows menu
 
-[#theme-settings]
+[[theme-settings]]
 == Theme Settings
 
 This section shows settings that can be set in theme files. They can
@@ -1483,7 +1501,7 @@ Description of the theme, credits.
 +
 List of gradient pixmaps in the current theme.
 
-[#borders]
+[[borders]]
 === Borders
 
 The following settings can be set to a numeric value.
@@ -1603,7 +1621,7 @@ r=rollup, s=sysmenu, d=depth).
 +
 Titlebar buttons supported by theme (x,m,i,r,h,s,d).
 
-[#fonts]
+[[fonts]]
 === Fonts
 
 The following settings can be set to a string value.
@@ -1770,7 +1788,7 @@ Name of the input field font.
 +
 Name of the label font.
 
-[#colors]
+[[colors]]
 === Colors
 
 * `ColorDialog = "rgb:C0/C0/C0"`
@@ -2037,19 +2055,19 @@ Background of non-LCD monitor.
 
 * `ColorApm = "rgb:00/00/00"`
 +
-Background of APM monitor, leave empty to force transparency.
+Background of battery monitor, leave empty to force transparency.
 
 * `ColorApmText = "rgb:00/FF/00"`
 +
-Textcolor of APM monitor.
+Textcolor of battery monitor.
 
 * `ColorApmBattary = "rgb:FF/FF/00"`
 +
-Color of APM monitor in battary mode.
+Color of battery monitor when discharging.
 
 * `ColorApmLine = "rgb:00/FF/00"`
 +
-Color of APM monitor in line mode.
+Color of battery monitor when charging.
 
 * `ColorApmGraphBg = "rgb:00/00/00"`
 +
@@ -2122,9 +2140,9 @@ transparency.
 
 * `ColorApmBattery = rgb:FF/FF/00`
 +
-Color of APM monitor in battery mode.
+Color of battery monitor in battery mode.
 
-[#desktop-background]
+[[desktop-background]]
 === Desktop Background
 
 The following options are used by `icewmbg`:
@@ -2163,17 +2181,17 @@ Image(s) to announce for semitransparent windows.
 +
 Paint the background image over all multihead monitors combined.
 
-[#task-bar-2]
-=== Task Bar
+[[task-bar-style]]
+=== Task Bar Style
 
 * `TaskBarClockLeds = 1`
 +
 Display clock using LCD style pixmaps.
 
-[#menus-and-toolbar-updated-2018-05-06]
+[[menus-and-toolbar-updated-2018-05-06]]
 == Menus and Toolbar (updated 2018-05-06)
 
-[#menu]
+[[menu]]
 === menu
 
 Within the `menu` configuration file you can configure which programs
@@ -2203,13 +2221,13 @@ expires. The `include` statement loads more configuration from the
 given filename, while `includeprog` runs `program arguments` to parse
 the output.
 
-[#toolbar]
+[[toolbar]]
 === toolbar
 
 The `toolbar` configuration file is used to put programs as buttons
 on the taskbar. It uses the same syntax as the `menu` file.
 
-[#programs-2]
+[[programs-2]]
 === programs
 
 Usually automatically generated menu configuration file of installed
@@ -2240,7 +2258,7 @@ having this class hint is mapped and raised. Syntax:
 
 The class hint of an application window can be figured out by running
 
- $ xprop WM_CLASS
+ xprop WM_CLASS
 
 Submenus can be added using the same keywords as the `menu`
 configuration file.
@@ -2248,7 +2266,7 @@ configuration file.
 Only double quotes are interpreted by IceWM. IceWM doesn't run the
 shell automatically, so you may have to do that.
 
-[#hot-keys]
+[[hot-keys]]
 == Hot Keys
 
 IceWM allows launching of arbitrary programs with any key
@@ -2263,19 +2281,19 @@ For example:
  key "Ctrl+Shift+r" icewm --restart
  runonce "Alt+F12"  "res_name.res_class" program_executable options
 
-[#window-options-updated-2018-03-04]
+[[window-options-updated-2018-03-04]]
 == Window Options (updated 2018-03-04)
 
 The *winoptions* file is used to configure settings for individual
 application windows. Each line in this file must have one of the
 following formats:
 
-* **  window_name.window_class.option: argument**
-* **  window_name.window_role.option: argument**
-* **  window_class.option: argument**
-* **  window_name.option: argument**
-* **  window_role.option: argument**
-* **  .option: argument**
+* *window_name.window_class.option: argument*
+* *window_name.window_role.option: argument*
+* *window_class.option: argument*
+* *window_name.option: argument*
+* *window_role.option: argument*
+* *.option: argument*
 
 The last format sets a default option value for all windows. Each
 window on the desktop should have *name* and *class* resources
@@ -2376,6 +2394,14 @@ If set to 0, window will not have a border.
 +
 If set to 0, window will not have a close button.
 
+* *dDepth: 1*
++
+If set to 0, window will not have a depth button.
+
+* *dHide: 1*
++
+If set to 0, window will not have a hide button.
+
 * *dMaximize: 1*
 +
 If set to 0, window will not have a maximize button.
@@ -2387,6 +2413,10 @@ If set to 0, window will not have a minimize button.
 * *dResize: 1*
 +
 If set to 0, window will not have a resize border.
+
+* *dRollup: 1*
++
+If set to 0, window will not have a shade button.
 
 * *dSysMenu: 1*
 +
@@ -2483,6 +2513,10 @@ raises it.
 if set to 1, IceWM will not assign focus when the window is mapped
 for the first time.
 
+* *noIgnoreTaskBar: 0*
++
+if set to 1, will show the window on the taskbar.
+
 * *nonICCCMconfigureRequest: 0*
 +
 if set to 1, IceWM assumes the application does not support the ICCCM
@@ -2508,10 +2542,10 @@ if set to 1, window starts maximized vertically.
 +
 if set to 1, window starts minimized.
 
-[#icon-handling]
+[[icon-handling]]
 == Icon handling
 
-[#generic]
+[[generic]]
 === Generic
 
 The window manager expects to find two XPM files for each icon
@@ -2539,7 +2573,7 @@ It would be nice to have a feature from OS/2 that varies the icon
 size with screen resolution (16x16 and 32x32 icons are quite small
 on 4000x4000 screens ;-)
 
-[#gdk-pixbuf]
+[[gdk-pixbuf]]
 === GDK-Pixbuf
 
 When icewm was configured with the `--enable-gdk-pixbuf` option all
@@ -2554,7 +2588,7 @@ A PPM icon in your IconPath.
 +
 An PNG image with absolute location.
 
-[#mouse-cursors]
+[[mouse-cursors]]
 == Mouse cursors
 
 IceWM scans the theme and configuration directories for a subdirectory
@@ -2605,7 +2639,7 @@ Cursor when you resize the window by bottom.
 +
 Cursor when you resize the window by bottom right.
 
-[#themes]
+[[themes]]
 == Themes
 
 Themes are used to configure the way the window manager looks. Things
@@ -2632,7 +2666,7 @@ search path.
 https://themes.ice-wm.org[www.box-look.org] has a very large number
 of themes which were created by users of IceWM.
 
-[#command-line-options]
+[[command-line-options]]
 == Command Line Options
 
 `icewm` supports the following options:
@@ -2688,41 +2722,41 @@ command line, combine this with the `--theme=NAME` option like:
 The theme name will then be saved to the 'theme' configuration file,
 before restarting IceWM.
 
-[#glossary]
+[[glossary]]
 == Glossary
 
 Resource Path
 A set of directories used by IceWM to locate resources like
 configuration files, themes, icons. See section *The Resource Path*.
 
-[#authors]
+[[authors]]
 == Authors
 
 Authors having contributed to this document include Gallium, Macek,
 Hasselmann, Gijsbers, Bidulock and Bloch.
 
-[#see-also]
+[[see-also]]
 == See Also
 
-https://ice-wm.org/man/icehelp.html[icehelp(1)],
-https://ice-wm.org/man/icesh.html[icesh(1)],
-https://ice-wm.org/man/icesound.html[icesound(1)],
-https://ice-wm.org/man/icewm-env.html[icewm-env(5)],
+https://ice-wm.org/man/icehelp[icehelp(1)],
+https://ice-wm.org/man/icesh[icesh(1)],
+https://ice-wm.org/man/icesound[icesound(1)],
+https://ice-wm.org/man/icewm-env[icewm-env(5)],
 https://ice-wm.org/man/icewm-focus_mode.html[icewm-focus_mode(5)],
-https://ice-wm.org/man/icewm-keys.html[icewm-keys(5)],
-https://ice-wm.org/man/icewm-menu-fdo.html[icewm-menu-fdo(1)],
-https://ice-wm.org/man/icewm-menu.html[icewm-menu(5)],
-https://ice-wm.org/man/icewm-preferences.html[icewm-preferences(5)],
-https://ice-wm.org/man/icewm-prefoverride.html[icewm-prefoverride(5)],
-https://ice-wm.org/man/icewm-programs.html[icewm-programs(5)],
-https://ice-wm.org/man/icewm-session.html[icewm-session(1)],
-https://ice-wm.org/man/icewm-set-gnomewm.html[icewm-set-gnomewm(1)],
-https://ice-wm.org/man/icewm-shutdown.html[icewm-shutdown(5)],
-https://ice-wm.org/man/icewm-startup.html[icewm-startup(5)],
-https://ice-wm.org/man/icewm-theme.html[icewm-theme(5)],
-https://ice-wm.org/man/icewm-toolbar.html[icewm-toolbar(5)],
-https://ice-wm.org/man/icewm-winoptions.html[icewm-winoptions(5)],
-https://ice-wm.org/man/icewm.html[icewm(1)],
-https://ice-wm.org/man/icewmbg.html[icewmbg(1)],
-https://ice-wm.org/man/icewmhint.html[icewmhint(1)],
-https://ice-wm.org/man/icewmtray.html[icewmtray(1)].
+https://ice-wm.org/man/icewm-keys[icewm-keys(5)],
+https://ice-wm.org/man/icewm-menu-fdo[icewm-menu-fdo(1)],
+https://ice-wm.org/man/icewm-menu[icewm-menu(5)],
+https://ice-wm.org/man/icewm-preferences[icewm-preferences(5)],
+https://ice-wm.org/man/icewm-prefoverride[icewm-prefoverride(5)],
+https://ice-wm.org/man/icewm-programs[icewm-programs(5)],
+https://ice-wm.org/man/icewm-session[icewm-session(1)],
+https://ice-wm.org/man/icewm-set-gnomewm[icewm-set-gnomewm(1)],
+https://ice-wm.org/man/icewm-shutdown[icewm-shutdown(5)],
+https://ice-wm.org/man/icewm-startup[icewm-startup(5)],
+https://ice-wm.org/man/icewm-theme[icewm-theme(5)],
+https://ice-wm.org/man/icewm-toolbar[icewm-toolbar(5)],
+https://ice-wm.org/man/icewm-winoptions[icewm-winoptions(5)],
+https://ice-wm.org/man/icewm[icewm(1)],
+https://ice-wm.org/man/icewmbg[icewmbg(1)],
+https://ice-wm.org/man/icewmhint[icewmhint(1)],
+https://ice-wm.org/man/icewmtray[icewmtray(1)].

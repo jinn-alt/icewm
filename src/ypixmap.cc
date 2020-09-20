@@ -3,17 +3,11 @@
 #include "ypixmap.h"
 #include "yxapp.h"
 
-static Pixmap createPixmap(int w, int h, int depth) {
+static Pixmap createPixmap(unsigned w, unsigned h, unsigned depth) {
     return XCreatePixmap(xapp->display(), desktop->handle(), w, h, depth);
 }
 
-#if 0
-static Pixmap createPixmap(int w, int h) {
-    return createPixmap(w, h, xapp->depth());
-}
-#endif
-
-static Pixmap createMask(int w, int h) {
+static Pixmap createMask(unsigned w, unsigned h) {
     return XCreatePixmap(xapp->display(), desktop->handle(), w, h, 1);
 }
 
@@ -21,7 +15,7 @@ void YPixmap::replicate(bool horiz, bool copyMask) {
     if (pixmap() == None || (fMask == None && copyMask))
         return;
 
-    int dim(horiz ? width() : height());
+    unsigned dim(horiz ? width() : height());
     if (dim >= 128) return;
     dim = 128 + dim - 128 % dim;
 
@@ -46,6 +40,10 @@ void YPixmap::replicate(bool horiz, bool copyMask) {
         XFreePixmap(xapp->display(), fPixmap);
     if (fMask != None)
         XFreePixmap(xapp->display(), fMask);
+    if (fPixmap32 != null)
+        fPixmap32 = null;
+    if (fPixmap24 != null)
+        fPixmap24 = null;
 
     fPixmap = nPixmap;
     fMask = nMask;
@@ -55,14 +53,38 @@ void YPixmap::replicate(bool horiz, bool copyMask) {
 
 YPixmap::~YPixmap() {
     if (fPixmap != None) {
-        if (xapp != 0)
+        if (xapp != nullptr)
             XFreePixmap(xapp->display(), fPixmap);
         fPixmap = 0;
     }
     if (fMask != None) {
-        if (xapp != 0)
+        if (xapp != nullptr)
             XFreePixmap(xapp->display(), fMask);
         fMask = 0;
+    }
+    freePicture();
+}
+
+Picture YPixmap::picture() {
+    if (fPicture == None) {
+        XRenderPictFormat* format = xapp->formatForDepth(fDepth);
+        if (format) {
+            XRenderPictureAttributes attr;
+            unsigned long mask = fMask ? CPClipMask : None;
+            attr.clip_mask = fMask;
+            attr.component_alpha = (fDepth == 32);
+            mask |= CPComponentAlpha;
+            fPicture = XRenderCreatePicture(xapp->display(), fPixmap,
+                                            format, mask, &attr);
+        }
+    }
+    return fPicture;
+}
+
+void YPixmap::freePicture() {
+    if (fPicture) {
+        XRenderFreePicture(xapp->display(), fPicture);
+        fPicture = None;
     }
 }
 
@@ -74,22 +96,46 @@ ref<YImage> YPixmap::image() {
 }
 
 Pixmap YPixmap::pixmap32() {
+    if (fDepth == 32) {
+        return pixmap();
+    }
     if (fPixmap32 == null && image() != null) {
         fPixmap32 = fImage->renderToPixmap(32);
     }
     return fPixmap32 != null ? fPixmap32->pixmap() : None;
 }
 
-ref<YPixmap> YPixmap::scale(unsigned const w, unsigned const h) {
-    ref<YPixmap> pixmap;
-    pixmap.init(this);
-    ref<YImage> image = YImage::createFromPixmap(pixmap);
-    if (image != null) {
-        image = image->scale(w, h);
-        if (image != null)
-            pixmap = YPixmap::createFromImage(image, depth());
+Pixmap YPixmap::pixmap24() {
+    if (fDepth == 24) {
+        return pixmap();
     }
-    return pixmap;
+    if (fPixmap24 == null && image() != null) {
+        fPixmap24 = fImage->renderToPixmap(24);
+    }
+    return fPixmap24 != null ? fPixmap24->pixmap() : None;
+}
+
+Pixmap YPixmap::pixmap(unsigned depth) {
+    if (depth == fDepth)
+        return pixmap();
+    if (depth == 32)
+        return pixmap32();
+    if (depth == 24)
+        return pixmap24();
+    return None;
+}
+
+ref<YPixmap> YPixmap::scale(unsigned const w, unsigned const h) {
+    if (w == width() && h == height())
+        return ref<YPixmap>(this);
+
+    if (image() != null) {
+        ref<YImage> scaled(image()->scale(w, h));
+        if (scaled != null) {
+            return YPixmap::createFromImage(scaled, depth());
+        }
+    }
+    return null;
 }
 
 ref<YPixmap> YPixmap::subimage(unsigned x, unsigned y, unsigned w, unsigned h) {
@@ -106,8 +152,8 @@ ref<YPixmap> YPixmap::create(unsigned w, unsigned h, unsigned depth, bool useMas
     ref<YPixmap> n;
 
     Pixmap pixmap = createPixmap(w, h, depth);
-    Pixmap mask = useMask ? createMask(w, h) : None;
-    if (pixmap != None && (!useMask || mask != None)) {
+    if (pixmap) {
+        Pixmap mask = useMask ? createMask(w, h) : None;
         n.init(new YPixmap(pixmap, mask, w, h, depth, null));
     }
     return n;
@@ -150,6 +196,29 @@ ref<YPixmap> YPixmap::load(upath filename) {
         pixmap = YPixmap::createFromImage(image, xapp->depth());
     }
     return pixmap;
+}
+
+unsigned YPixmap::verticalOffset() const {
+    unsigned offset = 0;
+    if (fMask) {
+        XImage* image = XGetImage(xapp->display(), fMask, 0, 0,
+                                  fWidth, fHeight, 1UL, XYPixmap);
+        if (image) {
+            for (; offset < fHeight; ++offset) {
+                unsigned k = 0;
+                for (; k < fWidth; ++k) {
+                    if (XGetPixel(image, k, offset)) {
+                        break;
+                    }
+                }
+                if (k < fWidth) {
+                    break;
+                }
+            }
+            XDestroyImage(image);
+        }
+    }
+    return offset;
 }
 
 // vim: set sw=4 ts=4 et:

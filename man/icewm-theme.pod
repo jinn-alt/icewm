@@ -6,19 +6,11 @@
 
 =head1 SYNOPSIS
 
-=over
-
-=item F<$ICEWM_PRIVCFG/theme>
-
-=item F<$XDG_CONFIG_HOME/icewm/theme>
-
-=item F<$HOME/.icewm/theme>
-
-=item F</etc/icewm/theme>
-
-=item F</usr/share/icewm/theme>
-
-=back
+ $ICEWM_PRIVCFG/theme
+ $XDG_CONFIG_HOME/icewm/theme
+ $HOME/.icewm/theme
+ /etc/icewm/theme
+ /usr/share/icewm/theme
 
 =head1 DESCRIPTION
 
@@ -61,21 +53,16 @@ that L<icewm(1)> keeps a history of the previous ten theme settings.
 
 =head1 FILES
 
-Locations for the toolbar options file are as follows:
+Locations for the F<theme> file are as follows:
 
-=over
+ $ICEWM_PRIVCFG/theme
+ $XDG_CONFIG_HOME/icewm/theme
+ $HOME/.icewm/theme
+ /etc/icewm/theme
+ /usr/share/icewm/theme
 
-=item F<$ICEWM_PRIVCFG/theme>
-
-=item F<$XDG_CONFIG_HOME/icewm/theme>
-
-=item F<$HOME/.icewm/theme>
-
-=item F</etc/icewm/theme>
-
-=item F</usr/share/icewm/theme>
-
-=back
+The locations are searched in the order listed; the first file found is
+read and the remainder ignored.
 
 =head1 SEE ALSO
 

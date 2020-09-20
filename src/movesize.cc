@@ -9,7 +9,6 @@
 #include "wmapp.h"
 #include "prefs.h"
 #include "wmtaskbar.h"
-#include "aworkspaces.h"
 #include "intl.h"
 
 extern YColorName activeBorderBg;
@@ -139,7 +138,7 @@ void YFrameWindow::snapTo(int &wx, int &wy) {
         yp += borderY();
         flags |= 16;
     }
-    snapTo(xp, yp, 0, 0, manager->width(), manager->height(), flags);
+    snapTo(xp, yp, 0, 0, desktop->width(), desktop->height(), flags);
     if (flags & 8) {
         xp -= borderX();
         flags &= ~8;
@@ -170,25 +169,38 @@ void YFrameWindow::snapTo(int &wx, int &wy) {
     wy = yp;
 }
 
-void YFrameWindow::drawMoveSizeFX(int x, int y, int w, int h, bool) {
+void YFrameWindow::drawMoveSizeFX(int x, int y, int w, int h) {
     if ((movingWindow && opaqueMove) ||
         (sizingWindow && opaqueResize))
         return;
 
-    int const bw((wsBorderX + wsBorderY) / 2);
-    int const bo((wsBorderX + wsBorderY) / 4);
+    int const pencil(min(3U, (wsBorderX + wsBorderY) / 2));
+    int const offset(min(2U, (wsBorderX + wsBorderY) / 4));
 
-    XGCValues gcv;
+    YColor color(activeBorderBg);
+    unsigned mask = color.red() | color.green() | color.blue();
+    if (mask < 32) {
+        const int gray = 63;
+        color = YColor(gray, gray, gray);
+    }
+    else if (mask < 64) {
+        const int k = 2;
+        color = YColor(k * color.red(), k * color.green(), k * color.blue());
+    }
+    else if (mask < 128) {
+        color = color.brighter().brighter();
+    }
 
-    gcv.foreground = activeBorderBg.pixel();
-    gcv.function = GXxor;
-    gcv.graphics_exposures = False;
-    gcv.line_width = bw;
+    XGCValues gcv = { GXxor, };
+
+    gcv.foreground = color.pixel();
+    gcv.line_width = pencil;
     gcv.subwindow_mode = IncludeInferiors;
+    gcv.graphics_exposures = False;
 
-    Graphics g(*desktop, GCForeground | GCFunction | GCGraphicsExposures |
-                         GCLineWidth | GCSubwindowMode, &gcv);
-    g.drawRect(x + bo, y + bo, w - bw, h - bw);
+    Graphics g(*desktop, GCFunction | GCForeground | GCLineWidth |
+                         GCSubwindowMode | GCGraphicsExposures, &gcv);
+    g.drawRect(x + offset, y + offset, w - pencil, h - pencil);
 }
 
 int YFrameWindow::handleMoveKeys(const XKeyEvent &key, int &newX, int &newY) {
@@ -367,7 +379,7 @@ void YFrameWindow::handleMoveMouse(const XMotionEvent &motion, int &newX, int &n
 void YFrameWindow::handleResizeMouse(const XMotionEvent &motion,
                                      int &newX, int &newY, int &newWidth, int &newHeight)
 {
-    if (buttonDownX == 0 && buttonDownY == 0)
+    if (buttonDownX == 0 && buttonDownY == 0 && grabX == 0 && grabY == 0)
         return;
 
     int mouseX = motion.x_root;
@@ -726,9 +738,9 @@ bool YFrameWindow::handleKey(const XKeyEvent &key) {
             } else if (IS_WMKEY(k, vm, gKeyWinPrev)) {
                 wmPrevWindow();
             } else if (IS_WMKEY(k, vm, gKeyWinMaximizeVert)) {
-                wmMaximizeVert();
+                if (canMaximize()) wmMaximizeVert();
             } else if (IS_WMKEY(k, vm, gKeyWinMaximizeHoriz)) {
-                wmMaximizeHorz();
+                if (canMaximize()) wmMaximizeHorz();
             } else if (IS_WMKEY(k, vm, gKeyWinRaise)) {
                 if (canRaise()) wmRaise();
             } else if (IS_WMKEY(k, vm, gKeyWinOccupyAll)) {
@@ -773,22 +785,6 @@ bool YFrameWindow::handleKey(const XKeyEvent &key) {
                 if (canMove()) wmArrange(waTop, waLeft);
             } else if (IS_WMKEY(k, vm, gKeyWinArrangeC)) {
                 if (canMove()) wmArrange(waCenter, waCenter);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveN)) {
-                if (canMove()) wmSnapMove(waTop, waCenter);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveNE)) {
-                if (canMove()) wmSnapMove(waTop, waRight);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveE)) {
-                if (canMove()) wmSnapMove(waCenter, waRight);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveSE)) {
-                if (canMove()) wmSnapMove(waBottom, waRight);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveS)) {
-                if (canMove()) wmSnapMove(waBottom, waCenter);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveSW)) {
-                if (canMove()) wmSnapMove(waBottom, waLeft);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveW)) {
-                if (canMove()) wmSnapMove(waCenter, waLeft);
-            } else if (IS_WMKEY(k, vm, gKeyWinSnapMoveNW)) {
-                if (canMove()) wmSnapMove(waTop, waLeft);
             } else if (IS_WMKEY(k, vm, gKeyWinSmartPlace)) {
                 if (canMove()) {
                     int newX = x();
@@ -799,7 +795,10 @@ bool YFrameWindow::handleKey(const XKeyEvent &key) {
                 }
             } else if (isIconic() || isRollup()) {
                 if (k == XK_Return || k == XK_KP_Enter) {
-                    wmRestore();
+                    if (isMinimized())
+                        wmMinimize();
+                    else
+                        wmRestore();
                 } else if ((k == XK_Menu) || (k == XK_F10 && m == ShiftMask)) {
                     popupSystemMenu(this);
                 }
@@ -828,6 +827,10 @@ void YFrameWindow::constrainMouseToWorkspace(int &x, int &y) {
 
     x = clamp(x, mx, Mx - 1);
     y = clamp(y, my, My - 1);
+}
+
+bool YFrameWindow::canFullscreen() const {
+    return client() != taskBar;
 }
 
 bool YFrameWindow::canSize(bool horiz, bool vert) {
@@ -890,7 +893,6 @@ void YFrameWindow::startMoveSize(bool doMove, bool byMouse,
     buttonDownX = 0;
     buttonDownY = 0;
 
-    manager->setWorkAreaMoveWindows(true);
     if (doMove && grabX == 0 && grabY == 0) {
         buttonDownX = mouseXroot;
         buttonDownY = mouseYroot;
@@ -973,44 +975,60 @@ void YFrameWindow::endMoveSize() {
     movingWindow = false;
     sizingWindow = false;
 
-    manager->setWorkAreaMoveWindows(false);
-
-    if (taskBar && taskBar->workspacesPane()) {
-        taskBar->workspacesPane()->repaint();
+    if (taskBar) {
+        taskBar->workspacesRepaint();
     }
 }
 
 void YFrameWindow::handleBeginDrag(const XButtonEvent &down, const XMotionEvent &motion) {
-    if ((down.button == 3) && canMove()) {
+    if (down.button == Button3 && canMove()) {
         startMoveSize(true, true,
                       0, 0,
                       down.x, down.y);
         handleDrag(down, motion);
-    } else if ((down.button == 1) && canSize()) {
+    }
+    else if (down.button == Button1 && canSize()) {
+        Window sw = down.subwindow;
+
         grabX = 0;
         grabY = 0;
 
-        if (down.x < int(borderX())) grabX = -1;
-        else if ((int) width() - down.x <= borderX()) grabX = 1;
-
-        if (down.y < int(borderY())) grabY = -1;
-        else if ((int) height() - down.y <= borderY()) grabY = 1;
-
-        if (grabY != 0 && grabX == 0) {
-            if (down.x < int(wsCornerX)) grabX = -1;
-            else if ((int)width() - down.x <= (int) wsCornerX) grabX = 1;
+        if (down.x < int(borderX()) || sw == topLeft ||
+                sw == leftSide || sw == bottomLeft) {
+            grabX = -1;
+        }
+        else if (int(width()) - down.x <= borderX() || sw == topRight ||
+                sw == rightSide || sw == bottomRight) {
+            grabX = 1;
         }
 
-        if (grabX != 0 && grabY == 0) {
-            if (down.y < int(wsCornerY)) grabY = -1;
-            else if ((int)height() - down.y <= (int) wsCornerY) grabY = 1;
+        if (down.y < int(borderY()) + int(topSideVerticalOffset) ||
+                sw == topLeft || sw == topSide || sw == topRight) {
+            grabY = -1;
+        }
+        else if (int(height()) - down.y <= borderY() || sw == bottomLeft ||
+                sw == bottomSide || sw == bottomRight) {
+            grabY = 1;
         }
 
-        if (grabX != 0 || grabY != 0) {
+        if (grabY && !grabX) {
+            if (down.x < int(wsCornerX))
+                grabX = -1;
+            else if (int(width()) - down.x <= int(wsCornerX))
+                grabX = 1;
+        }
+
+        if (grabX && !grabY) {
+            if (down.y < int(wsCornerY) + int(topSideVerticalOffset))
+                grabY = -1;
+            else if (int(height()) - down.y <= int(wsCornerY))
+                grabY = 1;
+        }
+
+        if (grabX || grabY) {
             startMoveSize(false, true,
                           grabX, grabY,
                           down.x_root, down.y_root);
-
         }
     }
 }
@@ -1038,12 +1056,6 @@ void YFrameWindow::moveWindow(int newX, int newY) {
         drawMoveSizeFX(x(), y(), width(), height());
 
     statusMoveSize->setStatus(this);
-}
-
-void YFrameWindow::handleDrag(const XButtonEvent &/*down*/, const XMotionEvent &/*motion*/) {
-}
-
-void YFrameWindow::handleEndDrag(const XButtonEvent &/*down*/, const XButtonEvent &/*up*/) {
 }
 
 void YFrameWindow::handleButton(const XButtonEvent &button) {

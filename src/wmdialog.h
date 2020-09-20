@@ -1,5 +1,5 @@
-#ifndef __WMDIALOG_H
-#define __WMDIALOG_H
+#ifndef WMDIALOG_H
+#define WMDIALOG_H
 
 #include "ywindow.h"
 #include "yaction.h"
@@ -15,6 +15,8 @@ public:
     virtual void paint(Graphics &g, const YRect &r);
     virtual bool handleKey(const XKeyEvent &key);
     virtual void actionPerformed(YAction action, unsigned int modifiers);
+    virtual void configure(const YRect2& rect);
+    virtual void repaint();
 
     void activate();
     void deactivate();
@@ -29,7 +31,7 @@ private:
     YActionButton *aboutButton;
     YActionButton *windowListButton;
     IApp *app;
-    YActionButton *addButton(const ustring& str, unsigned& maxW, unsigned& maxH);
+    YActionButton *addButton(const mstring& str, unsigned& maxW, unsigned& maxH);
 };
 
 #endif

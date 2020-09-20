@@ -16,12 +16,20 @@
 #ifdef USE_SIGNALFD
 #include <sys/signalfd.h>
 #endif
-#include <pwd.h>
+#include "ywordexp.h"
 
 IMainLoop *mainLoop;
 static int signalPipe[2];
 static sigset_t oldSignalMask;
 static sigset_t signalMask;
+
+const char* YTrace::conf;
+void YTrace::show(bool busy, const char* kind, const char* inst) {
+    tlog("%s %s: %s", kind, busy ? "open" : "done", inst);
+}
+
+IApp::~IApp() {}
+IMainLoop::~IMainLoop() {}
 
 void YApplication::initSignals() {
     sigemptyset(&signalMask);
@@ -38,7 +46,6 @@ void YApplication::initSignals() {
     fcntl(signalPipe[0], F_SETFD, FD_CLOEXEC);
 #else
     sigemptyset(&signalMask);
-    sigaddset(&signalMask, SIGPIPE);
     sigprocmask(SIG_BLOCK, &signalMask, &oldSignalMask);
 
     if (pipe(signalPipe) != 0)
@@ -47,7 +54,7 @@ void YApplication::initSignals() {
     fcntl(signalPipe[0], F_SETFD, FD_CLOEXEC);
     fcntl(signalPipe[1], F_SETFD, FD_CLOEXEC);
 #endif
-    sfd.registerPoll(this, signalPipe[0]);
+    sfd.registerPoll(signalPipe[0]);
 }
 
 #ifdef __linux__
@@ -56,21 +63,25 @@ void alrm_handler(int /*sig*/) {
 }
 #endif
 
-YApplication::YApplication(int * /*argc*/, char *** /*argv*/) {
+YApplication::YApplication(int * /*argc*/, char *** /*argv*/) :
+    sfd(this),
+    fLoopLevel(0),
+    fExitCode(0),
+    fExitLoop(false),
+    fExitApp(false)
+{
     ::mainLoop = this;
 
-    fLoopLevel = 0;
-    fExitApp = 0;
-
-    setvbuf(stdout, NULL, _IOLBF, BUFSIZ);
-    setvbuf(stderr, NULL, _IOLBF, BUFSIZ);
+    setvbuf(stdout, nullptr, _IOLBF, BUFSIZ);
+    setvbuf(stderr, nullptr, _IOLBF, BUFSIZ);
 
     initSignals();
 }
 
 YApplication::~YApplication() {
     sfd.unregisterPoll();
-    ::mainLoop = 0;
+    if (::mainLoop == this)
+        ::mainLoop = nullptr;
 }
 
 void YApplication::registerTimer(YTimer *t) {
@@ -154,7 +165,7 @@ bool YApplication::getTimeout(timeval *timeout) {
 
 void YApplication::handleTimeouts() {
     timeval now = monotime();
-    YTimer *timeout = 0;
+    YTimer *timeout = nullptr;
     YArrayIterator<YTimer*> iter = timers.reverseIterator();
     // we must be careful since the callback may modify the array.
     while (iter.hasNext()) {
@@ -185,9 +196,7 @@ void YApplication::registerPoll(YPollBase *t) {
 }
 
 void YApplication::unregisterPoll(YPollBase *t) {
-    int k = find(polls, t);
-    if (k >= 0)
-        polls.remove(k);
+    findRemove(polls, t);
 }
 
 YPollBase::~YPollBase() {
@@ -195,18 +204,28 @@ YPollBase::~YPollBase() {
 }
 
 void YPollBase::unregisterPoll() {
-    if (fd() >= 0) {
+    if (fRegistered) {
         mainLoop->unregisterPoll(this);
-        fFd = -1;
+        fRegistered = false;
     }
 }
 
-
 void YPollBase::registerPoll(int fd) {
-    unregisterPoll();
     fFd = fd;
-    if (fFd >= 0) {
+    if (fFd < 0) {
+        unregisterPoll();
+    }
+    else if (fRegistered == false) {
         mainLoop->registerPoll(this);
+        fRegistered = true;
+    }
+}
+
+void YPollBase::closePoll() {
+    unregisterPoll();
+    if (fFd >= 0) {
+        close(fFd);
+        fFd = -1;
     }
 }
 
@@ -226,8 +245,7 @@ int YApplication::mainLoop() {
         fd_set write_fds;
         FD_ZERO(&write_fds);
 
-        YArrayIterator<YPollBase*> iPoll = polls.iterator();
-        while (++iPoll) {
+        for (YPollIterType iPoll = polls.iterator(); ++iPoll; ) {
             PRECONDITION(iPoll->fd() >= 0);
             if (iPoll->forRead()) {
                 FD_SET(iPoll->fd(), &read_fds);
@@ -240,21 +258,21 @@ int YApplication::mainLoop() {
         timeval timeout = {0, 0L};
         timeval *tp = &timeout;
         if (!didIdle && getTimeout(tp) == false)
-            tp = 0;
+            tp = nullptr;
 
 #ifndef USE_SIGNALFD
-        sigprocmask(SIG_UNBLOCK, &signalMask, NULL);
+        sigprocmask(SIG_UNBLOCK, &signalMask, nullptr);
 #endif
 
         int rc;
         rc = select(sizeof(fd_set) * 8,
                     SELECT_TYPE_ARG234 &read_fds,
                     SELECT_TYPE_ARG234 &write_fds,
-                    0,
+                    nullptr,
                     tp);
 
 #ifndef USE_SIGNALFD
-        sigprocmask(SIG_BLOCK, &signalMask, NULL);
+        sigprocmask(SIG_BLOCK, &signalMask, nullptr);
 #endif
 
         {
@@ -262,7 +280,7 @@ int YApplication::mainLoop() {
             // This is irrelevant when using monotonic clocks:
             // if time travel to past, decrease the timeouts
             if (diff < zerotime()) {
-                warn("time warp of %ld.%06ld", diff.tv_sec, diff.tv_usec);
+                warn("time warp of %ld.%06ld", long(diff.tv_sec), diff.tv_usec);
                 decreaseTimeouts(diff);
             } else {
                 // no detection for time travel to the future
@@ -276,7 +294,7 @@ int YApplication::mainLoop() {
             if (errno != EINTR)
                 fail(_("%s: select failed"), __func__);
         } else {
-            for (iPoll = polls.reverseIterator(); ++iPoll; ) {
+            for (YPollIterType iPoll = polls.reverseIterator(); ++iPoll; ) {
                 if (iPoll->fd() >= 0 && FD_ISSET(iPoll->fd(), &read_fds)) {
                     iPoll->notifyRead();
                     if (iPoll.isValid() == false)
@@ -293,12 +311,12 @@ int YApplication::mainLoop() {
 }
 
 void YApplication::exitLoop(int exitCode) {
-    fExitLoop = 1;
+    fExitLoop = true;
     fExitCode = exitCode;
 }
 
 void YApplication::exit(int exitCode) {
-    fExitApp = 1;
+    fExitApp = true;
     exitLoop(exitCode);
 }
 
@@ -316,8 +334,8 @@ bool YApplication::handleIdle() {
 }
 
 #ifndef USE_SIGNALFD
-void sig_handler(int sig) {
-    unsigned char uc = (unsigned char)sig;
+static void sig_handler(int sig) {
+    unsigned char uc = static_cast<unsigned char>(sig);
     if (write(signalPipe[1], &uc, 1) != 1)
         fprintf(stderr, "icewm: signal error\n");
 }
@@ -325,7 +343,7 @@ void sig_handler(int sig) {
 
 void YApplication::catchSignal(int sig) {
     sigaddset(&signalMask, sig);
-    sigprocmask(SIG_BLOCK, &signalMask, NULL);
+    sigprocmask(SIG_BLOCK, &signalMask, nullptr);
 
 #ifdef USE_SIGNALFD
     signalPipe[0]=signalfd(signalPipe[0], &signalMask, 0);
@@ -334,12 +352,12 @@ void YApplication::catchSignal(int sig) {
     sa.sa_handler = sig_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
-    sigaction(sig, &sa, NULL);
+    sigaction(sig, &sa, nullptr);
 #endif
 }
 
 void YApplication::resetSignals() {
-    sigprocmask(SIG_SETMASK, &oldSignalMask, 0);
+    sigprocmask(SIG_SETMASK, &oldSignalMask, nullptr);
 }
 
 void YApplication::closeFiles() {
@@ -378,7 +396,7 @@ int YApplication::runProgram(const char *path, const char *const *args) {
         resetSignals();
         sigemptyset(&signalMask);
         sigaddset(&signalMask, SIGHUP);
-        sigprocmask(SIG_UNBLOCK, &signalMask, NULL);
+        sigprocmask(SIG_UNBLOCK, &signalMask, nullptr);
 
         /* perhaps the right thing to to:
          create ptys .. and show console window when an application
@@ -392,11 +410,11 @@ int YApplication::runProgram(const char *path, const char *const *args) {
         closeFiles();
 
         if (args)
-            execvp(path, (char **)args);
+            execvp(path, const_cast<char **>(args));
         else
-            execlp(path, path, (void *)NULL);
+            execlp(path, path, nullptr);
 
-        fail("%s", path);
+        fail(_("Failed to execute %s"), path);
         _exit(99);
     }
     return cpid;
@@ -414,9 +432,18 @@ int YApplication::waitProgram(int p) {
 }
 
 void YApplication::runCommand(const char *cmdline) {
-/// TODO #warning calling /bin/sh is considered to be bloat
-    char const * argv[] = { "/bin/sh", "-c", cmdline, NULL };
-    runProgram(argv[0], argv);
+    const char shell[] = "&();<>`{}|";
+    wordexp_t exp = {};
+    if (strpbrk(cmdline, shell) == nullptr &&
+        wordexp(cmdline, &exp, WRDE_NOCMD) == 0)
+    {
+        runProgram(exp.we_wordv[0], exp.we_wordv);
+        wordfree(&exp);
+    }
+    else {
+        char const * argv[] = { "/bin/sh", "-c", cmdline, nullptr };
+        runProgram(argv[0], argv);
+    }
 }
 
 #ifndef USE_SIGNALFD
@@ -434,26 +461,15 @@ void YSignalPoll::notifyRead() {
 #else
 void YSignalPoll::notifyRead()
 {
-        struct signalfd_siginfo fdsi;
-        int s = read(signalPipe[0], &fdsi, sizeof(struct signalfd_siginfo));
-        if (s == sizeof(struct signalfd_siginfo))
-                owner()->handleSignal(fdsi.ssi_signo);
+    signalfd_siginfo info;
+    ssize_t s = read(signalPipe[0], &info, sizeof(info));
+    if (s == sizeof(info))
+        owner()->handleSignal(info.ssi_signo);
 }
 #endif
 
-void YSignalPoll::notifyWrite() {
-}
-
-bool YSignalPoll::forRead() {
-    return true;
-}
-
-bool YSignalPoll::forWrite() {
-    return false;
-}
-
 const upath& YApplication::getLibDir() {
-    static upath dir( REDIR_ROOT(LIBDIR) );
+    static upath dir( LIBDIR );
     return dir;
 }
 
@@ -485,29 +501,33 @@ const upath& YApplication::getPrivConfDir() {
                     dir.mkdir();
             }
         }
-        MSG(("using %s for private configuration files", cstring(dir).c_str()));
+        MSG(("using %s for private configuration files", dir.string()));
     }
     return dir;
 }
 
 upath YApplication::getHomeDir() {
     char *env = getenv("HOME");
-    if (env) {
+    if (nonempty(env)) {
         return upath(env);
     } else {
-        passwd *pw = getpwuid(getuid());
-        if (pw) {
-            return upath(pw->pw_dir);
+        csmart home(userhome(nullptr));
+        if (home) {
+            return upath(home);
         }
     }
     return upath(null);
 }
 
 upath YApplication::findConfigFile(upath name) {
+    return locateConfigFile(name);
+}
+
+upath YApplication::locateConfigFile(upath name) {
     upath p;
 
     if (name.isAbsolute())
-        return name;
+        return name.expand();
 
     p = getPrivConfDir() + name;
     if (p.fileExists())

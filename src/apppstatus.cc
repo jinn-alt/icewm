@@ -8,15 +8,13 @@
 //
 // !!! share code with cpu status
 //
-// KNOWN BUGS: - first measurement is throwed off
+// KNOWN BUGS: - first measurement is thrown off
 //
 // //////////////////////////////////////////////////////////////////////////
 
 #include "config.h"
 #include "wmtaskbar.h"
 #include "apppstatus.h"
-
-#ifdef HAVE_NET_STATUS
 
 #include "wmapp.h"
 #include "prefs.h"
@@ -27,7 +25,6 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <net/if.h>
-#include <fnmatch.h>
 
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #include <sys/sysctl.h>
@@ -36,11 +33,11 @@
 
 extern ref<YPixmap> taskbackPixmap;
 
-static NetDevice* getNetDevice(cstring netdev)
+static NetDevice* getNetDevice(mstring netdev)
 {
     return
 #if defined(__linux__)
-        netdev.m_str().startsWith("ippp")
+        netdev.startsWith("ippp")
             ? (NetDevice *) new NetIsdnDevice(netdev)
             : (NetDevice *) new NetLinuxDevice(netdev)
 #elif defined(__FreeBSD__)
@@ -48,13 +45,13 @@ static NetDevice* getNetDevice(cstring netdev)
 #elif defined(__OpenBSD__) || defined(__NetBSD__)
         new NetOpenDevice(netdev)
 #else
-        0
+        new NetDummyDevice(netdev)
 #endif
         ;
 }
 
 NetStatus::NetStatus(
-    cstring netdev,
+    mstring netdev,
     NetStatusHandler* handler,
     YWindow *aParent):
     IApplet(this, aParent),
@@ -73,9 +70,9 @@ NetStatus::NetStatus(
     prev_time(start_time),
     oldMaxBytes(None),
     statusUpdateCount(0),
-    unchanged(taskBarNetSamples),
+    unchanged(0),
     wasUp(false),
-    useIsdn(netdev.m_str().startsWith("ippp")),
+    useIsdn(netdev.startsWith("ippp")),
     fDevName(netdev),
     fDevice(getNetDevice(netdev))
 {
@@ -88,13 +85,13 @@ NetStatus::NetStatus(
 
     setSize(taskBarNetSamples, taskBarGraphHeight);
 
-    getCurrent(0, 0, 0);
-    updateStatus(0);
+    getCurrent(nullptr, nullptr, nullptr);
+    updateStatus(nullptr);
     if (isUp()) {
         updateVisible(true);
     }
+    setTitle("NET-" + netdev);
     updateToolTip();
-    setTitle(cstring("NET-" + netdev));
 }
 
 NetStatus::~NetStatus() {
@@ -104,14 +101,10 @@ NetStatus::~NetStatus() {
 
 void NetStatus::updateVisible(bool aVisible) {
     if (visible() != aVisible) {
-        if (aVisible)
-            show();
-        else
-            hide();
-
+        setVisible(aVisible);
         fHandler->relayout();
+        isVisible = min(isVisible, aVisible);
     }
-    isVisible = min(isVisible, aVisible);
 }
 
 void NetStatus::timedUpdate(const void* sharedData, bool forceDown) {
@@ -150,8 +143,8 @@ void NetStatus::updateToolTip() {
     char status[400];
 
     if (isUp()) {
-        char const * const sizeUnits[] = { "B", "KiB", "MiB", "GiB", "TiB", NULL };
-        char const * const rateUnits[] = { "B/s", "kB/s", "MB/s", NULL };
+        char const * const sizeUnits[] = { "B", "KiB", "MiB", "GiB", "TiB", nullptr };
+        char const * const rateUnits[] = { "B/s", "kB/s", "MB/s", nullptr };
 
         long const period(long(toDouble(monotime() - start_time)));
 
@@ -255,7 +248,7 @@ void NetStatus::fill(Graphics& g) {
         g.setColor(color[2]);
         g.fillRect(0, 0, width(), height());
     } else {
-        ref<YImage> gradient(parent()->getGradient());
+        ref<YImage> gradient(getGradient());
 
         if (gradient != null)
             g.drawImage(gradient,
@@ -293,7 +286,7 @@ void NetStatus::draw(Graphics &g) {
     oldMaxBytes = maxBytes;
 
     for (int i = first; i < limit; i++) {
-        if (1 /* ppp_in[i] > 0 || ppp_out[i] > 0 */) {
+        if (true /* ppp_in[i] > 0 || ppp_out[i] > 0 */) {
             long round = maxBytes / h / 2;
             int inbar, outbar;
 
@@ -318,7 +311,7 @@ void NetStatus::draw(Graphics &g) {
                     g.setColor(color[2]);
                     g.drawLine(i, l, i, t);
                 } else {
-                    ref<YImage> gradient(parent()->getGradient());
+                    ref<YImage> gradient(getGradient());
 
                     if (gradient != null)
                         g.drawImage(gradient,
@@ -334,7 +327,7 @@ void NetStatus::draw(Graphics &g) {
                 g.setColor(color[2]);
                 g.drawLine(i, 0, i, h - 1);
             } else {
-                ref<YImage> gradient(parent()->getGradient());
+                ref<YImage> gradient(getGradient());
 
                 if (gradient != null)
                     g.drawImage(gradient,
@@ -355,7 +348,7 @@ void NetStatus::draw(Graphics &g) {
  */
 #ifdef __linux__
 bool NetIsdnDevice::isUp() {
-    csmart str(load_text_file("/dev/isdninfo"));
+    auto str(filereader("/dev/isdninfo").read_all());
     char val[5][32];
     int busage = 0;
     int bflags = 0;
@@ -588,7 +581,7 @@ void NetStatus::getCurrent(long *in, long *out, const void* sharedData) {
 
 NetStatusControl::~NetStatusControl() {
     for (int i = 0; i < fNetStatus.getCount(); ++i) {
-        NetStatus* status = 0;
+        NetStatus* status = nullptr;
         swap(status, fNetStatus[i].value);
         if (status)
             delete status;
@@ -598,11 +591,11 @@ NetStatusControl::~NetStatusControl() {
 #ifdef __linux__
 void NetStatusControl::fetchSystemData() {
     devStats.clear();
-    devicesText = load_text_file("/proc/net/dev");
-    if (devicesText == 0)
+    devicesText = filereader("/proc/net/dev").read_all();
+    if (devicesText == nullptr)
         return;
 
-    for (char* p = devicesText; (p = strchr(p, '\n')) != 0; ) {
+    for (char* p = devicesText; (p = strchr(p, '\n')) != nullptr; ) {
         *p = 0;
         while (*++p == ' ');
         char* name = p;
@@ -619,7 +612,6 @@ void NetStatusControl::fetchSystemData() {
 
 NetStatusControl::NetStatusControl(IApp* app, YSMListener* smActionListener,
         IAppletContainer* taskBar, YWindow* aParent) :
-    app(app),
     smActionListener(smActionListener),
     taskBar(taskBar),
     aParent(aParent),
@@ -629,7 +621,7 @@ NetStatusControl::NetStatusControl(IApp* app, YSMListener* smActionListener,
     while (devList.splitall(' ', &devName, &devList)) {
         if (devName.isEmpty())
             continue;
-        cstring devStr(devName);
+        mstring devStr(devName);
 
         if (strpbrk(devStr, "*?[]\\.")) {
             if (interfaces.isEmpty())
@@ -638,7 +630,7 @@ NetStatusControl::NetStatusControl(IApp* app, YSMListener* smActionListener,
             while (++iter) {
                 if (fNetStatus.has(iter))
                     continue;
-                if (fnmatch(devStr, iter, 0) == 0) {
+                if (upath(iter).fnMatch(devStr) == 0) {
                     createNetStatus(*iter);
                 }
             }
@@ -657,9 +649,9 @@ NetStatusControl::NetStatusControl(IApp* app, YSMListener* smActionListener,
     fUpdateTimer->setTimer(taskBarNetDelay, this, true);
 }
 
-NetStatus* NetStatusControl::createNetStatus(cstring netdev) {
+NetStatus* NetStatusControl::createNetStatus(mstring netdev) {
     NetStatus*& status = fNetStatus[netdev];
-    if (status == 0)
+    if (status == nullptr)
         status = new NetStatus(netdev, this, aParent);
     return status;
 }
@@ -706,7 +698,7 @@ void NetStatusControl::relayout()
     taskBar->relayout();
 }
 
-void NetStatusControl::handleClick(const XButtonEvent &up, cstring netdev)
+void NetStatusControl::handleClick(const XButtonEvent &up, mstring netdev)
 {
     if (up.button == Button3) {
         interfaces.clear();
@@ -715,6 +707,7 @@ void NetStatusControl::handleClick(const XButtonEvent &up, cstring netdev)
         fMenu = new YMenu();
         fMenu->setActionListener(this);
         fMenu->addItem(_("NET"), -2, null, actionNull)->setEnabled(false);
+        fMenu->addSeparator();
         YStringArray::IterType iter = interfaces.iterator();
         while (++iter) {
             bool enable = true;
@@ -724,7 +717,7 @@ void NetStatusControl::handleClick(const XButtonEvent &up, cstring netdev)
             }
             else if (fNetStatus[*iter]->visible()) {
                 visible = true;
-                enable = fNetStatus[*iter]->isUp();
+                enable = true;  // fNetStatus[*iter]->isUp();
             }
             YAction act(EAction(visible + 2 * (300 + iter.where())));
             YMenuItem* item = fMenu->addItem(*iter, -2, null,
@@ -732,7 +725,7 @@ void NetStatusControl::handleClick(const XButtonEvent &up, cstring netdev)
             item->setChecked(visible);
             item->setEnabled(enable);
         }
-        fMenu->popup(0, 0, 0, up.x_root, up.y_root,
+        fMenu->popup(nullptr, nullptr, nullptr, up.x_root, up.y_root,
                      YPopupWindow::pfCanFlipVertical |
                      YPopupWindow::pfCanFlipHorizontal |
                      YPopupWindow::pfPopupMenu);
@@ -755,7 +748,7 @@ void NetStatusControl::actionPerformed(YAction action, unsigned int modifiers) {
             relayout();
         }
     }
-    fMenu = 0;
+    fMenu = nullptr;
     interfaces.clear();
 }
 
@@ -789,12 +782,12 @@ void NetStatusControl::linuxUpdate() {
     // mark disappeared devices as down without additional ioctls
     for (int i = 0; i < count; ++i)
         if (covered[i] == false && fNetStatus[i])
-            fNetStatus[i]->timedUpdate(0, true);
+            fNetStatus[i]->timedUpdate(nullptr, true);
 
     for (int i = 0; i < pending.getCount(); ++i) {
         const netpair stat = pending[i];
         YStringArray::IterType pat = patterns.iterator();
-        while (++pat && fnmatch(pat, stat.name(), 0));
+        while (++pat && upath(stat.name()).fnMatch(pat));
         if (pat) {
             createNetStatus(stat.name())->timedUpdate(stat.data());
         } else {
@@ -804,10 +797,8 @@ void NetStatusControl::linuxUpdate() {
     }
 
     devStats.clear();
-    devicesText = 0;
+    devicesText = nullptr;
 }
 #endif
-
-#endif // HAVE_NET_STATUS
 
 // vim: set sw=4 ts=4 et:

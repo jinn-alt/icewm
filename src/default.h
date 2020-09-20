@@ -46,7 +46,6 @@ XIV(bool, taskBarShowWindowListMenu,            true)
 XIV(bool, taskBarShowWorkspaces,                true)
 XIV(bool, taskBarShowWindows,                   true)
 XIV(bool, taskBarShowShowDesktopButton,         true)
-XIV(bool, fontPreferFreetype,                   true)
 
 XIV(int, taskBarButtonWidthDivisor,             3)
 XIV(int, taskBarWidthPercentage,                100)
@@ -61,11 +60,13 @@ XIV(bool, taskBarAutoHide,                      false)
 XIV(bool, taskBarFullscreenAutoShow,            true)
 XIV(bool, taskBarWorkspacesLeft,                true)
 XIV(bool, taskBarWorkspacesTop,                 false)
+XSV(const char *, taskBarWorkspacesLimit,       0)
 XIV(bool, taskBarUseMouseWheel,                 true)
 XIV(bool, pagerShowPreview,                     true)
 XIV(bool, pagerShowWindowIcons,                 true)
 XIV(bool, pagerShowMinimized,                   true)
 XIV(bool, pagerShowBorders,                     true)
+XIV(bool, pagerShowLabels,                      true)
 XIV(bool, pagerShowNumbers,                     false)
 XIV(bool, taskBarShowCPUStatus,                 true)
 XIV(bool, cpustatusShowRamUsage,                true)
@@ -147,7 +148,7 @@ XIV(int, autoShowDelay,                         500)
 XIV(int, edgeSwitchDelay,                       600)
 XIV(int, scrollBarStartDelay,                   500)
 XIV(int, scrollBarDelay,                        30)
-XIV(int, workspaceStatusTime,                   2500)
+XIV(int, workspaceStatusTime,                   700)
 XIV(int, useRootButtons,                        255)    // bitmask=all
 XIV(int, buttonRaiseMask,                       1)
 XIV(int, rootWinMenuButton,                     0)
@@ -169,7 +170,11 @@ XIV(int, netWorkAreaBehaviour,                  0)
 
 XSV(const char *, acpiIgnoreBatteries,          0)
 XSV(const char *, mailBoxPath,                  0)
+<<<<<<< HEAD
 XSV(const char *, mailCommand,                  "xterm -name mutt -title MUTT -e mutt")
+=======
+XSV(const char *, mailCommand,                  TERM " -name mutt -e mutt")
+>>>>>>> refs/heads/transit
 XSV(const char *, mailClassHint,                "mutt.XTerm")
 XSV(const char *, newMailCommand,               0)
 XSV(const char *, lockCommand,                  0)
@@ -177,13 +182,12 @@ XSV(const char *, clockCommand,                 "xterm -name cal -hold -g 21x9 -
 XSV(const char *, clockClassHint,               "cal.XClock")
 XSV(const char *, runDlgCommand,                0)
 XSV(const char *, openCommand,                  0)
-XSV(const char *, terminalCommand,              "xterm -hold")
+XSV(const char *, terminalCommand,              TERM " -hold")
 XSV(const char *, logoutCommand,                0)
 XSV(const char *, logoutCancelCommand,          0)
 #if defined(__linux__)
-// use shell code since those are wrapped through shell in YWindowManager::execAfterFork
-XSV(const char *, shutdownCommand,              "/bin/sh -c \"{ test -e /run/systemd/system && systemctl poweroff; } || poweroff\"")
-XSV(const char *, rebootCommand,                "/bin/sh -c \"{ test -e /run/systemd/system && systemctl reboot; } || reboot\"")
+XSV(const char *, shutdownCommand,              "test -e /run/systemd/system && systemctl poweroff")
+XSV(const char *, rebootCommand,                "test -e /run/systemd/system && systemctl reboot")
 XSV(const char *, suspendCommand,               "test -e /run/systemd/system && systemctl suspend")
 #else
 XSV(const char *, shutdownCommand,              0)
@@ -194,15 +198,15 @@ XIV(int, taskBarCPUDelay,                       500)
 XIV(int, taskBarMEMDelay,                       500)
 XIV(int, taskBarNetSamples,                     20)
 XIV(int, taskBarNetDelay,                       500)
-XSV(const char *, cpuCommand,                   "xterm -name top -title 'Process Status' -e 'if [ -x /usr/bin/htop ]; then htop; else top; fi'")
+XSV(const char *, cpuCommand,                   TERM " -name top -title Process\\ Status -e top")
 XSV(const char *, cpuClassHint,                 "top.XTerm")
 XIV(bool, cpuCombine,                           true)
 
 #ifdef __linux__
-XSV(const char *, netCommand,                   "xterm -name 'ss' -title 'Socket Statistics' -hold -e sh -c 'which ss > /dev/null && watch -t ss -putswl || netstat -c'")
+XSV(const char *, netCommand,                   TERM " -name 'ss' -title 'Socket Statistics' -hold -e sh -c 'which ss > /dev/null && watch -t ss -putswl || netstat -c'")
 XSV(const char *, netClassHint,                 "ss.XTerm")
 #else
-XSV(const char *, netCommand,                   "xterm -name netstat -title 'Network Status' -hold -e netstat -c")
+XSV(const char *, netCommand,                   TERM " -name netstat -title 'Network Status' -hold -e netstat -c")
 XSV(const char *, netClassHint,                 "netstat.XTerm")
 #endif
 
@@ -263,7 +267,7 @@ cfoption icewm_preferences[] = {
     OBV("OpaqueMove",                           &opaqueMove,                    "Opaque window move"),
     OBV("OpaqueResize",                         &opaqueResize,                  "Opaque window resize"),
     OBV("ManualPlacement",                      &manualPlacement,               "Windows initially placed manually by user"),
-    OBV("SmartPlacement",                       &smartPlacement,                "Smart window placement (minimal overlap)"),
+    OBV("SmartPlacement",                       &smartPlacement,                "Smart window placement with minimal overlap"),
     OBV("HideTitleBarWhenMaximized",            &hideTitleBarWhenMaximized,     "Hide title bar when maximized"),
     OBV("CenterLarge",                          &centerLarge,                   "Center large windows"),
     OBV("CenterTransientsOnOwner",              &centerTransientsOnOwner,       "Center dialogs on owner window"),
@@ -278,12 +282,12 @@ cfoption icewm_preferences[] = {
     OBV("QuickSwitch",                          &quickSwitch,                   "Alt+Tab window switching"),
     OBV("QuickSwitchToMinimized",               &quickSwitchToMinimized,        "Alt+Tab to minimized windows"),
     OBV("QuickSwitchToHidden",                  &quickSwitchToHidden,           "Alt+Tab to hidden windows"),
-    OBV("QuickSwitchToUrgent",                  &quickSwitchToUrgent,           "Priorize Alt+Tab to urgent windows"),
+    OBV("QuickSwitchToUrgent",                  &quickSwitchToUrgent,           "Prioritize Alt+Tab to urgent windows"),
     OBV("QuickSwitchToAllWorkspaces",           &quickSwitchToAllWorkspaces,    "Alt+Tab to windows on other workspaces"),
     OBV("QuickSwitchGroupWorkspaces",           &quickSwitchGroupWorkspaces,    "Alt+Tab: group windows on current workspace"),
     OBV("QuickSwitchAllIcons",                  &quickSwitchAllIcons,           "Show all reachable icons when quick switching"),
     OBV("QuickSwitchTextFirst",                 &quickSwitchTextFirst,          "Show the window title above (all reachable) icons"),
-    OBV("QuickSwitchSmallWindow",               &quickSwitchSmallWindow,        "Attempt to create a small QuickSwitch window (1/3 instead of 3/5 of screen width)"),
+    OBV("QuickSwitchSmallWindow",               &quickSwitchSmallWindow,        "Create a smaller QuickSwitch window of 1/3 screen width"),
     OBV("QuickSwitchMaxWidth",                  &quickSwitchMaxWidth,           "Go trough all window titles and choose width of the longest one"),
     OBV("QuickSwitchVertical",                  &quickSwitchVertical,           "Place the icons and titles vertical instead of horizontal"),
     OBV("QuickSwitchHugeIcon",                  &quickSwitchHugeIcon,           "Show the huge (48x48) of the window icon for the active window"),
@@ -301,10 +305,10 @@ cfoption icewm_preferences[] = {
     OBV("TaskBarAutoHide",                      &taskBarAutoHide,               "Auto hide task bar after delay"),
     OBV("TaskBarFullscreenAutoShow",            &taskBarFullscreenAutoShow,     "Auto show task bar when fullscreen window active"),
     OBV("TaskBarShowClock",                     &taskBarShowClock,              "Show clock on task bar"),
-    OBV("TaskBarShowAPMStatus",                 &taskBarShowApm,                "Show APM/ACPI/Battery/Power status monitor on task bar"),
+    OBV("TaskBarShowAPMStatus",                 &taskBarShowApm,                "Show battery status monitor on task bar"),
     OBV("TaskBarShowAPMAuto",                   &taskBarShowApmAuto,            "Enable TaskBarShowAPMStatus if a battery is present"),
-    OBV("TaskBarShowAPMTime",                   &taskBarShowApmTime,            "Show APM status on task bar in time-format"),
-    OBV("TaskBarShowAPMGraph",                  &taskBarShowApmGraph,           "Show APM status in graph mode"),
+    OBV("TaskBarShowAPMTime",                   &taskBarShowApmTime,            "Show battery status on task bar in time-format"),
+    OBV("TaskBarShowAPMGraph",                  &taskBarShowApmGraph,           "Show battery status in graph mode"),
     OBV("TaskBarShowMailboxStatus",             &taskBarShowMailboxStatus,      "Show mailbox status on task bar"),
     OBV("TaskBarMailboxStatusBeepOnNewMail",    &beepOnNewMail,                 "Beep when new mail arrives"),
     OBV("TaskBarMailboxStatusCountMessages",    &countMailMessages,             "Count messages in mailbox"),
@@ -331,13 +335,15 @@ cfoption icewm_preferences[] = {
     OBV("TaskBarShowCollapseButton",            &taskBarShowCollapseButton,     "Show a button to collapse the taskbar"),
     OBV("TaskBarWorkspacesLeft",                &taskBarWorkspacesLeft,         "Place workspace pager on left, not right"),
     OBV("TaskBarWorkspacesTop",                 &taskBarWorkspacesTop,          "Place workspace pager on top row when using dual-height taskbar"),
+    OSV("TaskBarWorkspacesLimit",               &taskBarWorkspacesLimit,        "Limit number of taskbar workspaces"),
     OBV("TaskBarUseMouseWheel",                 &taskBarUseMouseWheel,          "Enable mouse wheel cycling over workspaces and task buttons in taskbar"),
     OBV("PagerShowPreview",                     &pagerShowPreview,              "Show a mini desktop preview on each workspace button"),
     OBV("PagerShowWindowIcons",                 &pagerShowWindowIcons,          "Draw window icons inside large enough preview windows on pager (if PagerShowPreview=1)"),
     OBV("PagerShowMinimized",                   &pagerShowMinimized,            "Draw even minimized windows as unfilled rectangles (if PagerShowPreview=1)"),
     OBV("PagerShowBorders",                     &pagerShowBorders,              "Draw border around workspace buttons (if PagerShowPreview=1)"),
+    OBV("PagerShowLabels",                      &pagerShowLabels,               "Show workspace name label on workspace button (if PagerShowPreview=1)"),
     OBV("PagerShowNumbers",                     &pagerShowNumbers,              "Show number of workspace on workspace button (if PagerShowPreview=1)"),
-    OBV("TaskBarLaunchOnSingleClick",           &taskBarLaunchOnSingleClick,    "Execute taskbar applet commands (like MailCommand,     ClockCommand,   ...) on single click"),
+    OBV("TaskBarLaunchOnSingleClick",           &taskBarLaunchOnSingleClick,    "Execute taskbar applet commands (like MailCommand, ClockCommand, ...) on single click"),
 //    OBV("WarpPointer",                          &warpPointer,                   "Move mouse when doing focusing in pointer focus mode"),
     OBV("ClientWindowMouseActions",             &clientMouseActions,            "Allow mouse actions on client windows (buggy with some programs)"),
     OBV("ShowProgramsMenu",                     &showPrograms,                  "Show programs submenu in the program menu"),
@@ -363,8 +369,8 @@ cfoption icewm_preferences[] = {
 #endif
     OBV("DoubleBuffer",                         &doubleBuffer,                  "Use double buffering when redrawing the display"),
     OBV("XRRDisable",                           &xrrDisable,                    "Disable use of new XRANDR API for dual head (nvidia workaround)"),
-    OBV("PreferFreetypeFonts",                  &fontPreferFreetype,            "Favor *Xft fonts over core X11 fonts where possible"),
-    OIV("DelayFuzziness",                       &DelayFuzziness, 0, 100,        "Delay fuzziness, to allow merging of multiple timer timeouts into one (notebook power saving)"),
+    OBV("PreferFreetypeFonts",                  &fontPreferFreetype,            "Favour Xft fonts over core X11 fonts where possible"),
+    OIV("DelayFuzziness",                       &DelayFuzziness, 0, 100,        "Delay fuzziness, to allow merging of multiple timer timeouts into one for notebook power saving"),
     OIV("ClickMotionDistance",                  &ClickMotionDistance, 0, 32,    "Pointer motion distance before click gets interpreted as drag"),
     OIV("ClickMotionDelay",                     &ClickMotionDelay, 0, 2000,     "Delay before click gets interpreted as drag"),
     OIV("MultiClickTime",                       &MultiClickTime, 0, 5000,       "Multiple click time"),
@@ -393,28 +399,29 @@ cfoption icewm_preferences[] = {
     OIV("TitleBarMaximizeButton",               &titleMaximizeButton, 0, 5,     "TitleBar mouse-button double click to maximize the window"),
     OIV("TitleBarRollupButton",                 &titleRollupButton, 0, 5,       "TitleBar mouse-button double click to rollup the window"),
     OIV("MsgBoxDefaultAction",                  &msgBoxDefaultAction, 0, 1,     "Preselect to Cancel (0) or the OK (1) button in message boxes"),
-    OIV("MailCheckDelay",                       &mailCheckDelay, 0, (3600*24),  "Delay between new-mail checks. (seconds)"),
+    OIV("MailCheckDelay",                       &mailCheckDelay, 0, (3600*24),  "Delay between new-mail checks in seconds"),
     OIV("TaskBarCPUDelay",                      &taskBarCPUDelay, 10, (60*60*1000),    "Delay between CPU Monitor samples in ms"),
-    OIV("TaskBarCPUSamples",                    &taskBarCPUSamples, 2, 1000,    "Width of CPU Monitor"),
-    OIV("TaskBarMEMSamples",                    &taskBarMEMSamples, 2, 1000,    "Width of Memory Monitor"),
+    OIV("TaskBarCPUSamples",                    &taskBarCPUSamples, 2, 1000,    "The width of the CPU Monitor applet in pixels"),
+    OIV("TaskBarMEMSamples",                    &taskBarMEMSamples, 2, 1000,    "The width of the Memory Monitor applet in pixels"),
     OIV("TaskBarMEMDelay",                      &taskBarMEMDelay, 10, (60*60*1000),    "Delay between Memory Monitor samples in ms"),
-    OIV("TaskBarNetSamples",                    &taskBarNetSamples, 2, 1000,    "Width of Net Monitor"),
+    OIV("TaskBarNetSamples",                    &taskBarNetSamples, 2, 1000,    "The width of the Net Monitor applet in pixels"),
     OIV("TaskBarNetDelay",                      &taskBarNetDelay, 10, (60*60*1000),    "Delay between Net Monitor samples in ms"),
     OIV("TaskbarButtonWidthDivisor",            &taskBarButtonWidthDivisor, 1, 25, "default number of tasks in taskbar"),
     OIV("TaskBarWidthPercentage",               &taskBarWidthPercentage, 0, 100, "Task bar width as percentage of the screen width"),
     OSV("TaskBarJustify",                       &taskBarJustify, "Taskbar justify left, right or center"),
-    OIV("TaskBarApmGraphWidth",                 &taskBarApmGraphWidth, 1, 1000,  "Width of APM Monitor"),
+    OIV("TaskBarApmGraphWidth",                 &taskBarApmGraphWidth, 1, 1000,  "Width of battery Monitor"),
     OIV("TaskBarGraphHeight",                   &taskBarGraphHeight, 16, 1000,  "Height of taskbar monitoring applets"),
 
-    OIV("XineramaPrimaryScreen",                &xineramaPrimaryScreen, 0, 63, "Primary screen for xinerama (taskbar, ...)"),
+    OIV("XineramaPrimaryScreen",                &xineramaPrimaryScreen, 0, 63, "Primary screen for xinerama where taskbar is shown"),
     OIV("FocusRequestFlashTime",                &focusRequestFlashTime, 0, (3600 * 24), "Number of seconds the taskbar app will blink when requesting focus (0 = forever)"),
     OIV("FocusRequestFlashInterval",            &focusRequestFlashInterval, 0, 30000, "Taskbar blink interval (ms) when requesting focus (0 = blinking disabled)"),
     OIV("NestedThemeMenuMinNumber",             &nestedThemeMenuMinNumber,  0, 1234,  "Minimal number of themes after which the Themes menu becomes nested (0=disabled)"),
-    OIV("BatteryPollingPeriod",                 &batteryPollingPeriod, 2, 3600, "Delay between power status updates (seconds)"),
+    OIV("BatteryPollingPeriod",                 &batteryPollingPeriod, 2, 3600, "Delay between power status updates in seconds"),
     OIV("NetWorkAreaBehaviour",                 &netWorkAreaBehaviour, 0, 2,    "NET_WORKAREA behaviour: 0 (single/multimonitor with STRUT information, like metacity), 1 (always full desktop), 2 (singlemonitor with STRUT, multimonitor without STRUT)"),
 ///    OSV("Theme",                                &themeName,                     "Theme name"),
     OSV("IconPath",                             &iconPath,                      "Icon search path (colon separated)"),
-    OSV("MailBoxPath",                          &mailBoxPath,                   "Mailbox path (use $MAIL instead)"),
+    OSV("IconThemes",                           &iconThemes,                    "Colon separated icon theme list with wildcard support. Minus prefix - can be used to exclude themes."),
+    OSV("MailBoxPath",                          &mailBoxPath,                   "Colon separated paths of your mailboxes, otherwise $MAILPATH or $MAIL is used"),
     OSV("MailCommand",                          &mailCommand,                   "Command to run on mailbox"),
     OSV("MailClassHint",                        &mailClassHint,                 "WM_CLASS to allow runonce for MailCommand"),
     OSV("NewMailCommand",                       &newMailCommand,                "Command to run when new mail arrives"),
@@ -437,7 +444,7 @@ cfoption icewm_preferences[] = {
     OSV("AddressBarCommand",                    &addressBarCommand,             "Command to run for address bar entries"),
     OSV("NetworkStatusDevice",                  &netDevice,                     "Network device to show status for"),
     OSV("TimeFormat",                           &fmtTime,                       "Clock Time format (strftime format string)"),
-    OSV("TimeFormatAlt",                        &fmtTimeAlt,                    "Alternate Clock Time format (e.g. for blinking effects)"),
+    OSV("TimeFormatAlt",                        &fmtTimeAlt,                    "Alternate Clock Time format for blinking effects"),
     OSV("DateFormat",                           &fmtDate,                       "Clock Date format for tooltip (strftime format string)"),
     OSV("XRRPrimaryScreenName",                 &xineramaPrimaryScreenName,     "screen/output name of the primary screen"),
     OSV("AcpiIgnoreBatteries",                  &acpiIgnoreBatteries,           "List of battery names (directories) in /proc/acpi/battery to ignore. Useful when more slots are built-in, but only one battery is used"),
@@ -472,15 +479,7 @@ cfoption icewm_preferences[] = {
     OKV("KeyWinArrangeW",                       gKeyWinArrangeW,                ""),
     OKV("KeyWinArrangeNW",                      gKeyWinArrangeNW,               ""),
     OKV("KeyWinArrangeC",                       gKeyWinArrangeC,                ""),
-    OKV("KeyWinSnapMoveN",                      gKeyWinSnapMoveN, "Move the window up until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveNE",                     gKeyWinSnapMoveNE, "Move the window up/right until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveE",                      gKeyWinSnapMoveE, "Move the window right until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveSE",                     gKeyWinSnapMoveSE, "Move the window down/right until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveS",                      gKeyWinSnapMoveS, "Move the window down until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveSW",                     gKeyWinSnapMoveSW, "Move the window down/left until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveW",                      gKeyWinSnapMoveW, "Move the window left until its bounce to an other window border"),
-    OKV("KeyWinSnapMoveNW",                     gKeyWinSnapMoveNW, "Move the window up/left until its bounce to an other window border"),
-    OKV("KeyWinSmartPlace",                     gKeyWinSmartPlace, "Smart window placement (minimal overlap)"),
+    OKV("KeyWinSmartPlace",                     gKeyWinSmartPlace,              ""),
     OKV("KeySysSwitchNext",                     gKeySysSwitchNext,              ""),
     OKV("KeySysSwitchLast",                     gKeySysSwitchLast,              ""),
     OKV("KeySysSwitchClass",                    gKeySysSwitchClass,             ""),
@@ -538,10 +537,30 @@ cfoption icewm_preferences[] = {
     OKV("KeySysCollapseTaskBar",                gKeySysCollapseTaskBar,         ""),
 
     OKF("WorkspaceNames", addWorkspace, ""),
+    OKF("KeyboardLayouts", addKeyboard, ""),
     OSV("WinMenuItems",                         &winMenuItems,                  "Items supported in menu window (rmsnxfhualytickw)"),
     OK0()
 };
 
+#endif
+
+#if defined(GENPREF) || defined(WMAPP)
+
+static bool alphaBlending;
+static bool synchronizeX11;
+static const char* splashFile(ICESPLASH);
+static const char* tracingModules;
+extern bool loggingEvents;
+
+cfoption wmapp_preferences[] = {
+    OBV("Alpha",        &alphaBlending,  "Use a 32-bit visual for alpha blending"),
+    OBV("Synchronize",  &synchronizeX11, "Synchronize X11 for debugging (slow)"),
+    OBV("LogEvents",    &loggingEvents,  "Enable event logging for debugging"),
+    OSV("Splash",       &splashFile,     "Splash image on startup (IceWM.jpg)"),
+    OSV("Trace",        &tracingModules, "Enable tracing for the given modules"),
+    OSV("Theme",        &themeName,      "The name of the theme"),
+    OK0()
+};
 #endif
 
 #include "themable.h"

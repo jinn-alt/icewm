@@ -14,16 +14,18 @@
 
 #include <stdio.h>
 
-YClientContainer::YClientContainer(YWindow *parent, YFrameWindow *frame)
-:YWindow(parent)
+YClientContainer::YClientContainer(YWindow *parent, YFrameWindow *frame,
+                                   int depth, Visual *visual, Colormap cmap)
+    : YWindow(parent, None, depth, visual, cmap)
 {
     fFrame = frame;
     fHaveGrab = false;
     fHaveActionGrab = false;
 
-    setStyle(wsManager);
-    setDoubleBuffer(false);
+    setStyle(wsManager | wsNoExpose);
     setPointer(YXApplication::leftPointer);
+    setTitle("Container");
+    show();
 }
 
 YClientContainer::~YClientContainer() {
@@ -218,12 +220,12 @@ void YClientContainer::handleConfigureRequest(const XConfigureRequestEvent &conf
 
 void YClientContainer::handleMapRequest(const XMapRequestEvent &mapRequest) {
     if (mapRequest.window == getFrame()->client()->handle()) {
-        manager->lockFocus();
-        getFrame()->setState(WinStateMinimized |
-                             WinStateHidden |
-                             WinStateRollup,
-                             0);
-        manager->unlockFocus();
+        long unmapped = WinStateMinimized | WinStateHidden | WinStateRollup;
+        if (getFrame()->hasState(unmapped)) {
+            manager->lockFocus();
+            getFrame()->setState(unmapped, 0);
+            manager->unlockFocus();
+        }
         bool doActivate = true;
         getFrame()->updateFocusOnMap(doActivate);
         if (doActivate) {
@@ -241,7 +243,7 @@ void YClientContainer::handleCrossing(const XCrossingEvent &crossing) {
                  crossing.mode == NotifyNormal &&
                  manager->colormapWindow() == getFrame())
         {
-            manager->setColormapWindow(0);
+            manager->setColormapWindow(nullptr);
         }
     }
 }

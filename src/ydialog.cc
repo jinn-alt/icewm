@@ -14,37 +14,58 @@
 
 static YColorName dialogBg(&clrDialog);
 
-YDialog::YDialog(YWindow *owner):
-    YFrameClient(0, 0),
-    fGradient(null)
+YDialog::YDialog():
+    YFrameClient(nullptr, nullptr),
+    fGradient(dialogbackPixbuf),
+    fSurface(dialogBg, dialogbackPixmap, getGradient())
 {
-    fOwner = owner;
+    addStyle(wsNoExpose);
+    setNetWindowType(_XA_NET_WM_WINDOW_TYPE_DIALOG);
 }
 
 YDialog::~YDialog() {
-    fGradient = null;
 }
 
-void YDialog::paint(Graphics &g, const YRect &/*r*/) {
+void YDialog::paint(Graphics &g, const YRect& r) {
+    if (width() > 2 && height() > 2)
+        g.drawSurface(getSurface(), 1, 1, width() - 2, height() - 2);
     g.setColor(dialogBg);
     g.draw3DRect(0, 0, width() - 1, height() - 1, true);
+    if (dialogbackPixbuf != null) {
+        g.maxOpacity();
+    }
+}
 
-    if (dialogbackPixbuf != null
-        && !(fGradient != null &&
-             fGradient->width() == (width() - 2) &&
-             fGradient->height() == (height() - 2)))
-    {
-        fGradient = dialogbackPixbuf->scale(width() - 2, height() - 2);
+ref<YImage> YDialog::getGradient() {
+    if (dialogbackPixbuf != null) {
+        if (width() <= 2 || height() <= 2)
+            fGradient = null;
+        else {
+            unsigned w = width() - 2, h = height() - 2;
+            if (fGradient == null ||
+                w != fGradient->width() ||
+                h != fGradient->height())
+            {
+                fGradient = dialogbackPixbuf->scale(w, h);
+            }
+        }
+    }
+    return fGradient;
+}
+
+const YSurface& YDialog::getSurface() {
+    fSurface.gradient = getGradient();
+    return fSurface;
+}
+
+void YDialog::configure(const YRect2& r) {
+    if (r.resized()) {
         repaint();
     }
+}
 
-    if (fGradient != null)
-        g.drawImage(fGradient, 0, 0, width() - 2, height() - 2, 1, 1);
-    else
-    if (dialogbackPixmap != null)
-        g.fillPixmap(dialogbackPixmap, 1, 1, width() -2, height() - 2);
-    else
-        g.fillRect(1, 1, width() - 2, height() - 2);
+void YDialog::repaint() {
+    GraphicsBuffer(this).paint();
 }
 
 bool YDialog::handleKey(const XKeyEvent &key) {

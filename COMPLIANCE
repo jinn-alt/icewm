@@ -180,7 +180,7 @@ _NET_WM_PING:				supported
 _NET_WM_SYNC_REQUEST:			NOT supported
 _NET_WM_SYNC_REQUEST_COUNTER:		NOT supported
 _NET_WM_FULLSCREEN_MONITORS:		supported
-_NET_WM_FULL_PLACEMENT:			NOT supported (n/a)
+_NET_WM_FULL_PLACEMENT:			NOT supported
 
 ------------------------------------------------------------------------
 
@@ -246,8 +246,8 @@ _NET_SYSTEM_TRAY_OPCODE:		supported
 	SYSTEM_TRAY_REQUEST_DOCK	?
 	SYSTEM_TRAY_BEGIN_MESSAGE	?
 	SYSTEM_TRAY_CANCEL_MESSAGE	?
-_NET_SYSTEM_TRAY_ORIENTATION:		NOT supported
-_NET_SYSTEM_TRAY_VISUAL:		NOT supported
+_NET_SYSTEM_TRAY_ORIENTATION:		supported
+_NET_SYSTEM_TRAY_VISUAL:		supported
 
 Composite Manager Specification:
 

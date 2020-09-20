@@ -10,6 +10,7 @@
 #define CFGDEF
 #include "wmconfig.h"
 #include "bindkey.h"
+#include "appnames.h"
 #include "default.h"
 
 #include "wmoption.h"
@@ -21,23 +22,22 @@
 
 #include "intl.h"
 
-long workspaceCount = 0;
-char *workspaceNames[MAXWORKSPACES];
-YAction workspaceActionActivate[MAXWORKSPACES];
-YAction workspaceActionMoveTo[MAXWORKSPACES];
+YStringArray configWorkspaces;
+MStringArray configKeyboards;
 
 void WMConfig::loadConfiguration(IApp *app, const char *fileName) {
     YConfig::findLoadConfigFile(app, icewm_preferences, fileName);
     YConfig::findLoadConfigFile(app, icewm_themable_preferences, fileName);
 }
 
-void WMConfig::loadThemeConfiguration(IApp *app, const char *themeName) {
+bool WMConfig::loadThemeConfiguration(IApp *app, const char *themeName) {
     bool ok = YConfig::findLoadThemeFile(app,
                 icewm_themable_preferences,
                 *themeName == '/' ? themeName :
                 upath("themes").child(themeName));
     if (ok == false)
         fail(_("Failed to load theme %s"), themeName);
+    return ok;
 }
 
 void WMConfig::freeConfiguration() {
@@ -45,19 +45,20 @@ void WMConfig::freeConfiguration() {
     YConfig::freeConfig(icewm_themable_preferences);
 }
 
-void addWorkspace(const char * /*name*/, const char *value, bool append) {
+void addWorkspace(const char *, const char *value, bool append) {
     if (!append) {
-        for (int i = 0; i < workspaceCount; i++) {
-            delete[] workspaceNames[i];
-        }
-        workspaceCount = 0;
+        configWorkspaces.clear();
     }
+    configWorkspaces += value;
+}
 
-    if (workspaceCount >= MAXWORKSPACES)
-        return;
-    workspaceNames[workspaceCount] = newstr(value);
-    PRECONDITION(workspaceNames[workspaceCount] != NULL);
-    workspaceCount++;
+void addKeyboard(const char *, const char *value, bool append) {
+    if (!append) {
+        configKeyboards.clear();
+    }
+    if (nonempty(value)) {
+        configKeyboards += value;
+    }
 }
 
 static const struct {
@@ -104,16 +105,16 @@ void setLook(const char *name, const char *arg, bool) {
     }
 }
 
-static bool ensureDirectory(const upath& path) {
+static bool ensureDirectory(upath path) {
     if (path.dirExists())
         return true;
     if (path.mkdir() != 0) {
-        fail(_("Unable to create directory %s"), path.string().c_str());
+        fail(_("Unable to create directory %s"), path.string());
     }
     return path.dirExists();
 }
 
-static upath getDefaultsFilePath(const pstring& basename) {
+static upath getDefaultsFilePath(const mstring& basename) {
     upath prv(YApplication::getPrivConfDir());
     if (ensureDirectory(prv)) {
         return prv + basename;
@@ -121,10 +122,10 @@ static upath getDefaultsFilePath(const pstring& basename) {
     return null;
 }
 
-int WMConfig::setDefault(const char *basename, const char *content) {
+void WMConfig::setDefault(const char *basename, mstring content) {
     upath confOld(getDefaultsFilePath(basename));
     if (confOld == null) {
-        return -1; // no directory
+        return; // no directory
     }
     upath confNew(confOld.path() + ".new.tmp");
 
@@ -134,42 +135,65 @@ int WMConfig::setDefault(const char *basename, const char *content) {
         if (content[0] && content[strlen(content)-1] != '\n')
             fputc('\n', fpNew);
     }
-    if (fpNew == NULL || fflush(fpNew) || ferror(fpNew)) {
-        fail(_("Unable to write to %s"), confNew.string().c_str());
+    if (fpNew == nullptr || fflush(fpNew) || ferror(fpNew)) {
+        fail(_("Unable to write to %s"), confNew.string());
         if (fpNew)
             fclose(fpNew);
         confNew.remove();
-        return -1;
+        return;
     }
 
     FILE *fpOld = confOld.fopen("r");
     if (fpOld) {
-        for (int i = 0; i < 10; ++i) {
+        const int maxRead = 42;
+        const int maxCopy = 10;
+        for (int i = 0, k = 0; i < maxRead && k < maxCopy; ++i) {
             char buf[600] = "#", *line = buf;
             if (fgets(1 + buf, sizeof buf - 1, fpOld)) {
-                while (line[1] == '#')
-                    ++line;
-                fputs(line, fpNew);
-                if ('\n' != line[strlen(line)-1])
-                    fputc('\n', fpNew);
+                const char* eq = strchr(buf, '=');
+                const char* sp = strchr(buf, ' ');
+                if (eq && (sp == nullptr || eq < sp)) {
+                    while (line[1] == '#')
+                        ++line;
+                    fputs(line, fpNew);
+                    if ('\n' != line[strlen(line)-1])
+                        fputc('\n', fpNew);
+                    ++k;
+                }
             }
+            else
+                break;
         }
         fclose(fpOld);
     }
     fclose(fpNew);
 
-    if (fpOld != 0 || confOld.access() == 0) {
+    if (fpOld != nullptr || confOld.access() == 0) {
         confOld.remove();
     }
     if (confNew.renameAs(confOld)) {
         fail(_("Unable to rename %s to %s"),
-                confNew.string().c_str(), confOld.string().c_str());
+                confNew.string(), confOld.string());
         confNew.remove();
     }
-    return 0;
 }
 
-static void print_options(cfoption *options) {
+void WMConfig::setDefaultFocus(long focusMode) {
+    mstring header(
+            "#\n"
+            "# Focus mode (0=custom, 1=click, 2=sloppy"
+            ", 3=explicit, 4=strict, 5=quiet)\n"
+            "#\n"
+            "FocusMode="
+            );
+    setDefault("focus_mode", header + mstring(focusMode));
+}
+
+void WMConfig::setDefaultTheme(mstring themeName) {
+    setDefault("theme", "Theme=\"" + themeName + "\"");
+}
+
+void WMConfig::print_options(cfoption* options) {
     for (int i = 0; options[i].type != cfoption::CF_NONE; ++i) {
         switch (options[i].type) {
         case cfoption::CF_BOOL:
@@ -198,7 +222,10 @@ static void print_options(cfoption *options) {
     }
 }
 
-void WMConfig::print_preferences() {
+void WMConfig::printPrefs(long focus, cfoption* startup) {
+    print_options(startup);
+    printf("FocusMode=%ld\n", focus);
+
     print_options(icewm_preferences);
     print_options(icewm_themable_preferences);
 }

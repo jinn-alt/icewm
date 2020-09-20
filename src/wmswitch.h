@@ -41,7 +41,7 @@ public:
 
     // XXX: convert to iterator
     virtual int getActiveItem()=0;
-    virtual ustring getTitle(int idx) =0;
+    virtual mstring getTitle(int idx) =0;
     virtual ref<YIcon> getIcon(int idx) =0;
 
     // Manager notification about windows disappearing under the fingers
@@ -55,20 +55,22 @@ public:
 
 class SwitchWindow: public YPopupWindow, IClosablePopup {
 public:
-    SwitchWindow(YWindow *parent = 0,
-                 ISwitchItems *items = 0, bool verticalStyle=true);
+    SwitchWindow(YWindow *parent = nullptr,
+                 ISwitchItems *items = nullptr, bool verticalStyle=true);
     virtual ~SwitchWindow();
 
-    virtual void paint(Graphics &g, const YRect &r);
+    virtual void paint(Graphics &g, const YRect &r) override;
+    virtual void repaint() override;
 
-    void begin(bool zdown, int mods, char* wmclass = 0);
+    void begin(bool zdown, int mods, char* wmclass = nullptr);
 
-    virtual void activatePopup(int flags);
-    virtual void deactivatePopup();
+    virtual void activatePopup(int flags) override;
+    virtual void deactivatePopup() override;
 
-    virtual bool handleKey(const XKeyEvent &key) OVERRIDE;
-    virtual void handleButton(const XButtonEvent &button) OVERRIDE;
-    void handleMotion(const XMotionEvent &motion) OVERRIDE;
+    virtual void handleExpose(const XExposeEvent &expose) override {}
+    virtual bool handleKey(const XKeyEvent &key) override;
+    virtual void handleButton(const XButtonEvent &button) override;
+    void handleMotion(const XMotionEvent &motion) override;
     void destroyedFrame(YFrameWindow *frame);
 
 private:
@@ -91,6 +93,7 @@ private:
     ref<YFont> switchFont;
 
     int modsDown;
+    int iconsDrawn;
 
     bool isUp;
 
@@ -99,7 +102,7 @@ private:
     void resize(int xiscreen);
 
     void cancel();
-    bool close();
+    virtual bool close() override;
     void accept();
     void displayFocus(int itemIdx);
     //YFrameWindow *nextWindow(YFrameWindow *from, bool zdown, bool next);

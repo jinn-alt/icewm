@@ -1,5 +1,5 @@
-#ifndef __WMFRAME_H
-#define __WMFRAME_H
+#ifndef WMFRAME_H
+#define WMFRAME_H
 
 #include "ymsgbox.h"
 #include "wmoption.h"
@@ -16,25 +16,28 @@ class YFrameTitleBar;
 class YFrameWindow:
     public YWindow,
     public YActionListener,
-    public YTimerListener,
-    public YPopDownListener,
-    public YMsgBoxListener,
+    private YTimerListener,
+    private YPopDownListener,
+    private YMsgBoxListener,
     public ClientData,
     public YLayeredNode,
     public YCreatedNode,
     public YFocusedNode
 {
 public:
-    YFrameWindow(YActionListener *wmActionListener, YWindow *parent = 0, int depth = CopyFromParent, Visual *visual = CopyFromParent);
+    YFrameWindow(YActionListener *wmActionListener,
+                 unsigned depth = CopyFromParent,
+                 Visual* visual = nullptr,
+                 Colormap clmap = CopyFromParent);
     virtual ~YFrameWindow();
 
     void doManage(YFrameClient *client, bool &doActivate, bool &requestFocus);
     void afterManage();
-    void manage(YFrameClient *client);
+    void manage();
     void unmanage(bool reparent = true);
     void sendConfigure();
 
-    Window createPointerWindow(Cursor cursor, Window parent);
+    Window createPointerWindow(Cursor cursor, int gravity);
     void createPointerWindows();
     void grabKeys();
 
@@ -48,12 +51,11 @@ public:
     virtual void handleButton(const XButtonEvent &button);
     virtual void handleClick(const XButtonEvent &up, int count);
     virtual void handleBeginDrag(const XButtonEvent &down, const XMotionEvent &motion);
-    virtual void handleDrag(const XButtonEvent &down, const XMotionEvent &motion);
-    virtual void handleEndDrag(const XButtonEvent &down, const XButtonEvent &up);
     virtual void handleMotion(const XMotionEvent &motion);
     virtual void handleCrossing(const XCrossingEvent &crossing);
     virtual void handleFocus(const XFocusChangeEvent &focus);
     virtual void handleConfigure(const XConfigureEvent &configure);
+    virtual void handleExpose(const XExposeEvent &expose);
 
     virtual bool handleTimer(YTimer *t);
 
@@ -75,7 +77,7 @@ public:
     void doRaise();
     void wmClose();
     void wmConfirmKill();
-    static YMsgBox* wmConfirmKill(const ustring& title, YMsgBoxListener *recvr);
+    static YMsgBox* wmConfirmKill(const mstring& title, YMsgBoxListener *recvr);
     void wmKill();
     void wmNextWindow();
     void wmPrevWindow();
@@ -123,7 +125,7 @@ public:
                 int &flags);
     void snapTo(int &wx, int &wy);
 
-    void drawMoveSizeFX(int x, int y, int w, int h, bool interior = true);
+    void drawMoveSizeFX(int x, int y, int w, int h);
     int handleMoveKeys(const XKeyEvent &xev, int &newX, int &newY);
     int handleResizeKeys(const XKeyEvent &key,
                          int &newX, int &newY, int &newWidth, int &newHeight,
@@ -147,17 +149,18 @@ public:
     bool canMinimize() const;
     bool canRestore() const;
     bool canRollup() const;
+    bool canShow() const;
     bool canHide() const;
     bool canLower() const;
     bool canRaise();
-    bool canFullscreen() { return true; }
+    bool canFullscreen() const;
     bool overlaps(bool below);
     unsigned overlap(YFrameWindow *other);
 
     void insertFrame(bool top);
     void removeFrame();
-    void setAbove(YFrameWindow *aboveFrame); // 0 = at the bottom
-    void setBelow(YFrameWindow *belowFrame); // 0 = at the top
+    bool setAbove(YFrameWindow *aboveFrame);
+    bool setBelow(YFrameWindow *belowFrame);
 
     enum FindWindowFlags {
         fwfVisible    = 1 << 0, // visible windows only
@@ -178,26 +181,25 @@ public:
     YFrameWindow *findWindow(int flag);
 
     void updateMenu();
+    virtual void updateSubmenus();
 
     virtual void raise();
     virtual void lower();
 
     void popupSystemMenu(YWindow *owner, int x, int y,
                          unsigned int flags,
-                         YWindow *forWindow = 0);
+                         YWindow *forWindow = nullptr);
     virtual void popupSystemMenu(YWindow *owner);
     virtual void handlePopDown(YPopupWindow *popup);
 
-    virtual void configure(const YRect &r);
+    virtual void configure(const YRect2& r);
 
     void getNewPos(const XConfigureRequestEvent &cr,
                    int &cx, int &cy, int &cw, int &ch);
     void configureClient(const XConfigureRequestEvent &configureRequest);
     void configureClient(int cx, int cy, int cwidth, int cheight);
 
-#ifdef CONFIG_SHAPE
     void setShape();
-#endif
 
     enum YFrameFunctions {
         ffMove          = (1 << 0),
@@ -223,44 +225,53 @@ public:
     };
 
     enum YFrameOptions {
-        foAllWorkspaces            = (1 << 0),
-        foAppTakesFocus            = (1 << 1),
-        foDoNotCover               = (1 << 2),
-        foDoNotFocus               = (1 << 3),
-        foForcedClose              = (1 << 4),
-        foFullKeys                 = (1 << 5),
-        foFullscreen               = (1 << 6),
-        foIgnoreNoFocusHint        = (1 << 7),
-        foIgnorePagerPreview       = (1 << 8),
-        foIgnorePosition           = (1 << 9),
-        foIgnoreQSwitch            = (1 << 10),
-        foIgnoreTaskBar            = (1 << 11),
-        foIgnoreUrgent             = (1 << 12),
-        foIgnoreWinList            = (1 << 13),
-        foMaximizedHorz            = (1 << 14),
-        foMaximizedVert            = (1 << 15),
-        foMinimized                = (1 << 16),
-        foNoFocusOnAppRaise        = (1 << 17),
-        foNoFocusOnMap             = (1 << 18),
-        foNoIgnoreTaskBar          = (1 << 19),
-        foNonICCCMConfigureRequest = (1 << 20),
+        foAllWorkspaces            = (1 << 0),  // WinStateSticky
+        foMinimized                = (1 << 1),  // WinStateMinimized
+        foMaximizedVert            = (1 << 2),  // WinStateMaximizedVert
+        foMaximizedHorz            = (1 << 3),  // WinStateMaximizedHoriz
+        foMaximizedBoth            = (3 << 2),  // WinStateMaximizedBoth
+        foAppTakesFocus            = (1 << 4),
+        foDoNotCover               = (1 << 5),
+        foDoNotFocus               = (1 << 6),
+        foForcedClose              = (1 << 7),
+        foFullKeys                 = (1 << 8),
+        foFullscreen               = (1 << 9),
+        foIgnoreNoFocusHint        = (1 << 10),
+        foIgnorePagerPreview       = (1 << 11),
+        foIgnorePosition           = (1 << 12),
+        foIgnoreQSwitch            = (1 << 13),
+        foIgnoreTaskBar            = (1 << 14),
+        foIgnoreUrgent             = (1 << 15),
+        foIgnoreWinList            = (1 << 16),
+        foIgnoreActivationMessages = (1 << 17),
+        foNoFocusOnAppRaise        = (1 << 18),
+        foNoFocusOnMap             = (1 << 19),
+        foNoIgnoreTaskBar          = (1 << 20),
+        foNonICCCMConfigureRequest = (1 << 21),
+        foClose                    = (1 << 22),
     };
 
     unsigned frameFunctions() const { return fFrameFunctions; }
     unsigned frameDecors() const { return fFrameDecors; }
     unsigned frameOptions() const { return fFrameOptions; }
+    bool frameOption(YFrameOptions o) const { return hasbit(fFrameOptions, o); }
     void updateAllowed();
     void updateNetWMState();
     void getFrameHints();
-    void getWindowOptions(WindowOption &opt, bool remove); /// !!! fix kludges
-    void getWindowOptions(WindowOptions *list, WindowOption &opt, bool remove);
+    bool haveHintOption() const { return fHintOption; }
+    WindowOption& getHintOption() { return *fHintOption; }
+    WindowOption getWindowOption();
+    void getWindowOptions(WindowOptions* list, WindowOption& opt, bool remove);
 
     YMenu *windowMenu();
 
     long getState() const { return fWinState; }
     void setState(long mask, long state);
+    bool hasState(long bit) const { return hasbit(fWinState, bit); }
+    bool notState(long bit) const { return !hasbit(fWinState, bit); }
+    long oldState() const { return fOldState; }
 
-    bool isFullscreen() const { return (getState() & WinStateFullscreen); }
+    bool isFullscreen() const { return hasState(WinStateFullscreen); }
 
     int borderXN() const;
     int borderYN() const;
@@ -280,7 +291,7 @@ public:
     WindowListItem *winListItem() const { return fWinListItem; }
     void setWinListItem(WindowListItem *i) { fWinListItem = i; }
 
-    void addAsTransient();
+    bool addAsTransient();
     void removeAsTransient();
     void addTransients();
     void removeTransients();
@@ -296,7 +307,7 @@ public:
     ref<YIcon> getClientIcon() const { return fFrameIcon; }
     ref<YIcon> clientIcon() const;
 
-    void getNormalGeometryInner(int *x, int *y, int *w, int *h);
+    void getNormalGeometryInner(int *x, int *y, int *w, int *h) const;
     void setNormalGeometryOuter(int x, int y, int w, int h);
     void setNormalPositionOuter(int x, int y);
     void setNormalGeometryInner(int x, int y, int w, int h);
@@ -304,6 +315,7 @@ public:
 
     void setCurrentGeometryOuter(YRect newSize);
     void setCurrentPositionOuter(int x, int y);
+    void limitOuterPosition();
     void updateNormalSize();
 
     void updateTitle();
@@ -311,7 +323,7 @@ public:
     void updateIcon();
     void updateState();
     void updateLayer(bool restack = true);
-    //void updateWorkspace();
+    void updateIconPosition();
     void updateLayout();
     void updateExtents();
     void performLayout();
@@ -319,6 +331,7 @@ public:
     void updateMwmHints();
     void updateProperties();
     void updateTaskBar();
+    void updateAppStatus();
 
     enum WindowType {
         wtCombo,
@@ -338,7 +351,7 @@ public:
     };
 
     void setWindowType(enum WindowType winType) { fWindowType = winType; }
-    bool isTypeDock(void) { return (fWindowType == wtDock); }
+    bool isTypeDock() { return (fWindowType == wtDock); }
 
     int getWorkspace() const { return fWinWorkspace; }
     int getTrayOrder() const { return fTrayOrder; }
@@ -346,36 +359,35 @@ public:
     void setWorkspaceHint(long workspace);
     long getActiveLayer() const { return fWinActiveLayer; }
     void setRequestedLayer(long layer);
+    long getRequestedLayer() const { return fWinRequestedLayer; }
     long getTrayOption() const { return fWinTrayOption; }
     void setTrayOption(long option);
     void setDoNotCover(bool flag);
-    bool isMaximized() const { return (getState() &
-                                 (WinStateMaximizedHoriz |
-                                  WinStateMaximizedVert)) ? true : false; }
-    bool isMaximizedVert() const { return (getState() & WinStateMaximizedVert) ? true : false; }
-    bool isMaximizedHoriz() const { return (getState() & WinStateMaximizedHoriz) ? true : false; }
+    bool isMaximized() const { return hasState(WinStateMaximizedBoth); }
+    bool isMaximizedVert() const { return hasState(WinStateMaximizedVert); }
+    bool isMaximizedHoriz() const { return hasState(WinStateMaximizedHoriz); }
     bool isMaximizedFully() const { return isMaximizedVert() && isMaximizedHoriz(); }
-    bool isMinimized() const { return (getState() & WinStateMinimized) ? true : false; }
-    bool isHidden() const { return (getState() & WinStateHidden) ? true : false; }
-    bool isSkipPager() const { return (getState() & WinStateSkipPager) ? true : false; }
-    bool isSkipTaskBar() const { return (getState() & WinStateSkipTaskBar) ? true : false; }
-    bool isRollup() const { return (getState() & WinStateRollup) ? true : false; }
-    bool isSticky() const { return (getState() & WinStateSticky) ? true : false; }
-    bool isAllWorkspaces() const { return (getWorkspace() == -1) ? true : false; }
-    //bool isHidWorkspace() { return (getState() & WinStateHidWorkspace) ? true : false; }
-    //bool isHidTransient() { return (getState() & WinStateHidTransient) ? true : false; }
+    bool isMinimized() const { return hasState(WinStateMinimized); }
+    bool isHidden() const { return hasState(WinStateHidden); }
+    bool isSkipPager() const { return hasState(WinStateSkipPager); }
+    bool isSkipTaskBar() const { return hasState(WinStateSkipTaskBar); }
+    bool isRollup() const { return hasState(WinStateRollup); }
+    bool isSticky() const { return hasState(WinStateSticky); }
+    bool isAllWorkspaces() const { return (getWorkspace() == AllWorkspaces); }
+    //bool isHidWorkspace() { return hasState(WinStateHidWorkspace); }
+    //bool isHidTransient() { return hasState(WinStateHidTransient); }
 
-    bool wasMinimized() const { return (getState() & WinStateWasMinimized) ? true : false; }
-    bool wasHidden() const { return (getState() & WinStateWasHidden) ? true : false; }
+    bool wasMinimized() const { return hasState(WinStateWasMinimized); }
+    bool wasHidden() const { return hasState(WinStateWasHidden); }
 
     bool isIconic() const { return isMinimized() && fMiniIcon; }
-
+    bool hasMiniIcon() const { return fMiniIcon != nullptr; }
     MiniIcon *getMiniIcon();
 
     bool isManaged() const { return fManaged; }
     void setManaged(bool isManaged) { fManaged = isManaged; }
 
-    void setAllWorkspaces(void);
+    void setAllWorkspaces();
 
     bool visibleOn(int workspace) const {
         return (isAllWorkspaces() || getWorkspace() == workspace);
@@ -392,14 +404,12 @@ public:
     bool inWorkArea() const;
     bool affectsWorkArea() const;
 
-    bool doNotCover() const {
-        return (frameOptions() & foDoNotCover) ? true : false;
-    }
+    bool doNotCover() const { return frameOption(foDoNotCover); }
 
     virtual ref<YIcon> getIcon() const { return clientIcon(); }
 
-    virtual ustring getTitle() const { return client()->windowTitle(); }
-    virtual ustring getIconTitle() const { return client()->iconTitle(); }
+    virtual mstring getTitle() const { return client()->windowTitle(); }
+    virtual mstring getIconTitle() const { return client()->iconTitle(); }
 
     void updateNetWMStrut();
     void updateNetWMStrutPartial();
@@ -413,12 +423,14 @@ public:
     int strutRight() { return fStrutRight; }
     int strutTop() { return fStrutTop; }
     int strutBottom() { return fStrutBottom; }
+    bool haveStruts() const { return fHaveStruts; }
 
     void updateUrgency();
     void setWmUrgency(bool wmUrgency);
     bool isUrgent() { return fWmUrgency || fClientUrgency; }
 
-    int getScreen();
+    int getScreen() const;
+    void refresh();
 
     long getOldLayer() { return fOldLayer; }
     void saveOldLayer() { fOldLayer = fWinActiveLayer; }
@@ -427,6 +439,11 @@ public:
     Window topSideIndicator() const { return topSide; }
     Window topLeftIndicator() const { return topLeft; }
     Window topRightIndicator() const { return topRight; }
+    Time since() const { return fStartManaged; }
+    bool startMinimized() const { return frameOption(foMinimized); }
+
+    void addToWindowList();
+    void removeFromWindowList();
 
 private:
     /*typedef enum {
@@ -447,8 +464,6 @@ private:
     int posX, posY, posW, posH;
     int extentLeft, extentRight, extentTop, extentBottom;
 
-    int iconX, iconY;
-
     YFrameClient *fClient;
     YClientContainer *fClientContainer;
     YFrameTitleBar *fTitleBar;
@@ -462,7 +477,6 @@ private:
 
     Window topSide, leftSide, rightSide, bottomSide;
     Window topLeft, topRight, bottomLeft, bottomRight;
-    Window topLeftSide, topRightSide;
     bool indicatorsCreated;
     bool indicatorsVisible;
 
@@ -471,6 +485,7 @@ private:
     MiniIcon *fMiniIcon;
     WindowListItem *fWinListItem;
     ref<YIcon> fFrameIcon;
+    lazy<WindowOption> fHintOption;
 
     YFrameWindow *fOwner;
     YFrameWindow *fTransient;
@@ -487,6 +502,7 @@ private:
     long fWinState;
     long fWinOptionMask;
     long fOldLayer;
+    long fOldState;
     int fTrayOrder;
 
     int fFullscreenMonitorsTop;
@@ -505,13 +521,17 @@ private:
     // _NET_WM_USER_TIME support
     UserTime fUserTime;
     Window fUserTimeWindow;
+    Time fStartManaged;
 
     unsigned fShapeWidth;
     unsigned fShapeHeight;
     int fShapeTitleY;
     int fShapeBorderX;
     int fShapeBorderY;
+    unsigned fShapeDecors;
+    mstring fShapeTitle;
 
+    bool fHaveStruts;
     bool fWmUrgency;
     bool fClientUrgency;
 
@@ -535,13 +555,13 @@ private:
     // only focus if mouse moves
     //static int fMouseFocusX, fMouseFocusY;
 
-    void setGeometry(const YRect &);
-    void setPosition(int, int);
-    void setSize(int, int);
+    void repaint();
+    void setGeometry(const YRect &) = delete;
+    void setPosition(int, int) = delete;
+    void setSize(int, int) = delete;
     void setWindowGeometry(const YRect &r) {
         YWindow::setGeometry(r);
     }
-    friend class MiniIcon;
 };
 
 #endif

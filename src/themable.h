@@ -27,6 +27,8 @@ XIV(unsigned, wsTitleBar,                       20)
 XIV(int, titleBarJustify,                       0)
 XIV(int, titleBarHorzOffset,                    0)
 XIV(int, titleBarVertOffset,                    0)
+XIV(int, MenuButtonIconVertOffset,              0)
+XIV(unsigned, topSideVerticalOffset,            0)
 XIV(unsigned, scrollBarWidth,                   16)
 XIV(unsigned, scrollBarHeight,                  16)
 
@@ -154,7 +156,7 @@ XSV(const char *, gradients,                    0)
 
 cfoption icewm_themable_preferences[] = {
     OBV("RolloverButtonsSupported",             &rolloverTitleButtons,          "Does it support the 'O' title bar button images (for mouse rollover)"),
-    OBV("TaskBarClockLeds",                     &prettyClock,                   "Task bar clock/APM uses nice pixmapped LCD display (but then it doesn't display correctly in many languages anymore, e.g. for Japanese and Korean it works only when a real font is used and not the LEDs"),
+    OBV("TaskBarClockLeds",                     &prettyClock,                   "Task bar clock/battery monitor uses nice pixmap LCD display (but then it doesn't display correctly in many languages anymore, e.g., for Japanese and Korean it works only when a real font is used and not the LCD pixmaps"),
 
     OUV("TaskbuttonIconOffset",                 &taskbuttonIconOffset, 0, 16,   "Width of taskbutton side icons"),
     OUV("TrayIconMaxWidth",                     &trayIconMaxWidth, 16, 128,     "Maximum scaled width of tray icons"),
@@ -178,6 +180,7 @@ cfoption icewm_themable_preferences[] = {
     OIV("TitleBarJustify",                      &titleBarJustify, 0, 100,       "Justification of the window title"),
     OIV("TitleBarHorzOffset",                   &titleBarHorzOffset, -128, 128, "Horizontal offset for the window title text"),
     OIV("TitleBarVertOffset",                   &titleBarVertOffset, -128, 128, "Vertical offset for the window title text"),
+    OIV("MenuButtonIconVertOffset",             &MenuButtonIconVertOffset, -128, 128, "Vertical offset for the menu button icon"),
     OUV("ScrollBarX",                           &scrollBarWidth, 0, 64,         "Scrollbar width"),
     OUV("ScrollBarY",                           &scrollBarHeight, 0, 64,        "Scrollbar (button) height"),
 
@@ -195,8 +198,8 @@ cfoption icewm_themable_preferences[] = {
     OSV("ThemeAuthor",                          &themeAuthor,                   "Theme author, e-mail address, credits"),
     OSV("ThemeDescription",                     &themeDescription,              "Description of the theme, credits"),
 
-    OSV("TitleButtonsLeft",                     &titleButtonsLeft,              "Titlebar buttons from left to right (x=close,  m=max,  i=min,  h=hide, r=rollup,       s=sysmenu,      d=depth)"),
-    OSV("TitleButtonsRight",                    &titleButtonsRight,             "Titlebar buttons from right to left (x=close,  m=max,  i=min,  h=hide, r=rollup,       s=sysmenu,      d=depth)"),
+    OSV("TitleButtonsLeft",                     &titleButtonsLeft,              "Titlebar buttons from left to right (x=close, m=max, i=min, h=hide, r=rollup, s=sysmenu, d=depth)"),
+    OSV("TitleButtonsRight",                    &titleButtonsRight,             "Titlebar buttons from right to left (x=close, m=max, i=min, h=hide, r=rollup, s=sysmenu, d=depth)"),
     OSV("TitleButtonsSupported",                &titleButtonsSupported,         "Titlebar buttons supported by theme (x,m,i,r,h,s,d)"),
 /************************************************************************************************************************************************************
  * Font definitions
@@ -228,52 +231,52 @@ cfoption icewm_themable_preferences[] = {
     OSV("ColorActiveBorder",                    &clrActiveBorder,               "Border of active windows"),
 
     OSV("ColorNormalButton",                    &clrNormalButton,               "Background of regular buttons"),
-    OSV("ColorNormalButtonText",                &clrNormalButtonText,           "Textcolor of regular buttons"),
+    OSV("ColorNormalButtonText",                &clrNormalButtonText,           "Text color of regular buttons"),
     OSV("ColorActiveButton",                    &clrActiveButton,               "Background of pressed buttons"),
-    OSV("ColorActiveButtonText",                &clrActiveButtonText,           "Textcolor of pressed buttons"),
+    OSV("ColorActiveButtonText",                &clrActiveButtonText,           "Text color of pressed buttons"),
     OSV("ColorNormalTitleButton",               &clrNormalTitleButton,          "Background of titlebar buttons"),
-    OSV("ColorNormalTitleButtonText",           &clrNormalTitleButtonText,      "Textcolor of titlebar buttons"),
+    OSV("ColorNormalTitleButtonText",           &clrNormalTitleButtonText,      "Text color of titlebar buttons"),
     OSV("ColorToolButton",                      &clrToolButton,                 "Background of toolbar buttons, ColorNormalButton is used if empty"),
-    OSV("ColorToolButtonText",                  &clrToolButtonText,             "Textcolor of toolbar buttons, ColorNormalButtonText is used if empty"),
+    OSV("ColorToolButtonText",                  &clrToolButtonText,             "Text color of toolbar buttons, ColorNormalButtonText is used if empty"),
     OSV("ColorNormalWorkspaceButton",           &clrWorkspaceNormalButton,      "Background of workspace buttons, ColorNormalButton is used if empty"),
-    OSV("ColorNormalWorkspaceButtonText",       &clrWorkspaceNormalButtonText,  "Textcolor of workspace buttons, ColorNormalButtonText is used if empty"),
+    OSV("ColorNormalWorkspaceButtonText",       &clrWorkspaceNormalButtonText,  "Text color of workspace buttons, ColorNormalButtonText is used if empty"),
     OSV("ColorActiveWorkspaceButton",           &clrWorkspaceActiveButton,      "Background of the active workspace button, ColorActiveButton is used if empty"),
-    OSV("ColorActiveWorkspaceButtonText",       &clrWorkspaceActiveButtonText,  "Textcolor of the active workspace button, ColorActiveButtonText is used if empty"),
+    OSV("ColorActiveWorkspaceButtonText",       &clrWorkspaceActiveButtonText,  "Text color of the active workspace button, ColorActiveButtonText is used if empty"),
 
     OSV("ColorNormalTitleBar",                  &clrInactiveTitleBar,           "Background of the titlebar of regular windows"),
-    OSV("ColorNormalTitleBarText",              &clrInactiveTitleBarText,       "Textcolor of the titlebar of regular windows"),
-    OSV("ColorNormalTitleBarShadow",            &clrInactiveTitleBarShadow,     "Textshadow of the titlebar of regular windows"),
+    OSV("ColorNormalTitleBarText",              &clrInactiveTitleBarText,       "Text color of the titlebar of regular windows"),
+    OSV("ColorNormalTitleBarShadow",            &clrInactiveTitleBarShadow,     "Text shadow of the titlebar of regular windows"),
     OSV("ColorActiveTitleBar",                  &clrActiveTitleBar,             "Background of the titlebar of active windows"),
-    OSV("ColorActiveTitleBarText",              &clrActiveTitleBarText,         "Textcolor of the titlebar of active windows"),
-    OSV("ColorActiveTitleBarShadow",            &clrActiveTitleBarShadow,       "Textshadow of the titlebar of active windows"),
+    OSV("ColorActiveTitleBarText",              &clrActiveTitleBarText,         "Text color of the titlebar of active windows"),
+    OSV("ColorActiveTitleBarShadow",            &clrActiveTitleBarShadow,       "Text shadow of the titlebar of active windows"),
 
     OSV("ColorNormalMinimizedWindow",           &clrNormalMinimizedWindow,      "Background for mini icons of regular windows"),
-    OSV("ColorNormalMinimizedWindowText",       &clrNormalMinimizedWindowText,  "Textcolor for mini icons of regular windows"),
+    OSV("ColorNormalMinimizedWindowText",       &clrNormalMinimizedWindowText,  "Text color for mini icons of regular windows"),
     OSV("ColorActiveMinimizedWindow",           &clrActiveMinimizedWindow,      "Background for mini icons of active windows"),
-    OSV("ColorActiveMinimizedWindowText",       &clrActiveMinimizedWindowText,  "Textcolor for mini icons of active windows"),
+    OSV("ColorActiveMinimizedWindowText",       &clrActiveMinimizedWindowText,  "Text color for mini icons of active windows"),
 
     OSV("ColorNormalMenu",                      &clrNormalMenu,                 "Background of pop-up menus"),
-    OSV("ColorNormalMenuItemText",              &clrNormalMenuItemText,         "Textcolor of regular menu items"),
+    OSV("ColorNormalMenuItemText",              &clrNormalMenuItemText,         "Text color of regular menu items"),
     OSV("ColorActiveMenuItem",                  &clrActiveMenuItem,             "Background of selected menu item, leave empty to force transparency"),
-    OSV("ColorActiveMenuItemText",              &clrActiveMenuItemText,         "Textcolor of selected menu items"),
-    OSV("ColorDisabledMenuItemText",            &clrDisabledMenuItemText,       "Textcolor of disabled menu items"),
+    OSV("ColorActiveMenuItemText",              &clrActiveMenuItemText,         "Text color of selected menu items"),
+    OSV("ColorDisabledMenuItemText",            &clrDisabledMenuItemText,       "Text color of disabled menu items"),
     OSV("ColorDisabledMenuItemShadow",          &clrDisabledMenuItemShadow,     "Shadow of regular menu items"),
 
     OSV("ColorMoveSizeStatus",                  &clrMoveSizeStatus,             "Background of move/resize status window"),
-    OSV("ColorMoveSizeStatusText",              &clrMoveSizeStatusText,         "Textcolor of move/resize status window"),
+    OSV("ColorMoveSizeStatusText",              &clrMoveSizeStatusText,         "Text color of move/resize status window"),
 
     OSV("ColorQuickSwitch",                     &clrQuickSwitch,                "Background of the quick switch window"),
-    OSV("ColorQuickSwitchText",                 &clrQuickSwitchText,            "Textcolor in the quick switch window"),
+    OSV("ColorQuickSwitchText",                 &clrQuickSwitchText,            "Text color in the quick switch window"),
     OSV("ColorQuickSwitchActive",               &clrQuickSwitchActive,          "Rectangle arround the active icon in the quick switch window"),
     OSV("ColorDefaultTaskBar",                  &clrDefaultTaskBar,             "Background of the taskbar"),
     OSV("ColorNormalTaskBarApp",                &clrNormalTaskBarApp,           "Background for task buttons of regular windows"),
-    OSV("ColorNormalTaskBarAppText",            &clrNormalTaskBarAppText,       "Textcolor for task buttons of regular windows"),
+    OSV("ColorNormalTaskBarAppText",            &clrNormalTaskBarAppText,       "Text color for task buttons of regular windows"),
     OSV("ColorActiveTaskBarApp",                &clrActiveTaskBarApp,           "Background for task buttons of the active window"),
-    OSV("ColorActiveTaskBarAppText",            &clrActiveTaskBarAppText,       "Textcolor for task buttons of the active window"),
+    OSV("ColorActiveTaskBarAppText",            &clrActiveTaskBarAppText,       "Text color for task buttons of the active window"),
     OSV("ColorMinimizedTaskBarApp",             &clrMinimizedTaskBarApp,        "Background for task buttons of minimized windows"),
-    OSV("ColorMinimizedTaskBarAppText",         &clrMinimizedTaskBarAppText,    "Textcolor for task buttons of minimized windows"),
+    OSV("ColorMinimizedTaskBarAppText",         &clrMinimizedTaskBarAppText,    "Text color for task buttons of minimized windows"),
     OSV("ColorInvisibleTaskBarApp",             &clrInvisibleTaskBarApp,        "Background for task buttons of windows on other workspaces"),
-    OSV("ColorInvisibleTaskBarAppText",         &clrInvisibleTaskBarAppText,    "Textcolor for task buttons of windows on other workspaces"),
+    OSV("ColorInvisibleTaskBarAppText",         &clrInvisibleTaskBarAppText,    "Text color for task buttons of windows on other workspaces"),
     OSV("ColorScrollBar",                       &clrScrollBar,                  "Scrollbar background (sliding area)"),
     OSV("ColorScrollBarSlider",                 &clrScrollBarSlider,            "Background of the slider button in scrollbars"),
     OSV("ColorScrollBarButton",                 &clrScrollBarButton,            "Background of the arrow buttons in scrollbars"),
@@ -282,26 +285,26 @@ cfoption icewm_themable_preferences[] = {
     OSV("ColorScrollBarInactiveArrow",          &clrScrollBarInactive,          "Color of inactive arrows on scrollbar buttons"),
 
     OSV("ColorListBox",                         &clrListBox,                    "Background of listboxes"),
-    OSV("ColorListBoxText",                     &clrListBoxText,                "Textcolor in listboxes"),
+    OSV("ColorListBoxText",                     &clrListBoxText,                "Text color in listboxes"),
     OSV("ColorListBoxSelection",                &clrListBoxSelected,            "Background of selected listbox items"),
-    OSV("ColorListBoxSelectionText",            &clrListBoxSelectedText,        "Textcolor of selected listbox items"),
+    OSV("ColorListBoxSelectionText",            &clrListBoxSelectedText,        "Text color of selected listbox items"),
     OSV("ColorToolTip",                         &clrToolTip,                    "Background of tooltips"),
-    OSV("ColorToolTipText",                     &clrToolTipText,                "Textcolor of tooltips"),
+    OSV("ColorToolTipText",                     &clrToolTipText,                "Text color of tooltips"),
     OSV("ColorLabel",                           &clrLabel,                      "Background of labels, leave empty to force transparency"),
-    OSV("ColorLabelText",                       &clrLabelText,                  "Textcolor of labels"),
-    OSV("ColorInput",                           &clrInput,                      "Background of text entry fields (e.g. the addressbar)"),
-    OSV("ColorInputText",                       &clrInputText,                  "Textcolor of text entry fields (e.g. the addressbar)"),
+    OSV("ColorLabelText",                       &clrLabelText,                  "Text color of labels"),
+    OSV("ColorInput",                           &clrInput,                      "Background of text entry fields (e.g., the addressbar)"),
+    OSV("ColorInputText",                       &clrInputText,                  "Text color of text entry fields (e.g., the addressbar)"),
     OSV("ColorInputSelection",                  &clrInputSelection,             "Background of selected text in an entry field"),
     OSV("ColorInputSelectionText",              &clrInputSelectionText,         "Selected text in an entry field"),
 
     OSV("ColorClock",                           &clrClock,                      "Background of non-LCD clock, leave empty to force transparency"),
     OSV("ColorClockText",                       &clrClockText,                  "Background of non-LCD monitor"),
 
-    OSV("ColorApm",                             &clrApm,                        "Background of APM monitor, leave empty to force transparency"),
-    OSV("ColorApmText",                         &clrApmText,                    "Textcolor of APM monitor"),
+    OSV("ColorApm",                             &clrApm,                        "Background of battery monitor, leave empty to force transparency"),
+    OSV("ColorApmText",                         &clrApmText,                    "Text color of battery monitor"),
     OSV("ColorApmBattary",                      &clrApmBat,                     "Legacy option; don't use, see ColorApmBattery"),
-    OSV("ColorApmBattery",                      &clrApmBat,                     "Color of APM monitor in battery mode"),
-    OSV("ColorApmLine",                         &clrApmLine,                    "Color of APM monitor in line mode"),
+    OSV("ColorApmBattery",                      &clrApmBat,                     "Color of battery monitor when discharging"),
+    OSV("ColorApmLine",                         &clrApmLine,                    "Color of battery monitor when charging"),
     OSV("ColorApmGraphBg",                      &clrApmGraphBg,                 "Background color for graph mode"),
 
     OSV("ColorCPUStatusUser",                   &clrCpuUser,                    "User load on the CPU monitor"),

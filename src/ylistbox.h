@@ -1,7 +1,6 @@
-#ifndef __YLISTBOX_H
-#define __YLISTBOX_H
+#ifndef YLISTBOX_H
+#define YLISTBOX_H
 
-#include "ywindow.h"
 #include "yscrollbar.h"
 #include "yscrollview.h"
 
@@ -10,43 +9,48 @@ class YIcon;
 
 class YListItem {
 public:
-    YListItem();
-    virtual ~YListItem();
-
-    YListItem *getNext();
-    YListItem *getPrev();
-    void setNext(YListItem *next);
-    void setPrev(YListItem *prev);
+    YListItem() : fSelected(false) { }
+    virtual ~YListItem() { }
 
     bool getSelected() { return fSelected; }
-    void setSelected(bool aSelected);
+    void setSelected(bool aSelected) { fSelected = aSelected; }
 
-    virtual int getOffset();
-
-    virtual ustring getText();
-    virtual ref<YIcon> getIcon();
+    virtual int getOffset() { return 0; }
+    virtual int getWidth();
+    virtual mstring getText() { return null; }
+    virtual ref<YIcon> getIcon() { return null; }
 private:
-    bool fSelected; // !!! remove this from here
-    YListItem *fPrevItem, *fNextItem;
+    bool fSelected;
 };
 
-class YListBox: public YWindow, public YScrollBarListener, public YScrollable {
+class YListBox:
+    public YWindow,
+    public YScrollBarListener,
+    public YScrollable,
+    public YTimerListener
+{
 public:
     YListBox(YScrollView *view, YWindow *aParent);
     virtual ~YListBox();
 
-    int addItem(YListItem *item);
-    int addAfter(YListItem *prev, YListItem *item);
+    void addItem(YListItem *item);
+    void addAfter(YListItem *after, YListItem *item);
+    void addBefore(YListItem *before, YListItem *item);
     void removeItem(YListItem *item);
 
-    virtual void configure(const YRect &r);
+    virtual void configure(const YRect2 &r);
     virtual bool handleKey(const XKeyEvent &key);
     virtual void handleButton(const XButtonEvent &button);
     virtual void handleClick(const XButtonEvent &up, int count);
     virtual void handleDrag(const XButtonEvent &down, const XMotionEvent &motion);
     virtual void handleMotion(const XMotionEvent &motion);
     virtual bool handleAutoScroll(const XMotionEvent &mouse);
+    virtual bool handleTimer(YTimer* timer);
+    virtual void handleExpose(const XExposeEvent& expose) {}
+    virtual void handleVisibility(const XVisibilityEvent& visib);
 
+    virtual void outdated();
+    virtual void repaint();
     virtual void paint(Graphics &g, const YRect &r);
     virtual void scroll(YScrollBar *sb, int delta);
     virtual void move(YScrollBar *sb, int pos);
@@ -55,13 +59,10 @@ public:
     bool hasSelection();
     virtual void activateItem(YListItem *item);
 
-    YListItem *getFirst() const { return fFirst; }
-    YListItem *getLast() const { return fLast; }
-
-    int getItemCount();
+    int getItemCount() const { return fItems.getCount(); }
     YListItem *getItem(int item);
     int findItemByPoint(int x, int y);
-    int findItem(YListItem *item);
+    int findItem(YListItem *item) const { return find(fItems, item); }
     int getLineHeight();
 
     int maxWidth();
@@ -81,21 +82,21 @@ private:
     YScrollBar *fVerticalScroll;
     YScrollBar *fHorizontalScroll;
     YScrollView *fView;
-    YListItem *fFirst, *fLast;
-    int fItemCount;
-    YListItem **fItems;
 
     int fOffsetX;
     int fOffsetY;
     int fMaxWidth;
+    int fWidestItem;
     int fFocusedItem;
     int fSelectStart, fSelectEnd;
     bool fDragging;
     bool fSelect;
+    bool fVisible;
+    bool fOutdated;
+    GraphicsBuffer fGraphics;
 
     static int fAutoScrollDelta;
 
-    bool isItemSelected(int item);
     void selectItem(int item, bool sel);
     void selectItems(int selStart, int selEnd, bool sel);
     void paintItems(int selStart, int selEnd);
@@ -112,7 +113,15 @@ private:
     void focusVisible();
     void ensureVisibility(int item);
 
+    lazy<YTimer> fTimer;
     ref<YImage> fGradient;
+
+    typedef YArray<YListItem*> ArrayType;
+    ArrayType fItems;
+
+protected:
+    typedef ArrayType::IterType IterType;
+    IterType getIterator() { return fItems.iterator(); }
 };
 
 #endif

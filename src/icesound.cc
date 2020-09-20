@@ -49,9 +49,10 @@
 #include "config.h"
 #include <assert.h>
 #include <signal.h>
+#include <string.h>
 #include <X11/Xlib.h>
 
-#include "ytimer.h"
+#include "ytime.h"
 #include "base.h"
 #include "ypointer.h"
 #include "upath.h"
@@ -72,7 +73,7 @@
 #undef ENABLE_OSS
 #endif
 
-#ifdef HAVE_SNDFILE_H
+#if defined(ENABLE_ALSA) || defined(ENABLE_AO) || defined(ENABLE_OSS)
 #include <sndfile.h>
 #endif
 
@@ -100,9 +101,6 @@ static const char audio_interfaces[] =
 #ifdef ENABLE_AO
     "AO,"
 #endif
-#ifdef ENABLE_ESD
-    "ESD,"
-#endif
 #ifdef ENABLE_ALSA
     "ALSA,"
 #endif
@@ -127,7 +125,6 @@ public:
     virtual bool verbose() const = 0;
     virtual const char* alsaDevice() const = 0;
     virtual const char* ossDevice() const = 0;
-    virtual const char* esdServer() const = 0;
 
     /**
      * Finds a filename for sample with the specified gui event.
@@ -182,8 +179,8 @@ private:
 };
 
 YALSAAudio::YALSAAudio() :
-    conf(0),
-    playback_handle(0)
+    conf(nullptr),
+    playback_handle(nullptr)
 {
 }
 
@@ -191,7 +188,7 @@ YALSAAudio::~YALSAAudio() {
     if (playback_handle) {
         snd_pcm_hw_free(playback_handle);
         snd_pcm_close(playback_handle);
-        playback_handle = 0;
+        playback_handle = nullptr;
     }
 }
 
@@ -212,18 +209,18 @@ int YALSAAudio::open() {
  */
 bool YALSAAudio::play(int sound) {
     csmart samplefile(conf->findSample(sound));
-    if (samplefile == NULL)
+    if (samplefile == nullptr)
         return false;
 
     if (conf->verbose())
         tlog(_("Playing sample #%d (%s)"), sound, (char *) samplefile);
 
     int err;
-    snd_pcm_hw_params_t *hw_params(0);
+    snd_pcm_hw_params_t *hw_params(nullptr);
 
     SF_INFO sfinfo = {};
     SNDFILE* sf = sf_open(samplefile, SFM_READ, &sfinfo);
-    if (sf == NULL) {
+    if (sf == nullptr) {
         warn("%s: %s", (char *) samplefile, sf_strerror(sf));
         goto done;
     }
@@ -253,7 +250,7 @@ bool YALSAAudio::play(int sound) {
     }
 
     if ((err = snd_pcm_hw_params_set_rate_near(playback_handle, hw_params,
-                    (unsigned int *)&sfinfo.samplerate, 0)) < 0) {
+                    (unsigned int *)&sfinfo.samplerate, nullptr)) < 0) {
         warn("cannot set sample rate (%s)\n", snd_strerror(err));
         goto done;
     }
@@ -278,7 +275,7 @@ bool YALSAAudio::play(int sound) {
         const int N = 8*1024;
         short sbuf[N]; // period_size * channels * snd_pcm_format_width(format)) / 8
         for (int n; (n = sf_readf_short(sf, sbuf, N / 2)) > 0; ) {
-            if ((err = snd_pcm_writei(playback_handle, sbuf, n) != n)) {
+            if ((err = snd_pcm_writei(playback_handle, sbuf, n)) != n) {
                 warn("write to audio interface failed (%s) %zd %d\n",
                          snd_strerror(err), sizeof(short), n);
                 goto done;
@@ -304,7 +301,7 @@ done:
 
 class YOSSAudio : public YAudioInterface {
 public:
-    YOSSAudio(): conf(0), device(-1) {}
+    YOSSAudio(): conf(nullptr), device(-1) {}
     ~YOSSAudio();
 
     virtual bool play(int sound);
@@ -320,7 +317,7 @@ private:
  */
 bool YOSSAudio::play(int sound) {
     csmart samplefile(conf->findSample(sound));
-    if (samplefile == NULL)
+    if (samplefile == nullptr)
         return false;
 
     if (conf->verbose())
@@ -328,7 +325,7 @@ bool YOSSAudio::play(int sound) {
 
     SF_INFO sfinfo = {};
     SNDFILE* sf = sf_open(samplefile, SFM_READ, &sfinfo);
-    if (sf == NULL) {
+    if (sf == nullptr) {
         warn("%s: %s", (char *) samplefile, sf_strerror(sf));
         return false;
     }
@@ -440,150 +437,6 @@ YOSSAudio::~YOSSAudio() {
 #endif /* ENABLE_OSS */
 
 /******************************************************************************
- * Enlightenment Sound Daemon audio interface
- ******************************************************************************/
-
-#ifdef ENABLE_ESD
-
-#include <esd.h>
-
-class YESDAudio : public YAudioInterface {
-public:
-    YESDAudio():
-        socket(-1)
-    {
-        for (unsigned i = 0; i < ACOUNT(sample); ++i) sample[i] = -1;
-    }
-
-    virtual ~YESDAudio() {
-        unloadSamples();
-        if (socket > -1) {
-            esd_close(socket);
-            socket = -1;
-        }
-    }
-
-    virtual bool play(int sound);
-
-    virtual void reload() {
-        unloadSamples();
-        uploadSamples();
-    }
-
-    virtual int init(SoundConf* conf);
-
-private:
-    int uploadSamples();
-    int unloadSamples();
-
-    int uploadSample(int sound, char const * path);
-
-protected:
-    SoundConf* conf;
-    int sample[NUM_GUI_EVENTS];     // cache audio samples
-    int socket;                     // socket to ESound Daemon
-};
-
-int YESDAudio::init(SoundConf* conf) {
-    this->conf = conf;
-
-    const char* server = conf->esdServer();
-    if ((socket = esd_open_sound(server)) == -1) {
-        if (conf->verbose())
-            warn(_("Can't connect to ESound daemon: %s"),
-                 server ? server : _("<none>"));
-        return ICESOUND_IF_ERROR;
-    }
-
-    uploadSamples();
-    return ICESOUND_SUCCESS;
-}
-
-/**
- * Upload a sample in the ESounD server.
- * Returns sample ID or negative on error.
- */
-int YESDAudio::uploadSample(int sound, char const * path) {
-    if (socket < 0) return -1;
-
-    int rc(esd_file_cache(socket, ApplicationName, path));
-
-    if (rc < 0)
-        msg(_("Error <%d> while uploading `%s:%s'"), rc,
-            ApplicationName, path);
-    else {
-        sample[sound] = rc;
-
-        if (conf->verbose())
-            tlog(_("Sample <%d> uploaded as `%s:%s'"), rc,
-                ApplicationName, path);
-    }
-
-    return rc;
-}
-
-/**
- * Unload all samples from the ESounD server.
- * Returns number of samples catched.
- */
-
-int YESDAudio::unloadSamples() {
-    if (socket < 0) return 0;
-
-    int cnt(0);
-    for (int i(0); i < NUM_GUI_EVENTS; ++i)
-        if (sample[i] > 0) {
-            esd_sample_free(socket, sample[i]);
-            cnt++;
-        }
-
-    return cnt;
-}
-
-/**
- * Upload all samples into the EsounD server.
- * Returns the number of loaded samples.
- */
-
-int YESDAudio::uploadSamples() {
-    if (socket < 0) return 0;
-
-    int cnt(0);
-    for (int i(0); i < NUM_GUI_EVENTS; i++) {
-        csmart samplefile(conf->findSample(i));
-
-        if (samplefile != NULL) {
-            if (uploadSample(i, samplefile) >= 0) ++cnt;
-        }
-    }
-
-    if (soundAsync.reload)
-        soundAsync.reload = false;
-
-    return cnt;
-}
-
-/**
- * Play a cached sound sample using ESounD.
- */
-bool YESDAudio::play(int sound) {
-    if (socket < 0) return false;
-
-    if (soundAsync.reload)
-        reload();
-
-    if (conf->verbose())
-        tlog(_("Playing sample #%d: %d"), sound, sample[sound]);
-
-    if (sample[sound] > 0)
-        esd_sample_play(socket, sample[sound]);
-
-    return true;
-}
-
-#endif /* ENABLE_ESD */
-
-/******************************************************************************
  * LibAO cross-platform audio output library version 1.2.0 or later.
  ******************************************************************************/
 
@@ -594,7 +447,7 @@ bool YESDAudio::play(int sound) {
 class YAOAudio : public YAudioInterface {
 public:
     YAOAudio() :
-        conf(0),
+        conf(nullptr),
         driver(-1)
     {
     }
@@ -624,18 +477,18 @@ int YAOAudio::init(SoundConf* conf) {
  */
 bool YAOAudio::play(int sound) {
     csmart samplefile(conf->findSample(sound));
-    if (samplefile == NULL)
+    if (samplefile == nullptr)
         return false;
 
     if (conf->verbose())
         tlog(_("Playing sample #%d (%s)"), sound, (char *) samplefile);
 
-    ao_device* device = 0;
+    ao_device* device = nullptr;
     ao_sample_format format = {};
 
     SF_INFO sfinfo = {};
     SNDFILE* sf = sf_open(samplefile, SFM_READ, &sfinfo);
-    if (sf == NULL) {
+    if (sf == nullptr) {
         warn("%s: %s", (char *) samplefile, sf_strerror(sf));
         goto done;
     }
@@ -644,10 +497,10 @@ bool YAOAudio::play(int sound) {
     format.rate = sfinfo.samplerate;
     format.channels = sfinfo.channels;
     format.byte_format = AO_FMT_LITTLE;
-    format.matrix = NULL;
+    format.matrix = nullptr;
 
-    device = ao_open_live(driver, &format, NULL);
-    if (device == NULL) {
+    device = ao_open_live(driver, &format, nullptr);
+    if (device == nullptr) {
         warn(_("ao_open_live failed with %d"), errno);
         goto done;
     }
@@ -681,8 +534,10 @@ done:
 
 class IceSound : public SoundConf {
 public:
-    IceSound(int argc, char** argv);
+    IceSound();
     virtual ~IceSound() {}
+
+    void parseArgs(int argc, char** argv);
 
     virtual bool verbose() const { return verbosity; }
     virtual const char* alsaDevice() const {
@@ -692,9 +547,6 @@ public:
     virtual const char* ossDevice() const {
         return ossDeviceFile ? ossDeviceFile :
             deviceFile ? deviceFile : OSS_DEFAULT_DEVICE;
-    }
-    virtual const char* esdServer() const {
-        return esdServerName ? esdServerName : getenv("ESPEAKER");
     }
     virtual char* findSample(int sound) const;
 
@@ -707,7 +559,6 @@ private:
     char const* deviceFile;
     char const* alsaDeviceFile;
     char const* ossDeviceFile;
-    char const* esdServerName;
     char const* displayName;
     char const* interfaceNames;
     class YAudioInterface* audio;
@@ -736,18 +587,17 @@ private:
     static void hup(int sig);
 };
 
-IceSound::IceSound(int argc, char** argv) :
+IceSound::IceSound() :
     verbosity(false),
-    sampleDir(0),
-    deviceFile(0),
-    alsaDeviceFile(0),
-    ossDeviceFile(0),
-    esdServerName(0),
-    displayName(0),
+    sampleDir(nullptr),
+    deviceFile(nullptr),
+    alsaDeviceFile(nullptr),
+    ossDeviceFile(nullptr),
+    displayName(nullptr),
     interfaceNames(audio_interfaces),
-    audio(0),
+    audio(nullptr),
     _GUI_EVENT(None),
-    display(NULL),
+    display(nullptr),
     root(None),
     last(zerotime()),
     snooze(DEFAULT_SNOOZE_TIME)
@@ -757,9 +607,13 @@ IceSound::IceSound(int argc, char** argv) :
 #endif
     initPaths();
     initSignals();
+}
+
+void IceSound::parseArgs(int argc, char** argv)
+{
     for (char **arg = argv + 1; arg < argv + argc; ++arg) {
         if (**arg == '-') {
-            char* value(0);
+            char* value(nullptr);
             if (GetArgument(value, "d", "display", arg, argv + argc)) {
                 displayName = value;
             }
@@ -779,10 +633,10 @@ IceSound::IceSound(int argc, char** argv) :
                 ossDeviceFile = value;
             }
             else if (GetArgument(value, "S", "server", arg, argv + argc)) {
-                esdServerName = value;
+                /*ignore*/;
             }
             else if (GetArgument(value, "z", "snooze", arg, argv + argc)) {
-                long t = strtol(value, NULL, 10);
+                long t = strtol(value, nullptr, 10);
                 if (t > 0) snooze = t;
             }
             else if (is_switch(*arg, "v", "verbose")) {
@@ -793,6 +647,9 @@ IceSound::IceSound(int argc, char** argv) :
             }
             else if (is_version_switch(*arg)) {
                 print_version_exit(VERSION);
+            }
+            else if (is_copying_switch(*arg)) {
+                print_copying_exit();
             }
             else if (is_switch(*arg, "l", "list-files")) {
                 for (int i = 0; i < NUM_GUI_EVENTS; ++i) {
@@ -856,9 +713,6 @@ Options:\n\
  -O, --oss=DEVICE        Specifies the OSS device (default: \"%s\").\n\
 \n\
  -A, --alsa=DEVICE       Specifies the ALSA device (default: \"%s\").\n\
-\n\
- -S, --server=ADDR:PORT  Specifies the ESD server address and port number.\n\
-                         For ESD the default is \"localhost:16001\".\n\
 \n\
  -z, --snooze=millisecs  Specifies the snooze interval between sound events\n\
                          in milliseconds. Default is 500 milliseconds.\n\
@@ -929,7 +783,7 @@ char* IceSound::findSample(int sound) const {
         if (verbose())
             tlog(_("No audio for %s"), name(sound));
     }
-    return NULL;
+    return nullptr;
 }
 
 /**
@@ -941,7 +795,7 @@ int IceSound::run() {
     int rc = chooseInterface();
     if (rc) return rc;
 
-    if (NULL == (display = XOpenDisplay(displayName))) { // === connect to X11 ===
+    if (nullptr == (display = XOpenDisplay(displayName))) { // === connect to X11 ===
         warn(_("Can't open display: %s. X must be running and $DISPLAY set."),
              XDisplayName(displayName));
         rc = ICESOUND_IF_ERROR;
@@ -952,10 +806,10 @@ int IceSound::run() {
         XSelectInput(display, root, PropertyChangeMask);
         loopEvents();
         XCloseDisplay(display);
-        display = NULL;
+        display = nullptr;
     }
     delete audio;
-    audio = NULL;
+    audio = nullptr;
     return rc;
 }
 
@@ -965,7 +819,7 @@ void IceSound::loopEvents() {
     FD_ZERO(&rfds);
     for (readEvents(); soundAsync.running; readEvents()) {
         FD_SET(fd, &rfds);
-        select(fd + 1, SELECT_TYPE_ARG234 &rfds, NULL, NULL, NULL);
+        select(fd + 1, SELECT_TYPE_ARG234 &rfds, nullptr, nullptr, nullptr);
     }
 }
 
@@ -987,7 +841,7 @@ int IceSound::getProperty() {
     Atom type;
     int format;
     unsigned long nitems, lbytes;
-    unsigned char *propdata(0);
+    unsigned char *propdata(nullptr);
     int gev(-1);
 
     if (XGetWindowProperty(display, root, _GUI_EVENT,
@@ -1036,11 +890,11 @@ void IceSound::nosupport(const char* name) {
 int IceSound::chooseInterface() {
     int rc(ICESOUND_IF_ERROR);
     mstring name, list(interfaceNames);
-    while (audio == NULL && list.splitall(',', &name, &list)) {
+    while (audio == nullptr && list.splitall(',', &name, &list)) {
         if (name.isEmpty())
             continue;
         name = name.upper();
-        const char* val = cstring(name);
+        const char* val = name;
         if (name == "OSS") {
 #ifdef ENABLE_OSS
             audio = new YOSSAudio();
@@ -1062,13 +916,6 @@ int IceSound::chooseInterface() {
             nosupport(val);
 #endif
         }
-        else if (name == "ESD" || name == "ESOUND") {
-#ifdef ENABLE_ESD
-            audio = new YESDAudio();
-#else
-            nosupport(val);
-#endif
-        }
         else {
             warn(_("Unsupported interface: %s."), val);
         }
@@ -1076,13 +923,13 @@ int IceSound::chooseInterface() {
             rc = audio->init(this);
             if (rc) {
                 delete audio;
-                audio = 0;
+                audio = nullptr;
             }
             else if (verbose())
                 tlog(_("Using %s audio."), val);
         }
     }
-    if (audio == NULL) {
+    if (audio == nullptr) {
         warn(_("Failed to connect to audio interfaces %s."), interfaceNames);
     }
 
@@ -1123,7 +970,7 @@ void IceSound::playOnce(char* value) {
             if (audio->play(sound)) {
                 audio->drain();
             }
-            delete audio; audio = 0;
+            delete audio; audio = nullptr;
         }
     }
     else {
@@ -1137,7 +984,10 @@ int main(int argc, char *argv[]) {
     textdomain(PACKAGE);
 
     ApplicationName = my_basename(argv[0]);
-    return IceSound(argc, argv).run();
+
+    IceSound icesound;
+    icesound.parseArgs(argc, argv);
+    return icesound.run();
 }
 
 

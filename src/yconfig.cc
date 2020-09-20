@@ -13,27 +13,6 @@
 #include "ascii.h"
 #include "argument.h"
 
-upath findPath(ustring path, int mode, upath name) {
-    if (name.isAbsolute()) { // check for root in XFreeOS/2
-        if (name.fileExists() && name.access(mode) == 0)
-            return name;
-    } else {
-        if (path == null)
-            return null;
-
-        ustring s(null), r(null);
-        for (s = path; s.splitall(PATHSEP, &s, &r); s = r) {
-            if (s.isEmpty())
-                continue;
-
-            upath prog = upath(s).relative(name);
-            if (prog.access(mode) == 0)
-                return prog;
-        }
-    }
-    return null;
-}
-
 char *YConfig::getArgument(Argument *dest, char *source, bool comma) {
     char *p = source;
     while (ASCII::isSpaceOrTab(*p))
@@ -169,7 +148,7 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
             break;
         case cfoption::CF_UINT:
             if (options[a].v.u.uint_value) {
-                unsigned const v(strtoul(arg, NULL, 0));
+                unsigned const v(strtoul(arg, nullptr, 0));
 
                 if (v >= options[a].v.u.min && v <= options[a].v.u.max)
                     *(options[a].v.u.uint_value) = v;
@@ -184,7 +163,7 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
         case cfoption::CF_STR:
             if (options[a].v.s.string_value) {
                 if (!options[a].v.s.initial)
-                    delete[] (char *)*options[a].v.s.string_value;
+                    delete[] const_cast<char *>(*options[a].v.s.string_value);
                 *options[a].v.s.string_value = newstr(arg);
                 options[a].v.s.initial = false;
                 return rest;
@@ -196,7 +175,7 @@ static char *setOption(cfoption *options, char *name, const char *arg, bool appe
 
                 if (YConfig::parseKey(arg, &wk->key, &wk->mod)) {
                     if (!wk->initial)
-                        delete[] (char *)wk->name;
+                        delete[] const_cast<char *>(wk->name);
                     wk->name = newstr(arg);
                     wk->initial = false;
                 }
@@ -250,12 +229,12 @@ static char *parseOption(cfoption *options, char *str) {
         }
 
         p = YConfig::getArgument(&argument, p, true);
-        if (p == 0)
+        if (p == nullptr)
             break;
 
         p = setOption(options, name, argument, append, p);
-        if (p == 0)
-            return 0;
+        if (p == nullptr)
+            return nullptr;
 
         while (ASCII::isSpaceOrTab(*p))
             p++;
@@ -279,12 +258,11 @@ void YConfig::parseConfiguration(cfoption *options, char *data) {
 }
 
 bool YConfig::loadConfigFile(cfoption *options, upath fileName) {
-    char* buf = fileName.loadText();
-    if (buf) {
+    YTraceConfig trace(fileName.string());
+    auto buf = fileName.loadText();
+    if (buf)
         parseConfiguration(options, buf);
-        delete[] buf;
-    }
-    return buf != 0;
+    return buf;
 }
 
 void YConfig::freeConfig(cfoption *options) {
@@ -293,8 +271,8 @@ void YConfig::freeConfig(cfoption *options) {
             !o->v.s.initial &&
             *o->v.s.string_value)
         {
-            delete[] (char *)*o->v.s.string_value;
-            *o->v.s.string_value = 0;
+            delete[] const_cast<char *>(*o->v.s.string_value);
+            *o->v.s.string_value = nullptr;
         }
     }
 }
@@ -307,7 +285,7 @@ bool YConfig::findLoadConfigFile(IApp *app, cfoption *options, upath name) {
 bool YConfig::findLoadThemeFile(IApp *app, cfoption *options, upath name) {
     upath conf = app->findConfigFile(name);
     if (conf.isEmpty() || false == conf.fileExists()) {
-        if (name.getExtension().isEmpty())
+        if (name.getExtension() != ".theme")
             conf = app->findConfigFile(name + "default.theme");
     }
     return conf.nonempty() && YConfig::loadConfigFile(options, conf);

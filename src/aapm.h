@@ -1,37 +1,41 @@
+#ifndef AAPM_H
+#define AAPM_H
 
-#if defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#ifndef __sun__
 
-#include "ywindow.h"
 #include "ytimer.h"
 
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#define APMDEV "/dev/apm"
-#else
+#ifdef __linux__
 #define APMDEV "/proc/apm"
+#else
+#define APMDEV "/dev/apm"
+#endif
+#if __FreeBSD__ || __FreeBSD_kernel__
+#define ACPIDEV "/dev/acpi"
 #endif
 
-//assume there is no laptop with more
-//than 3 batteries
+// assume at most 3 batteries
 #define MAX_ACPI_BATTERY_NUM 3
 
 struct Battery {
-  //(file)name of battery
-  char *name;
-  bool present;
-  int capacity_full;
-  Battery(const char* batName) : name(newstr(batName)),
-          present(false), capacity_full(-1) { }
-  ~Battery() { delete[] name; name = 0; }
+    mstring name;
+    bool present;
+    int capacity_full;
+
+    Battery(const char* batName) : name(batName),
+            present(false), capacity_full(-1) { }
 };
 
 
-class YApm: public YWindow, public YTimerListener {
+class YApm:
+    public IApplet,
+    private Picturer,
+    private YTimerListener
+{
 public:
-        // autodetect==true means becoming dormant if no battery was detected correctly
-    YApm(YWindow *aParent = 0, bool autodetect=false);
+    // if autodetect==true and no battery then go to sleep
+    YApm(YWindow *aParent = nullptr, bool autodetect = false);
     virtual ~YApm();
-
-    virtual void paint(Graphics &g, const YRect &r);
 
     virtual void updateToolTip();
     virtual bool handleTimer(YTimer *t);
@@ -69,14 +73,19 @@ private:
     //(file)name of ac adapter
     char *acpiACName;
     char *fCurrentState;
+    bool fStatusChanged;
 
     // On line status and charge persent
     bool     acIsOnLine;
     // current and maximum charge, large enough for hundred 40Wh batteries
     unsigned    energyNow, energyFull;
 
-    void updateState();
+    bool updateState();
+    bool picture();
+    void draw(Graphics& g);
 };
+#endif
+
 #endif
 
 // vim: set sw=4 ts=4 et:

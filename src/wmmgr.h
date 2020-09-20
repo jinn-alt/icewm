@@ -1,18 +1,15 @@
-#ifndef __WMMGR_H
-#define __WMMGR_H
+#ifndef WMMGR_H
+#define WMMGR_H
 
 #include "WinMgr.h"
 #include "ylist.h"
 #include "yaction.h"
+#include "ymsgbox.h"
+#include "workspaces.h"
 
-#define MAXWORKSPACES     20
-
-extern long workspaceCount;
-extern char *workspaceNames[MAXWORKSPACES];
-extern YAction workspaceActionActivate[MAXWORKSPACES];
-extern YAction workspaceActionMoveTo[MAXWORKSPACES];
 extern YAction layerActionSet[WinLayerCount];
 
+class YStringList;
 class YWindowManager;
 class YFrameClient;
 class YFrameWindow;
@@ -66,13 +63,14 @@ public:
 
     virtual void handleCrossing(const XCrossingEvent &crossing);
     virtual bool handleTimer(YTimer *t);
+    void setGeometry();
 private:
     YWindowManager *fManager;
     YCursor & fCursor;
     int fDelta;
     bool fVert;
 
-    static lazy<YTimer> fEdgeSwitchTimer;
+    lazy<YTimer> fEdgeSwitchTimer;
 };
 
 class YProxyWindow: public YWindow {
@@ -83,7 +81,7 @@ public:
     virtual void handleButton(const XButtonEvent &button);
 };
 
-class YWindowManager: public YDesktop {
+class YWindowManager: private YDesktop, private YMsgBoxListener {
 public:
     YWindowManager(
         IApp *app,
@@ -104,16 +102,19 @@ public:
     virtual void handleConfigureRequest(const XConfigureRequestEvent &configureRequest);
     virtual void handleMapRequest(const XMapRequestEvent &mapRequest);
     virtual void handleUnmapNotify(const XUnmapEvent &unmap);
-    virtual void handleDestroyWindow(const XDestroyWindowEvent &destroyWindow);
     virtual void handleClientMessage(const XClientMessageEvent &message);
     virtual void handleProperty(const XPropertyEvent &property);
     virtual void handleFocus(const XFocusChangeEvent &focus);
 #ifdef CONFIG_XRANDR
     virtual void handleRRScreenChangeNotify(const XRRScreenChangeNotifyEvent &xrrsc);
+    virtual void handleRRNotify(const XRRNotifyEvent &notify);
 #endif
+    virtual void handleMsgBox(YMsgBox *msgbox, int operation);
 
     void manageClients();
     void unmanageClients();
+    void grabServer();
+    void ungrabServer();
 
     Window findWindow(char const* resource);
     Window findWindow(Window root, char const* resource, int maxdepth);
@@ -122,8 +123,7 @@ public:
     YFrameWindow *findFrame(Window win);
     YFrameClient *findClient(Window win);
     YFrameWindow *manageClient(Window win, bool mapClient = false);
-    void unmanageClient(Window win, bool mapClient = false,
-                        bool reparent = true);
+    void unmanageClient(YFrameClient *client);
     void destroyedClient(Window win);
     YFrameWindow *mapClient(Window win);
 
@@ -137,8 +137,8 @@ public:
 
     void removeClientFrame(YFrameWindow *frame);
 
-    void UpdateScreenSize(XEvent *event);
-    void getWorkArea(YFrameWindow *frame, int *mx, int *my, int *Mx, int *My, int xiscreen = -1) const;
+    void updateScreenSize(XEvent *event);
+    void getWorkArea(const YFrameWindow *frame, int *mx, int *my, int *Mx, int *My, int xiscreen = -1);
     void getWorkAreaSize(YFrameWindow *frame, int *Mw,int *Mh);
 
     int calcCoverage(bool down, YFrameWindow *frame, int x, int y, int w, int h);
@@ -156,8 +156,8 @@ public:
     YFrameWindow *topLayer(long layer = WinLayerCount - 1);
     YFrameWindow *bottomLayer(long layer = 0);
 
-    void setAbove(YFrameWindow* frame, YFrameWindow* above);
-    void setBelow(YFrameWindow* frame, YFrameWindow* below);
+    bool setAbove(YFrameWindow* frame, YFrameWindow* above);
+    bool setBelow(YFrameWindow* frame, YFrameWindow* below);
     void removeLayeredFrame(YFrameWindow *);
     void appendCreatedFrame(YFrameWindow *f);
     void removeCreatedFrame(YFrameWindow *f);
@@ -170,13 +170,12 @@ public:
     void lowerFocusFrame(YFrameWindow* frame);
     void raiseFocusFrame(YFrameWindow* frame);
 
-    void restackWindows(YFrameWindow *win);
+    void restackWindows();
     void focusTopWindow();
-    YFrameWindow *getFrameUnderMouse(long workspace = -1);
-    YFrameWindow *getLastFocus(bool skipAllWorkspaces = false, long workspace = -1);
+    YFrameWindow *getFrameUnderMouse(long workspace = AllWorkspaces);
+    YFrameWindow *getLastFocus(bool skipAllWorkspaces = false, long workspace = AllWorkspaces);
     void focusLastWindow();
     bool focusTop(YFrameWindow *f);
-    void relocateWindows(long workspace, int screen, int dx, int dy);
     void updateClientList();
     void updateUserTime(const UserTime& userTime);
 
@@ -189,11 +188,9 @@ public:
     long activeWorkspace() const { return fActiveWorkspace; }
     long lastWorkspace() const { return fLastWorkspace; }
     void activateWorkspace(long workspace);
-    long workspaceCount() const { return ::workspaceCount; }
-    const char *workspaceName(long workspace) const { return ::workspaceNames[workspace]; }
 
-    void appendNewWorkspace();
-    void removeLastWorkspace();
+    void appendNewWorkspaces(long extra);
+    void removeLastWorkspaces(long minus);
     void updateWorkspaces(bool increase);
 
     void setShowingDesktop();
@@ -204,11 +201,11 @@ public:
 
     bool readCurrentDesktop(long &workspace);
     void setDesktopGeometry();
-    bool compareDesktopNames(char **strings, int count);
+    bool compareDesktopNames(const YStringList& list);
     bool readDesktopLayout();
-    bool readDesktopNames();
-    bool readNetDesktopNames();
-    bool readWinDesktopNames();
+    void readDesktopNames(bool init, bool net);
+    bool readNetDesktopNames(YStringList& list);
+    bool readWinDesktopNames(YStringList& list);
     void setWinDesktopNames(long count);
     void setNetDesktopNames(long count);
     void setDesktopNames(long count);
@@ -217,15 +214,17 @@ public:
     void setDesktopViewport();
 
     void announceWorkArea();
-    void setWinWorkspace(long workspace);
+    void setWinWorkspace(int workspace);
     void updateWorkArea();
+    bool updateWorkAreaInner();
+    void debugWorkArea(const char* prefix);
+    void workAreaUpdated();
     void resizeWindows();
 
     void getIconPosition(YFrameWindow *frame, int *iconX, int *iconY);
 
     void wmCloseSession();
     void exitAfterLastClient(bool shuttingDown);
-    static void execAfterFork(const char *command);
     void checkLogout();
 
     virtual void resetColormap(bool active);
@@ -249,19 +248,22 @@ public:
     void cascadePlace(YFrameWindow **w, int count);
     void setWindows(YFrameWindow **w, int count, YAction action);
 
-    void getWindowsToArrange(YFrameWindow ***w, int *count, bool sticky = false, bool skipNonMinimizable = false);
+    bool getWindowsToArrange(YFrameWindow ***w, int *count, bool sticky = false, bool skipNonMinimizable = false);
 
     void saveArrange(YFrameWindow **w, int count);
     void undoArrange();
+    void arrangeIcons();
 
     bool haveClients();
     void setupRootProxy();
-
-    void setWorkAreaMoveWindows(bool m) { fWorkAreaMoveWindows = m; }
+    void setKeyboard(mstring keyboard);
+    void setKeyboard(int configIndex);
+    mstring getKeyboard();
+    void updateKeyboard(int configIndex);
 
     void updateFullscreenLayer();
     void updateFullscreenLayerEnable(bool enable);
-    int getScreen();
+    int getSwitchScreen();
 
     static void doWMAction(WMAction action);
     void lockFocus() {
@@ -273,6 +275,12 @@ public:
         //MSG(("unlockFocus %d", lockFocusCount));
     }
     bool focusLocked() { return lockFocusCount != 0; }
+    void lockWorkArea() { ++fWorkAreaLock; }
+    void unlockWorkArea() {
+        if (0 == --fWorkAreaLock && fWorkAreaUpdate)
+            updateWorkArea();
+    }
+    void requestWorkAreaUpdate() { ++fWorkAreaUpdate; }
 
     enum WMState { wmSTARTUP, wmRUNNING, wmSHUTDOWN };
 
@@ -286,6 +294,8 @@ public:
         int columns;
         int rows;
         int corner;
+        DesktopLayout(int o, int c, int r, int k) :
+            orient(o), columns(c), rows(r), corner(k) { }
     };
 
     const DesktopLayout& layout() const { return fLayout; }
@@ -299,6 +309,8 @@ private:
 
     void updateArea(long workspace, int screen_number, int l, int t, int r, int b);
     bool handleWMKey(const XKeyEvent &key, KeySym k, unsigned int m, unsigned int vm);
+    void setWmState(WMState newWmState);
+    void refresh();
 
     IApp *app;
     YActionListener *wmActionListener;
@@ -308,7 +320,6 @@ private:
     YLayeredList fLayers[WinLayerCount];
     YCreatedList fCreationOrder;  // frame creation order
     YFocusedList fFocusedOrder;   // focus order: old -> now
-    YFrameWindow *fFocusedWindow[MAXWORKSPACES];
 
     long fActiveWorkspace;
     long fLastWorkspace;
@@ -318,17 +329,39 @@ private:
     int fWorkAreaScreenCount;
     struct WorkAreaRect {
         int fMinX, fMinY, fMaxX, fMaxY;
+        bool operator!=(const WorkAreaRect& o) const {
+            return fMinX != o.fMinX || fMinY != o.fMinY
+                || fMaxX != o.fMaxX || fMaxY != o.fMaxY;
+        }
+        bool displaced(const WorkAreaRect& o) const {
+            return fMinX != o.fMinX || fMinY != o.fMinY;
+        }
+        bool resized(const WorkAreaRect& o) const {
+            return fMaxX != o.fMaxX || fMaxY != o.fMaxY;
+        }
+        void operator=(const DesktopScreenInfo& o) {
+            fMaxX = o.width + (fMinX = o.x_org);
+            fMaxY = o.height + (fMinY = o.y_org);
+        }
+        int width() const { return fMaxX - fMinX; }
+        int height() const { return fMaxY - fMinY; }
+        operator YRect() const {
+            return YRect(fMinX, fMinY, width(), height());
+        }
     } **fWorkArea;
 
-    EdgeSwitch *fLeftSwitch, *fRightSwitch, *fTopSwitch, *fBottomSwitch;
+    YObjectArray<EdgeSwitch> edges;
     bool fShuttingDown;
     int fArrangeCount;
     WindowPosState *fArrangeInfo;
     YProxyWindow *rootProxy;
     YWindow *fTopWin;
-    bool fWorkAreaMoveWindows;
-    bool fOtherScreenFocused;
+    int fIconColumn;
+    int fIconRow;
     int lockFocusCount;
+    int fWorkAreaLock;
+    int fWorkAreaUpdate;
+    int fServerGrabCount;
     bool fFullscreenEnabled;
 
     WMState fWmState;
@@ -338,11 +371,13 @@ private:
     bool fLayeredUpdated;
 
     DesktopLayout fLayout;
+    mstring fCurrentKeyboard;
+    int fDefaultKeyboard;
 };
 
 extern YWindowManager *manager;
 
-void dumpZorder(const char *oper, YFrameWindow *w, YFrameWindow *a = 0);
+void dumpZorder(const char *oper, YFrameWindow *w, YFrameWindow *a = nullptr);
 
 extern Atom _XA_WIN_APP_STATE;
 extern Atom _XA_WIN_AREA_COUNT;
@@ -366,11 +401,12 @@ extern Atom _XA_WM_CLIENT_LEADER;
 extern Atom _XA_WM_CLIENT_MACHINE;
 extern Atom _XA_WM_WINDOW_ROLE;
 
-extern Atom _XA_WINDOW_ROLE;
-extern Atom _XA_SM_CLIENT_ID;
-extern Atom _XA_UTF8_STRING;
-
 extern Atom _XA_ICEWM_ACTION;
+extern Atom _XA_ICEWM_GUIEVENT;
+extern Atom _XA_ICEWM_HINT;
+extern Atom _XA_ICEWM_FONT_PATH;
+extern Atom _XA_XROOTPMAP_ID;
+extern Atom _XA_XROOTCOLOR_PIXEL;
 
 /// _SET would be nice to have
 #define _NET_WM_STATE_REMOVE 0
@@ -472,22 +508,6 @@ extern Atom _XA_NET_WM_USER_TIME;                   // OK
 extern Atom _XA_NET_WM_USER_TIME_WINDOW;            // OK
 extern Atom _XA_NET_WM_VISIBLE_ICON_NAME;           // OK
 extern Atom _XA_NET_WM_VISIBLE_NAME;                // OK
-extern Atom _XA_NET_WM_WINDOW_OPACITY;              // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE;                 // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_COMBO;           // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_DESKTOP;         // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_DIALOG;          // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_DND;             // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_DOCK;            // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_DROPDOWN_MENU;   // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_MENU;            // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_NORMAL;          // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_NOTIFICATION;    // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_POPUP_MENU;      // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_SPLASH;          // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_TOOLBAR;         // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_TOOLTIP;         // OK
-extern Atom _XA_NET_WM_WINDOW_TYPE_UTILITY;         // OK
 extern Atom _XA_NET_WORKAREA;                       // OK
 
 // TODO extra:

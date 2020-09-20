@@ -8,7 +8,6 @@
 #include "obj.h"
 
 class DObject;
-class YSMListener;
 
 class DObjectMenuItem: public YMenuItem {
 public:
@@ -22,13 +21,13 @@ private:
 
 class ObjectMenu: public YMenu, public ObjectContainer {
 public:
-    ObjectMenu(YActionListener *wmActionListener, YWindow *parent = 0);
-    virtual ~ObjectMenu();
+    ObjectMenu(YActionListener *wmActionListener, YWindow *parent = nullptr);
+    virtual ~ObjectMenu() =default;
 
     virtual void addObject(DObject *object);
     virtual void addObject(DObject *object, const char *icons);
     virtual void addSeparator();
-    virtual void addContainer(const ustring &name, ref<YIcon> icon, ObjectMenu *container);
+    virtual void addContainer(const mstring &name, ref<YIcon> icon, ObjectMenu *container);
 protected:
     YActionListener *wmActionListener;
 };

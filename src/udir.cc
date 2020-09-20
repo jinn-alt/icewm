@@ -11,21 +11,21 @@ private:
     struct dirent *de;
 
     void open(const char *path) { ptr = opendir(path); own = true; }
-    bool read() { return (de = readdir(ptr)) != 0; }
+    bool read() { return (de = readdir(ptr)) != nullptr; }
     bool dots() const { return '.' == *name(); }
 
 public:
-    DirPtr(const char * path) : own(false), ptr(0), de(0) { open(path); }
-    DirPtr(const upath& path) : own(false), ptr(0), de(0) { open(path.string()); }
-    DirPtr(void *vp) : own(false), ptr(static_cast<DIR*>(vp)), de(0) { }
+    DirPtr(const char * path) : own(false), ptr(nullptr), de(nullptr) { open(path); }
+    DirPtr(upath path) : own(false), ptr(nullptr), de(nullptr) { open(path.string()); }
+    DirPtr(void *vp) : own(false), ptr(static_cast<DIR*>(vp)), de(nullptr) { }
 
     ~DirPtr() { if (own) close(); }
-    void close() { if (ptr) { closedir(ptr); ptr = 0; own = false; de = 0; } }
+    void close() { if (ptr) { closedir(ptr); ptr = nullptr; own = false; de = nullptr; } }
 
     operator DIR *() const { return ptr; }
 
     char* name() const { return de->d_name; }
-    int length() const { return strlen(name()); }
+    int length() const { return int(strlen(name())); }
     int size() const { return 1 + length(); }
     struct dirent *next() {
         while (read() && dots());
@@ -35,7 +35,7 @@ public:
 };
 
 cdir::cdir(const char* path)
-    : fPath(path), impl(0)
+    : fPath(path), impl(nullptr)
 {
     if (path) {
         open();
@@ -45,7 +45,7 @@ cdir::cdir(const char* path)
 void cdir::close() {
     if (impl) {
         DirPtr(impl).close();
-        impl = 0;
+        impl = nullptr;
     }
 }
 
@@ -57,7 +57,7 @@ bool cdir::open(const char* path) {
 bool cdir::open() {
     close();
     if (fPath) {
-        impl = (void *) opendir(fPath);
+        impl = static_cast<void *>(opendir(fPath));
     }
     return isOpen();
 }
@@ -74,9 +74,9 @@ bool cdir::next() {
 }
 
 bool cdir::nextExt(const char *extension) {
-    int xlen = (int) strlen(extension);
+    int xlen = int(strlen(extension));
     while (next()) {
-        int start = ((int) strlen(fEntry)) - xlen;
+        int start = int(strlen(fEntry)) - xlen;
         if (start >= 0 && 0 == strcmp(fEntry + start, extension)) {
             return true;
         }
@@ -131,13 +131,13 @@ const char* adir::entry() const {
     if (fLast >= 0 && fLast < count()) {
         return fName[fLast];
     }
-    return 0;
+    return nullptr;
 }
 
 bool adir::nextExt(const char *extension) {
-    int xlen = (int) strlen(extension);
+    int xlen = int(strlen(extension));
     while (next()) {
-        int start = ((int) strlen(entry())) - xlen;
+        int start = int(strlen(entry())) - xlen;
         if (start >= 0 && 0 == strcmp(entry() + start, extension)) {
             return true;
         }
@@ -146,7 +146,7 @@ bool adir::nextExt(const char *extension) {
 }
 
 udir::udir(const upath& path)
-    : fPath(path), impl(0)
+    : fPath(path), impl(nullptr)
 {
     if (fPath.nonempty()) {
         open();
@@ -156,7 +156,7 @@ udir::udir(const upath& path)
 void udir::close() {
     if (impl) {
         DirPtr(impl).close();
-        impl = 0;
+        impl = nullptr;
     }
 }
 
@@ -168,7 +168,7 @@ bool udir::open(const upath& path) {
 bool udir::open() {
     close();
     if (fPath.nonempty()) {
-        impl = (void *) opendir(fPath.string());
+        impl = static_cast<void *>(opendir(fPath.string()));
     }
     return isOpen();
 }
@@ -184,7 +184,7 @@ bool udir::next() {
     return false;
 }
 
-bool udir::nextExt(const ustring& extension) {
+bool udir::nextExt(const mstring& extension) {
     while (next()) {
         if (fEntry.endsWith(extension)) {
             return true;
@@ -231,11 +231,11 @@ bool sdir::next() {
     return 1 + fLast < count() && ++fLast >= 0;
 }
 
-const ustring& sdir::entry() const {
+const mstring& sdir::entry() const {
     return fName[fLast];
 }
 
-bool sdir::nextExt(const ustring& extension) {
+bool sdir::nextExt(const mstring& extension) {
     while (next()) {
         if (entry().endsWith(extension)) {
             return true;
