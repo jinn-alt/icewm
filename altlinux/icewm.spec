@@ -4,7 +4,7 @@
 
 Name: %realname
 Version: 1.8.3.%gitrev
-Release: alt1
+Release: alt2
 Epoch:3
 
 Summary: X11 Window Manager
@@ -31,7 +31,7 @@ Source9: README.ALT
 Source11: restart
 Source12: icewm-old-changelog.bz2
 
-#Patch0: %name-%version-%release.patch
+Patch0: %name-%version-%release.patch
 
 BuildRequires(pre): rpm-macros-cmake
 
@@ -53,7 +53,7 @@ Recommends: iftop, mutt
 
 %prep
 %setup -n %name-%version
-#patch0 -p1
+%patch0 -p1
 
 %build
 %cmake	-DPREFIX=%_prefix \
@@ -121,6 +121,11 @@ rm -f %buildroot/%_datadir/xsessions/%realname.desktop
 %doc AUTHORS NEWS README.ALT README.md BUILD/*.html icewm-old-changelog.bz2
 
 %changelog
+* Sun Sep 20 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.8.3.0.4.d4a330a-alt2
+- added fixes:
+  + removed duplicate emails
+  + marked button in logout dialog box
+
 * Sun Sep 20 2020 Dmitriy Khanzhin <jinn@altlinux.org> 3:1.8.3.0.4.d4a330a-alt1
 - top version 1.8.3-4-d4a330a
 
